@@ -5,8 +5,8 @@ import Chmy.@add_cartesian
 
 export left, right, δ, ∂, lerp
 
-Base.@assume_effects :foldable p(::Val{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] + oneunit(D) : I[i], Val(N))
-Base.@assume_effects :foldable m(::Val{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] - oneunit(D) : I[i], Val(N))
+Base.@assume_effects :foldable p(::Val{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] + oneunit(I[i]) : I[i], Val(N))
+Base.@assume_effects :foldable m(::Val{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] - oneunit(I[i]) : I[i], Val(N))
 
 @add_cartesian left(f, ::Vertex, dim, I::Vararg{Integer,N}) where {N} = f[m(dim, I...)...]
 @add_cartesian left(f, ::Center, dim, I::Vararg{Integer,N}) where {N} = f[I...]
