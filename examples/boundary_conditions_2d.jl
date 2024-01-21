@@ -15,7 +15,7 @@ end
 
 @views function main()
     # geometry
-    grid = UniformGrid(; origin=(0, 0), extent=(1, 1), dims=(1000, 1000))
+    grid = UniformGrid(; origin=(0, 0), extent=(1, 1), dims=(510, 510))
     # physics
     χ = 1.0
     # numerics

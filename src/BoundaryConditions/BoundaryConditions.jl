@@ -74,8 +74,8 @@ end
 
 # single field, same BC
 @kernel inbounds = true function bc_kernel!(side::Val, dim::Val, grid::SG{N}, f::Field{T,N}, bc::FBC) where {N,T}
-    I   = @index(Global, NTuple)
-    I   = I .- 1
+    J   = @index(Global, NTuple)
+    I   = J .- 1
     Ibc = insert_dim(dim, I, halo_index(side, dim, f, location(f, dim)))
     bc!(side, dim, grid, f, location(f, dim), bc, Ibc...)
 end
@@ -89,8 +89,8 @@ end
 
 # batched version
 @kernel function bc_kernel!(side::Val, dim::Val, grid::SG{N}, fs::NTuple{K,Field{T,N}}, bcs::NTuple{K,FBC}) where {N,T,K}
-    I = @index(Global, NTuple)
-    I = I .- 1
+    J = (@index(Global, NTuple))
+    I = J .- 1
     ntuple(Val(K)) do ifield
         Base.@_inline_meta
         @inbounds begin
