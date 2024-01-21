@@ -1,6 +1,6 @@
 using Chmy, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators
 using KernelAbstractions
-using CUDA
+using AMDGPU
 using CairoMakie
 
 @kernel inbounds = true function compute_q!(q, C, χ, g::StructuredGrid)
@@ -16,7 +16,7 @@ end
 
 @views function main(backend=CPU())
     # geometry
-    grid = UniformGrid(; origin=(0, 0), extent=(1, 1), dims=(4096, 4096))
+    grid = UniformGrid(; origin=(0, 0), extent=(1, 1), dims=(8190, 8190))
     # physics
     χ = 1.0
     # numerics
@@ -49,8 +49,9 @@ end
     plt[3] = interior(C) |> Array
     ax.title = "it = 1000"
     display(fig)
+    save("result.png", fig)
 
     return
 end
 
-main(CUDABackend())
+main(ROCBackend())
