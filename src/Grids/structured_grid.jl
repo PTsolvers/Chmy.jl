@@ -30,6 +30,8 @@ Base.@assume_effects :foldable Base.ndims(::StructuredGrid{N}) where {N} = N
 Base.size(grid::StructuredGrid{N}, loc::LocOrLocs{N}) where {N} = length.(grid.axes, loc)
 Base.size(grid::StructuredGrid, loc::Location, ::Val{dim}) where {dim} = length(grid.axes[dim], loc)
 
+bounds(grid::StructuredGrid{N}, loc::LocOrLocs{N}) where {N} = bounds.(grid.axes, loc)
+
 """
     axis(grid::RegularGrid, ::Val{dim}) where {dim}
 
@@ -139,6 +141,8 @@ for (dim, c) in enumerate((:x, :y, :z))
 
         @propagate_inbounds $_center(grid::SG{N}, I::Vararg{Integer,N}) where {N} = center(grid, Val($dim), I...)
         @propagate_inbounds $_center(grid::SG, I) = center(grid, Val($dim), I)
+
+        @propagate_inbounds $_coords(grid::SG, loc) = coords(grid, loc, Val($dim))
 
         @propagate_inbounds $_vertices(grid::SG) = vertices(grid, Val($dim))
         @propagate_inbounds $_centers(grid::SG) = centers(grid, Val($dim))
