@@ -5,7 +5,8 @@ export Connectivity, Bounded, Periodic, Flat, LeftConnected, RightConnected
 export AbstractAxis, UniformAxis, FunctionAxis
 export StructuredGrid, UniformGrid
 
-export nvertices, ncenters, origin, extent, spacing, inv_spacing, Δ, iΔ, coord, coords, center, vertex, centers, vertices
+export nvertices, ncenters, spacing, inv_spacing, Δ, iΔ, coord, coords, center, vertex, centers, vertices
+export origin, extent, bounds
 export direction, axes_names
 
 import Chmy: @add_cartesian

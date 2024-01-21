@@ -25,3 +25,5 @@ coords(ax::AbstractAxis, loc::Location) = @inbounds [coord(ax, loc, i) for i in 
 
 centers(ax::AbstractAxis)  = coords(ax, Center())
 vertices(ax::AbstractAxis) = coords(ax, Vertex())
+
+bounds(ax::AbstractAxis, loc::Location) = (origin(ax, loc), origin(ax, loc) + extent(ax, loc))

@@ -1,6 +1,6 @@
 using Chmy, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators
 using KernelAbstractions
-using AMDGPU
+# using AMDGPU
 using CairoMakie
 
 @kernel inbounds = true function compute_q!(q, C, χ, g::StructuredGrid)
@@ -16,7 +16,7 @@ end
 
 @views function main(backend=CPU())
     # geometry
-    grid = UniformGrid(; origin=(0, 0), extent=(1, 1), dims=(8190, 8190))
+    grid = UniformGrid(; origin=(-1, -1), extent=(2, 2), dims=(128, 128))
     # physics
     χ = 1.0
     # numerics
@@ -30,16 +30,15 @@ end
     # boundary conditions
     bc = (q.x => (x=Dirichlet(),),
           q.y => (y=Dirichlet(),))
-
     # visualisation
-    fig = Figure(; size=(400, 350))
-    ax  = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="it = 0")
-    plt = heatmap!(ax, coords(grid, Center())..., interior(C) |> Array; colormap=:turbo)
-    Colorbar(fig[1, 1][1, 2], plt)
+    fig = Figure(; size=(400, 320))
+    ax  = Axis(fig[1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="it = 0")
+    plt = heatmap!(ax, centers(grid)..., interior(C) |> Array; colormap=:turbo)
+    Colorbar(fig[1, 2], plt)
     display(fig)
     # action
     @time begin
-        for it in 1:1000
+        for it in 1:100
             compute_q!(backend, 256, size(grid, Vertex()))(q, C, χ, grid)
             bc!(grid, bc...)
             update_C!(backend, 256, size(grid, Center()))(C, q, Δt, grid)
@@ -49,9 +48,8 @@ end
     plt[3] = interior(C) |> Array
     ax.title = "it = 1000"
     display(fig)
-    save("result.png", fig)
-
     return
 end
 
-main(ROCBackend())
+# main(ROCBackend())
+main()
