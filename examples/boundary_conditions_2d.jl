@@ -1,6 +1,7 @@
 using Chmy, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators
 using KernelAbstractions
-using GLMakie
+using CUDA
+using CairoMakie
 
 @kernel inbounds = true function compute_q!(q, C, χ, g::StructuredGrid)
     I = @index(Global, NTuple)
@@ -13,16 +14,16 @@ end
     C[I...] -= Δt * divg(q, g, I...)
 end
 
-@views function main()
+@views function main(backend=CPU())
     # geometry
-    grid = UniformGrid(; origin=(0, 0), extent=(1, 1), dims=(510, 510))
+    grid = UniformGrid(; origin=(0, 0), extent=(1, 1), dims=(4096, 4096))
     # physics
     χ = 1.0
     # numerics
     Δt = minimum(spacing(grid, Center(), 1, 1))^2 / χ / ndims(grid) / 2.1
     # allocate fields
-    C = Field(CPU(), grid, Center())
-    q = VectorField(CPU(), grid)
+    C = Field(backend, grid, Center())
+    q = VectorField(backend, grid)
     # initial conditions
     set!(C, grid, (_, _) -> rand())
     bc!(grid, C => Neumann())
@@ -33,22 +34,23 @@ end
     # visualisation
     fig = Figure(; size=(400, 350))
     ax  = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="it = 0")
-    plt = heatmap!(ax, coords(grid, Center())..., interior(C); colormap=:turbo)
+    plt = heatmap!(ax, coords(grid, Center())..., interior(C) |> Array; colormap=:turbo)
     Colorbar(fig[1, 1][1, 2], plt)
     display(fig)
     # action
     @time begin
         for it in 1:1000
-            compute_q!(CPU(), 256, size(grid, Vertex()))(q, C, χ, grid)
+            compute_q!(backend, 256, size(grid, Vertex()))(q, C, χ, grid)
             bc!(grid, bc...)
-            update_C!(CPU(), 256, size(grid, Center()))(C, q, Δt, grid)
-            # bc!(grid, C => Neumann())
+            update_C!(backend, 256, size(grid, Center()))(C, q, Δt, grid)
         end
+        KernelAbstractions.synchronize(backend)
     end
-    plt[3] = interior(C)
-    # ax.title = "it = $it"
-    yield()
+    plt[3] = interior(C) |> Array
+    ax.title = "it = 1000"
+    display(fig)
+
     return
 end
 
-main()
+main(CUDABackend())
