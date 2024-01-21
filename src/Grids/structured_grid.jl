@@ -47,7 +47,17 @@ Return a tuple of spatial coordinates of a grid point at location `loc` and indi
 For vertex locations, first grid point is at the origin.
 For center locations, first grid point at half-spacing distance from the origin.
 """
-@add_cartesian coord(grid::SG{N}, loc::LocOrLocs{N}, I::Vararg{Integer,N}) where {N} = broadcast(coord, grid.axes, loc, I)
+@add_cartesian coord(grid::SG{N}, loc::Location, I::Vararg{Integer,N}) where {N} =
+    ntuple(Val(N)) do D
+        Base.@_inline_meta
+        coord(grid.axes[D], loc, I[D])
+    end
+
+@add_cartesian coord(grid::SG{N}, locs::Locs{N}, I::Vararg{Integer,N}) where {N} =
+    ntuple(Val(N)) do D
+        Base.@_inline_meta
+        coord(grid.axes[D], locs[D], I[D])
+    end
 
 @add_cartesian coord(grid::SG{N}, loc::Location, ::Val{dim}, I::Vararg{Integer,N}) where {N,dim} = coord(grid.axes[dim], loc, I[dim])
 @add_cartesian coord(grid::SG{N}, loc::Locs{N}, ::Val{dim}, I::Vararg{Integer,N}) where {N,dim} = coord(grid.axes[dim], loc[dim], I[dim])
@@ -70,7 +80,17 @@ for (sp, desc) in ((:spacing, "grid spacings"), (:inv_spacing, "inverse grid spa
 
         Return a tuple of $($desc) at location `loc` and indices `I`.
         """
-        @add_cartesian $sp(grid::SG{N}, loc::LocOrLocs{N}, I::Vararg{Integer,N}) where {N} = broadcast($sp, grid.axes, loc, I)
+        @add_cartesian $sp(grid::SG{N}, loc::Location, I::Vararg{Integer,N}) where {N} =
+            ntuple(Val(N)) do D
+                Base.@_inline_meta
+                $sp(grid.axes[D], loc, I[D])
+            end
+
+        @add_cartesian $sp(grid::SG{N}, locs::Locs{N}, I::Vararg{Integer,N}) where {N} =
+            ntuple(Val(N)) do D
+                Base.@_inline_meta
+                $sp(grid.axes[D], locs[D], I[D])
+            end
 
         @add_cartesian $sp(grid::SG{N}, loc::Location, ::Val{dim}, I::Vararg{Integer,N}) where {N,dim} = $sp(grid.axes[dim], loc, I[dim])
         @add_cartesian $sp(grid::SG{N}, loc::Locs{N}, ::Val{dim}, I::Vararg{Integer,N}) where {N,dim} = $sp(grid.axes[dim], loc[dim], I[dim])
@@ -130,6 +150,6 @@ direction(::SG, ::Val{:x}) = Val(1)
 direction(::SG, ::Val{:y}) = Val(2)
 direction(::SG, ::Val{:z}) = Val(3)
 
-axes_names(::SG{1}) = (:x, )
+axes_names(::SG{1}) = (:x,)
 axes_names(::SG{2}) = (:x, :y)
 axes_names(::SG{3}) = (:x, :y, :z)
