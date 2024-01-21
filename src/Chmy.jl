@@ -11,6 +11,8 @@ include("Fields/Fields.jl")
 
 include("BoundaryConditions/BoundaryConditions.jl")
 
+include("Workers.jl")
+
 using .Grids
 using .GridOperators
 using .Fields
