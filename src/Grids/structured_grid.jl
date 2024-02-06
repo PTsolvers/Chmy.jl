@@ -1,13 +1,31 @@
+"""
+    struct StructuredGrid{N,T,C,A}
+
+Represents a structured grid with orthogonal axes.
+"""
 struct StructuredGrid{N,T,C,A}
     axes::A
     StructuredGrid{C}(axes::Vararg{<:AbstractAxis{T},N}) where {N,T,C} = new{N,T,C,typeof(axes)}(axes)
 end
 
+StructuredGrid{C}(::SingleDeviceArchitecture, axes::Vararg{<:AbstractAxis}) where {C} = StructuredGrid{C}(axes...)
+
 const UniformGrid{N,T,C} = StructuredGrid{N,T,C,NTuple{N,UniformAxis{T}}}
 
-function UniformGrid(; origin::NTuple{N,Number}, extent::NTuple{N,Number}, dims::NTuple{N,Integer}, topology=nothing) where {N}
+"""
+    UniformGrid(; origin, extent, dims, topology=nothing) where {N}
+
+Constructs a uniform grid with specified origin, extent, dimensions, and topology.
+
+## Arguments
+- `origin::NTuple{N,Number}`: The origin of the grid.
+- `extent::NTuple{N,Number}`: The extent of the grid.
+- `dims::NTuple{N,Integer}`: The dimensions of the grid.
+- `topology=nothing`: The topology of the grid. If not provided, a default `Bounded` topology is used.
+"""
+function UniformGrid(arch::Architecture; origin::NTuple{N,Number}, extent::NTuple{N,Number}, dims::NTuple{N,Integer}, topology=nothing) where {N}
     if isnothing(topology)
-        topology = ntuple(_ -> Bounded(), Val(N))
+        topology = ntuple(_ -> (Bounded(), Bounded()), Val(N))
     end
 
     extent = float.(extent)
@@ -16,7 +34,7 @@ function UniformGrid(; origin::NTuple{N,Number}, extent::NTuple{N,Number}, dims:
                         promote(extent...),
                         promote(dims...))
 
-    return StructuredGrid{typeof(topology)}(axes...)
+    return StructuredGrid{typeof(topology)}(arch, axes...)
 end
 
 const SG = StructuredGrid
@@ -30,6 +48,18 @@ Base.@assume_effects :foldable Base.ndims(::StructuredGrid{N}) where {N} = N
 Base.size(grid::StructuredGrid{N}, loc::LocOrLocs{N}) where {N} = length.(grid.axes, loc)
 Base.size(grid::StructuredGrid, loc::Location, ::Val{dim}) where {dim} = length(grid.axes[dim], loc)
 
+"""
+    connectivity(grid::StructuredGrid{N,T,C}, D::Val, S::Val)
+
+Return the connectivity of the structured grid `grid` for the given dimension `D` and side `S`.
+"""
+connectivity(::StructuredGrid{N,T,C}, ::Val{D}, ::Val{S}) where {N,T,C,D,S} = C.instance[D][S]
+
+"""
+    bounds(grid::StructuredGrid{N}, loc::LocOrLocs{N}) where {N}
+
+Compute the bounds of a structured grid at the specified location(s).
+"""
 bounds(grid::StructuredGrid{N}, loc::LocOrLocs{N}) where {N} = bounds.(grid.axes, loc)
 
 """

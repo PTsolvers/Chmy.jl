@@ -2,6 +2,20 @@ module Workers
 
 export Worker
 
+"""
+    mutable struct Worker{T}
+
+A worker that performs tasks asynchronously.
+
+# Constructor
+    Worker{T}(; setup=nothing, teardown=nothing) where {T}
+
+Constructs a new `Worker` object.
+
+## Arguments
+- `setup`: A function to be executed before the worker starts processing tasks. (optional)
+- `teardown`: A function to be executed after the worker finishes processing tasks. (optional)
+"""
 mutable struct Worker{T}
     src::Channel{T}
     out::Base.Event

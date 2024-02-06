@@ -1,3 +1,8 @@
+"""
+    struct Field{T,N,L,H,A} <: AbstractField{T,N,L}
+
+Field represents a discrete scalar field with specified type, number of dimensions, location, and halo size.
+"""
 struct Field{T,N,L,H,A} <: AbstractField{T,N,L}
     data::A
     dims::NTuple{N,Int}
@@ -34,6 +39,18 @@ Adapt.adapt_structure(to, f::Field{T,N,L,H}) where {T,N,L,H} = Field{L,H}(Adapt.
 expand_loc(::Val{N}, locs::NTuple{N,Location}) where {N} = locs
 expand_loc(::Val{N}, loc::Location) where {N} = ntuple(_ -> loc, Val(N))
 
+"""
+    Field(backend, grid, loc, type=eltype(grid); halo=1)
+
+Constructs a field on a structured grid at the specified location.
+
+Arguments:
+- `backend`: The backend to use for memory allocation.
+- `grid`: The structured grid on which the field is constructed.
+- `loc`: The location or locations on the grid where the field is constructed.
+- `type`: The element type of the field. Defaults to the element type of the grid.
+- `halo`: The halo size for the field. Defaults to 1.
+"""
 function Field(backend::Backend, grid::StructuredGrid{N}, loc::LocOrLocs{N}, type=eltype(grid); halo=1) where {N}
     dims = size(grid, loc)
     data_size = size(grid, loc) .+ 4 .* halo

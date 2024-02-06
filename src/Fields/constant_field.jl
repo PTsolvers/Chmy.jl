@@ -3,7 +3,7 @@ abstract type ConstantField{T} <: AbstractField{T,0,Nothing} end
 
 @inline Base.size(::ConstantField) = ()
 
-# zero
+"Constant field with values equal to zero(T)"
 struct ZeroField{T} <: ConstantField{T} end
 
 @inline Base.getindex(::ZeroField{T}, inds...) where {T} = zero(T)
@@ -13,7 +13,7 @@ Base.broadcastable(::ZeroField{T}) where {T} = zero(T)
 Base.show(io::IO, ::ZeroField{T}) where {T} = print(io, "ZeroField{$T}")
 Base.show(io::IO, ::MIME"text/plain", ::ZeroField{T}) where {T} = println(io, "ZeroField{$T}")
 
-# one
+"Constant field with values equal to one(T)"
 struct OneField{T} <: ConstantField{T} end
 
 @inline Base.getindex(::OneField{T}, inds...) where {T} = one(T)
@@ -23,7 +23,7 @@ Base.show(io::IO, ::MIME"text/plain", ::OneField{T}) where {T} = println(io, "On
 
 Base.broadcastable(::OneField{T}) where {T} = one(T)
 
-# arbitrary value
+"Field with a constant value"
 struct ValueField{T} <: ConstantField{T}
     value::T
 end
