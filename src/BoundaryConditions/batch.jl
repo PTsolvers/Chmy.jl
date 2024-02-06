@@ -26,7 +26,6 @@ function bc!(arch::Architecture, grid::SG{N}, batch::BatchSet{N}) where {N}
     return
 end
 
-
 """
     struct EmptyBatch <: AbstractBatch
 
@@ -35,7 +34,6 @@ EmptyBatch represents no boundary conditions.
 struct EmptyBatch <: AbstractBatch end
 
 bc!(::Val, ::Val, ::Architecture, ::SG, ::EmptyBatch) = nothing
-
 
 struct FieldBatch{K,F,B} <: AbstractBatch
     fields::F
