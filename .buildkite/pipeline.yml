@@ -1,0 +1,15 @@
+# see: https://github.com/staticfloat/forerunner-buildkite-plugin
+steps:
+  - label: ":runner: Dynamically launch Pipelines"
+    plugins:
+      - staticfloat/forerunner:
+          watch:
+            - ".buildkite/run_tests.yml"
+            - ".buildkite/pipeline.yml"
+            - "**/*.toml"
+            - "src/**"
+            # - "ext/**"
+            - "test/**"
+          target: ".buildkite/run_tests.yml"
+    agents:
+      queue: "juliagpu"
