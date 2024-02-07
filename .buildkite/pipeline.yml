@@ -8,7 +8,7 @@ steps:
             - ".buildkite/pipeline.yml"
             - "**/*.toml"
             - "src/**"
-            # - "ext/**"
+            - "ext/**"
             - "test/**"
           target: ".buildkite/run_tests.yml"
     agents:

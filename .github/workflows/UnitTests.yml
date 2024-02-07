@@ -7,14 +7,14 @@ on:
       - '.github/workflows/UnitTests.yml'
       - '**/*.toml'
       - 'src/**'
-      # - 'ext/**'
+      - 'ext/**'
       - 'test/**'
   pull_request:
     paths:
       - '.github/workflows/UnitTests.yml'
       - '**/*.toml'
       - 'src/**'
-      # - 'ext/**'
+      - 'ext/**'
       - 'test/**'
 env:
   JULIA_NUM_THREADS: 2
@@ -34,6 +34,10 @@ jobs:
           - windows-latest
         arch:
           - x64
+        include:
+          - os: macos-14
+            julia_arch: "aarch64"
+            julia_version: "1"
         # include:
         #   - version: 'nightly'
         #     os: ubuntu-latest
@@ -61,3 +65,4 @@ jobs:
       - uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false  # or true if you want CI to fail when Codecov fails
