@@ -3,31 +3,26 @@ using Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy
 using KernelAbstractions
 using MPI
 
-MPI.Init()
-
-arch = Arch(CPU(), MPI.COMM_WORLD, (0, 0))
-topo = topology(arch)
-
-grid = UniformGrid(arch; origin=(0, 0), extent=(1, 1), dims=(10, 10))
-
-field = Field(backend(arch), grid, Center())
-fill!(parent(field), NaN)
-
-set!(field, global_rank(topo))
-
-bc = batch(arch, grid, field => Neumann(); exchange=true)
-
-ntuple(Val(ndims(grid))) do D
-    Base.@_inline_meta
-    ntuple(Val(2)) do S
-        bc = has_neighbor(topo, D, S) ? ExchangeData(Val(S), Val(D), field) : Neumann()
-        bc!(Val(S), Val(D), arch, grid, (field,), (bc,))
+function main(backend=CPU())
+    arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0))
+    topo = topology(arch)
+    
+    grid = UniformGrid(arch; origin=(0, 0, 0), extent=(1, 1, 1), dims=(3*100, 3*100, 3*100))
+    
+    field = Field(backend, grid, Center())
+    fill!(parent(field), NaN)
+    
+    for _ in 1:10
+        @time set!(field, global_rank(topo))
+        @time bc!(arch, grid, field => Neumann(); replace=true)
     end
+    
+    KernelAbstractions.synchronize(backend)
+    
+    # sleep(0.2global_rank(topo))
+    # display(interior(field; with_halo=true))
 end
 
-KernelAbstractions.synchronize(backend(arch))
-
-sleep(global_rank(topo))
-display(interior(field; with_halo=true))
-
+MPI.Init()
+main()
 MPI.Finalize()

@@ -1,7 +1,7 @@
 module Architectures
 
 export Architecture, SingleDeviceArchitecture
-export Arch, backend, device, activate!, set_device!, heuristic_groupsize
+export Arch, get_backend, get_device, activate!, set_device!, heuristic_groupsize
 
 using KernelAbstractions
 
@@ -32,23 +32,23 @@ Create an architecture object for the specified backend and device.
 - `device_id=1`: The ID of the device to use.
 """
 function Arch(backend::Backend; device_id::Integer=1)
-    dev = device(backend, device_id)
+    dev = get_device(backend, device_id)
     return SingleDeviceArchitecture(backend, dev)
 end
 
 """
-    backend(arch::SingleDeviceArchitecture)
+    get_backend(arch::SingleDeviceArchitecture)
 
 Get the backend associated with a SingleDeviceArchitecture.
 """
-backend(arch::SingleDeviceArchitecture) = arch.backend
+get_backend(arch::SingleDeviceArchitecture) = arch.backend
 
 """
-    device(arch::SingleDeviceArchitecture)
+    get_device(arch::SingleDeviceArchitecture)
 
 Get the device associated with a SingleDeviceArchitecture.
 """
-device(arch::SingleDeviceArchitecture) = arch.device
+get_device(arch::SingleDeviceArchitecture) = arch.device
 
 """
     activate!(arch::SingleDeviceArchitecture; priority=:normal)
@@ -61,7 +61,7 @@ function activate!(arch::SingleDeviceArchitecture; priority=:normal)
 end
 
 # CPU
-device(::CPU, device_id) = nothing
+get_device(::CPU, device_id) = nothing
 set_device!(::Nothing) = nothing
 heuristic_groupsize(::CPU, ::Val{N}) where {N} = 256
 

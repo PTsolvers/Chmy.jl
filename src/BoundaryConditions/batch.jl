@@ -86,7 +86,7 @@ end
     end
 end
 
-bc!(arch::Architecture, grid::SG, f_bc::Vararg{FieldAndBC}) = bc!(arch, grid, batch(arch, grid, f_bc...))
+bc!(arch::Architecture, grid::SG, f_bc::Vararg{FieldAndBC}; kwargs...) = bc!(arch, grid, batch(arch, grid, f_bc...; kwargs...))
 
 # batched kernels
 @kernel function bc_kernel!(side::Val, dim::Val, grid::SG{N}, batch::FieldBatch{K}) where {N,K}
@@ -105,6 +105,6 @@ end
 
 function bc!(side::Val, dim::Val, arch::Architecture, grid::SG, batch::FieldBatch)
     worksize = remove_dim(dim, size(grid, Center()) .+ 2)
-    bc_kernel!(backend(arch), 256, worksize)(side, dim, grid, batch)
+    bc_kernel!(Architectures.get_backend(arch), 256, worksize)(side, dim, grid, batch)
     return
 end

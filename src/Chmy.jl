@@ -1,9 +1,12 @@
 module Chmy
 
+using KernelAbstractions
+
 export remove_dim, insert_dim
 
 include("macros.jl")
 include("utils.jl")
+include("kernel_abstractions.jl")
 
 include("Architectures.jl")
 include("Grids/Grids.jl")
