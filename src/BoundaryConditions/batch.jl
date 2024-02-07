@@ -86,7 +86,7 @@ end
     end
 end
 
-bc!(arch::Architecture, grid::SG, f_bc::Vararg{FieldAndBC}) = bc!(arch, grid, batch(arch, grid, f_bc...))
+bc!(arch::Architecture, grid::SG, f_bc::Vararg{FieldAndBC}; kwargs...) = bc!(arch, grid, batch(arch, grid, f_bc...; kwargs...))
 
 # batched kernels
 @kernel function bc_kernel!(side::Val, dim::Val, grid::SG{N}, batch::FieldBatch{K}) where {N,K}

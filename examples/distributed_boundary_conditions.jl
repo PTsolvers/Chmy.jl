@@ -15,9 +15,7 @@ fill!(parent(field), NaN)
 
 set!(field, global_rank(topo))
 
-bt = batch(arch, grid, field => Neumann(); replace=true)
-
-bc!(arch, grid, bt)
+bc!(arch, grid, field => Neumann(); replace=true)
 
 KernelAbstractions.synchronize(backend(arch))
 
