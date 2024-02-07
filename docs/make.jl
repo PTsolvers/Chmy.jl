@@ -21,6 +21,6 @@ makedocs(
 
 deploydocs(
     repo = "github.com/PTsolvers/Chmy.jl.git",
-    devbranch = "main",
+    devbranch = "lr/doc-ci",
     push_preview = true
 )
