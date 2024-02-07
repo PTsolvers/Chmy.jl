@@ -17,7 +17,7 @@ steps:
 
       julia -e 'println("+++ :julia: Running tests")
                 using Pkg
-                Pkg.test("FastIce"; test_args=["--backend=CUDA"], coverage=true)'
+                Pkg.test("Chmy"; test_args=["--backend=CUDA"], coverage=true)'
     agents:
       queue: "juliagpu"
       cuda: "*"
@@ -42,7 +42,7 @@ steps:
 
       julia -e 'println("+++ :julia: Running tests")
                 using Pkg
-                Pkg.test("FastIce"; test_args=["--backend=AMDGPU"], coverage=true)'
+                Pkg.test("Chmy"; test_args=["--backend=AMDGPU"], coverage=true)'
     agents:
       queue: "juliagpu"
       rocm: "*"
