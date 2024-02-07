@@ -2,7 +2,7 @@
 [![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://PTsolvers.github.io/Chmy.jl/dev)
 [![CPU CI](https://github.com/PTsolvers/Chmy.jl/actions/workflows/UnitTests.yml/badge.svg)](https://github.com/PTsolvers/Chmy.jl/actions/workflows/UnitTests.yml)
 [![GPU CI](https://badge.buildkite.com/fac6909b4e3a4183ea260bb54f735ddf0657825a421cc634c7.svg)](https://buildkite.com/julialang/Chmy-dot-jl)
-[![codecov](https://codecov.io/gh/PTsolvers/Chmy.jl/branch/iu/api/graph/badge.svg?token=KDB0GQQDT7)](https://codecov.io/gh/PTsolvers/Chmy.jl)
+[![codecov](https://codecov.io/gh/PTsolvers/Chmy.jl/graph/badge.svg?token=GMQZHJD807)](https://codecov.io/gh/PTsolvers/Chmy.jl)
 
 Hey, that's Chmy.jl 🚀
 
