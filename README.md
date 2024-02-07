@@ -1,4 +1,5 @@
-# Chmy.jl
+<h1> <img src="docs/src/assets/logo.png" alt="Chmy.jl" width="30"> Chmy.jl </h1>
+
 [![Docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://PTsolvers.github.io/Chmy.jl/dev)
 [![CPU CI](https://github.com/PTsolvers/Chmy.jl/actions/workflows/UnitTests.yml/badge.svg)](https://github.com/PTsolvers/Chmy.jl/actions/workflows/UnitTests.yml)
 [![GPU CI](https://badge.buildkite.com/3cfbc1f4a0553ce2281925dec2bceba9446bb429286621ec92.svg)](https://buildkite.com/julialang/chmy-dot-jl)
