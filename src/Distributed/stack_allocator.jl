@@ -58,7 +58,7 @@ function allocate(sa::StackAllocator, T::DataType, dims, align::Integer=sizeof(T
         resize!(sa.buffer, aligned + nbytes)
     end
     # get a slice of the buffer
-    backend = get_backend(sa.buffer)
+    backend = KernelAbstractions.get_backend(sa.buffer)
     data_ptr = convert(Chmy.pointertype(backend, T), pointer(sa.buffer) + aligned)
     sa.offset = aligned + nbytes
     sa.nallocs += 1

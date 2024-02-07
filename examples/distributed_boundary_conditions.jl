@@ -3,23 +3,26 @@ using Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy
 using KernelAbstractions
 using MPI
 
+function main(backend=CPU())
+    arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0))
+    topo = topology(arch)
+    
+    grid = UniformGrid(arch; origin=(0, 0, 0), extent=(1, 1, 1), dims=(3*100, 3*100, 3*100))
+    
+    field = Field(backend, grid, Center())
+    fill!(parent(field), NaN)
+    
+    for _ in 1:10
+        @time set!(field, global_rank(topo))
+        @time bc!(arch, grid, field => Neumann(); replace=true)
+    end
+    
+    KernelAbstractions.synchronize(backend)
+    
+    # sleep(0.2global_rank(topo))
+    # display(interior(field; with_halo=true))
+end
+
 MPI.Init()
-
-arch = Arch(CPU(), MPI.COMM_WORLD, (0, 0))
-topo = topology(arch)
-
-grid = UniformGrid(arch; origin=(0, 0), extent=(1, 1), dims=(12, 12))
-
-field = Field(backend(arch), grid, Center())
-fill!(parent(field), NaN)
-
-set!(field, global_rank(topo))
-
-bc!(arch, grid, field => Neumann(); replace=true)
-
-KernelAbstractions.synchronize(backend(arch))
-
-sleep(0.2global_rank(topo))
-display(interior(field; with_halo=true))
-
+main()
 MPI.Finalize()

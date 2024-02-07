@@ -8,7 +8,7 @@ function BoundaryConditions.bc!(side::Val{S}, dim::Val{D},
 
     tle = task_local_exchanger()
 
-    init!(tle, batch, backend(arch), dim, side)
+    init!(tle, batch, Architectures.get_backend(arch), dim, side)
 
     # initiate non-blocking MPI recieve and device-to-device copy to the send buffer
     for idx in eachindex(batch.fields)
@@ -16,7 +16,7 @@ function BoundaryConditions.bc!(side::Val{S}, dim::Val{D},
         send_view = get_send_view(Val(S), Val(D), batch.fields[idx])
         copyto!(tle.send_bufs[idx], send_view)
     end
-    KernelAbstractions.synchronize(backend(arch))
+    KernelAbstractions.synchronize(Architectures.get_backend(arch))
 
     # initiate non-blocking MPI send
     for idx in eachindex(batch.fields)
@@ -41,7 +41,7 @@ function BoundaryConditions.bc!(side::Val{S}, dim::Val{D},
     end
 
     reset_allocators!(tle)
-    async || KernelAbstractions.synchronize(backend(arch))
+    async || KernelAbstractions.synchronize(Architectures.get_backend(arch))
 
     return
 end

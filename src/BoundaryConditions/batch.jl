@@ -105,6 +105,6 @@ end
 
 function bc!(side::Val, dim::Val, arch::Architecture, grid::SG, batch::FieldBatch)
     worksize = remove_dim(dim, size(grid, Center()) .+ 2)
-    bc_kernel!(backend(arch), 256, worksize)(side, dim, grid, batch)
+    bc_kernel!(Architectures.get_backend(arch), 256, worksize)(side, dim, grid, batch)
     return
 end
