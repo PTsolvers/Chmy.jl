@@ -36,8 +36,8 @@ jobs:
           - x64
         include:
           - os: macos-14
-            julia_arch: "aarch64"
-            julia_version: "1"
+            arch: "aarch64"
+            version: "1"
         # include:
         #   - version: 'nightly'
         #     os: ubuntu-latest
