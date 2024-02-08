@@ -1,6 +1,6 @@
 module ChmyAMDGPUExt
 
-using AMDGPU, AMDGPU.ROCKernels, KernelAbstractions, Chmy
+using AMDGPU, KernelAbstractions, Chmy
 
 import Chmy.Architectures: heuristic_groupsize, set_device!, get_device
 

@@ -1,6 +1,6 @@
 module ChmyCUDAExt
 
-using CUDA, CUDA.CUDAKernels, KernelAbstractions, Chmy
+using CUDA, KernelAbstractions, Chmy
 
 import Chmy.Architectures: heuristic_groupsize, set_device!, get_device
 
