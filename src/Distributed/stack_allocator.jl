@@ -49,6 +49,12 @@ The `align` parameter specifies the alignment of the buffer elements.
 - `T::DataType`: The data type of the requested allocation.
 - `dims`: The dimensions of the requested allocation.
 - `align::Integer`: The alignment of the allocated buffer in bytes.
+
+!!! warning
+
+    Arrays allocated with StackAllocator are not managed by Julia runtime.
+    User is responsible for ensuring correct lifetimes, i.e., that the reference to allocator
+    outlives all arrays allocated using this allocator.
 """
 function allocate(sa::StackAllocator, T::DataType, dims, align::Integer=sizeof(T))
     nbytes  = prod(dims) * sizeof(T)
