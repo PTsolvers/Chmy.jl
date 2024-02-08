@@ -8,7 +8,7 @@ using Pkg
 Pkg.test("Chmy")
 ```
 
-## GPU tests - needs update!
+## GPU tests
 
 To run the Chmy test suite on CUDA or ROC backend (Nvidia or AMD GPUs), respectively, run the tests using `Pkg` adding following `test_args`:
 
