@@ -1,1 +1,8 @@
+docs/build/
+docs/site/
+
 Manifest.toml
+LocalPreferences.toml
+
+.DS_Store
+.vscode

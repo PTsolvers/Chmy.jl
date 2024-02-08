@@ -1,0 +1,56 @@
+steps:
+  - label: "CUDA Julia {{matrix.version}}"
+    matrix:
+      setup:
+        version:
+          - "1.9"
+          - "1.10"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: "{{matrix.version}}"
+      - JuliaCI/julia-coverage#v1:
+          codecov: true
+    command: |
+      julia -e 'println("--- :julia: Instantiating project")
+                using Pkg
+                Pkg.develop(; path=pwd())' || exit 3
+
+      julia -e 'println("+++ :julia: Running tests")
+                using Pkg
+                Pkg.test("Chmy"; test_args=["--backend=CUDA"], coverage=true)'
+    agents:
+      queue: "juliagpu"
+      cuda: "*"
+    timeout_in_minutes: 120
+    soft_fail:
+      - exit_status: 3
+
+  - label: "AMDGPU Julia {{matrix.version}}"
+    matrix:
+      setup:
+        version:
+          - "1.10"
+    plugins:
+      - JuliaCI/julia#v1:
+          version: "{{matrix.version}}"
+      - JuliaCI/julia-coverage#v1:
+          codecov: true
+    command: |
+      julia -e 'println("--- :julia: Instantiating project")
+                using Pkg
+                Pkg.develop(; path=pwd())' || exit 3
+
+      julia -e 'println("+++ :julia: Running tests")
+                using Pkg
+                Pkg.test("Chmy"; test_args=["--backend=AMDGPU"], coverage=true)'
+    agents:
+      queue: "juliagpu"
+      rocm: "*"
+      rocmgpu: "gfx1101" # select Ludovic's Navi 3 card (ROCm 6.0)
+    timeout_in_minutes: 120
+    soft_fail:
+      - exit_status: 3
+    env:
+      JULIA_NUM_THREADS: 4
+env:
+  SECRET_CODECOV_TOKEN: "D2H/GglFTcK7SKyfuO/Fy34xrVWHzXbtGTGQXAA3wpEPNAATGhHO/mIm0ILLzhMZSI1LplJBxJ7nV5WVsky0e/01nbSnW5iB0QqFHK8rD+lXUr4ls4zMlyUa0Lvsl/HixFyhwBtFhy8ruwUsqN8AbJNSJSiF9x4jXhzTgIvlO25/HqQObcfJa6qwcw0m9uMa3K26w1xrPhdE7F4mdUUREjB1W8dzfkKF+vZUeMqYFKgit21uQ9QsRjDJl0ExOEw0SC910rtGHtDO0bpIe+D1nEGQsQr8VEN3o0hOCgTJrya8MFitBqkKeVBV/NUImu4UtxlNb7r0ZrjTawiFle2tfg==;U2FsdGVkX1+sdgrm8OBTX9elIdJMwLMpOvXFFtHrG9lj5J8qDBdbjJDva3XMXkbF6I4PCh9G9NW0pEcF9ghb7g=="
