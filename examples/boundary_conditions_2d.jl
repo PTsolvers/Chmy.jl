@@ -28,7 +28,6 @@ end
     # initial conditions
     set!(C, grid, (_, _) -> rand())
     bc!(arch, grid, C => Neumann())
-
     # boundary conditions
     bc = (q.x => (x=Dirichlet(),),
           q.y => (y=Dirichlet(),))
