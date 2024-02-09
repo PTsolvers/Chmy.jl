@@ -11,3 +11,5 @@ CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 [compat]
 AMDGPU = "0.8"
 CUDA = "5"
+KernelAbstractions = "0.9"
+MPI = "0.20"
