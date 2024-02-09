@@ -17,3 +17,6 @@ CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 [extensions]
 ChmyAMDGPUExt = "AMDGPU"
 ChmyCUDAExt = "CUDA"
+
+[compat]
+MPI = "0.20"
