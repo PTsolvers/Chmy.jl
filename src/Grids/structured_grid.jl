@@ -13,11 +13,12 @@ StructuredGrid{C}(::SingleDeviceArchitecture, axes::Vararg{<:AbstractAxis}) wher
 const UniformGrid{N,T,C} = StructuredGrid{N,T,C,NTuple{N,UniformAxis{T}}}
 
 """
-    UniformGrid(; origin, extent, dims, topology=nothing) where {N}
+    UniformGrid(arch; origin, extent, dims, topology=nothing) where {N}
 
 Constructs a uniform grid with specified origin, extent, dimensions, and topology.
 
 ## Arguments
+- `arch::Architecture`: The associated architecture.
 - `origin::NTuple{N,Number}`: The origin of the grid.
 - `extent::NTuple{N,Number}`: The extent of the grid.
 - `dims::NTuple{N,Integer}`: The dimensions of the grid.
