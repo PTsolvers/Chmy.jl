@@ -34,11 +34,27 @@ end
 
 # operators on Cartesian grids
 for (dim, coord) in enumerate((:x, :y, :z))
+    left = Symbol(:left, coord)
+    right = Symbol(:right, coord)
     δ = Symbol(:δ, coord)
     ∂ = Symbol(:∂, coord)
 
     @eval begin
-        export $δ, $∂
+        export $δ, $∂, $left, $right
+
+        """
+            $($left)(f, loc, I)
+
+        "left side" of a field (`[1:end-1]`) in $($(string(coord))) direction.
+        """
+        @add_cartesian $left(f, loc, I::Vararg{Integer,N}) where {N} = left(f, loc, Val($dim), I...)
+
+        """
+            $($right)(f, loc, I)
+
+        "right side" of a field (`[2:end]`) in $($(string(coord))) direction.
+        """
+        @add_cartesian $right(f, loc, I::Vararg{Integer,N}) where {N} = right(f, loc, Val($dim), I...)
 
         """
             $($δ)(f, loc, I)
