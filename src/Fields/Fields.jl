@@ -1,6 +1,6 @@
 module Fields
 
-export AbstractField, Field, VectorField
+export AbstractField, Field, VectorField, TensorField
 export ConstantField, ZeroField, OneField, ValueField
 export FunctionField
 export location, halo, interior, set!

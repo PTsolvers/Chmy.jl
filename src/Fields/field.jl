@@ -101,3 +101,19 @@ function VectorField(backend::Backend, grid::StructuredGrid{N}, args...; kwargs.
     end
     return NamedTuple{names}(values)
 end
+
+# tensor fields
+TensorField(backend::Backend, grid::StructuredGrid{2}, args...; kwargs...) = (
+    xx = Field(backend, grid, Center(), args...; kwargs...),
+    yy = Field(backend, grid, Center(), args...; kwargs...),
+    xy = Field(backend, grid, Vertex(), args...; kwargs...)
+)
+
+TensorField(backend::Backend, grid::StructuredGrid{3}, args...; kwargs...) = (
+    xx = Field(backend, grid, Center(), args...; kwargs...),
+    yy = Field(backend, grid, Center(), args...; kwargs...),
+    zz = Field(backend, grid, Center(), args...; kwargs...),
+    xy = Field(backend, grid, (Vertex(), Vertex(), Center()), args...; kwargs...),
+    xz = Field(backend, grid, (Vertex(), Center(), Vertex()), args...; kwargs...),
+    yz = Field(backend, grid, (Center(), Vertex(), Vertex()), args...; kwargs...)
+)
