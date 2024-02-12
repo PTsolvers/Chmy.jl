@@ -15,12 +15,7 @@ Base.@assume_effects :foldable halo(::Field{T,N,A,H}) where {T,N,A,H} = H
 Base.size(f::Field) = f.dims
 Base.parent(f::Field) = f.data
 
-# @propagate_inbounds Base.getindex(f::Field{T,N,L,H}, I::Vararg{Int,N}) where {T,N,L,H} = f.data[(I .+ 2 .* H)...]
-
-@propagate_inbounds function Base.getindex(f::Field{T,N,L,H}, I::Vararg{Int,N}) where {T,N,L,H}
-    indices = I .+ 2 .* H
-    view(f.data, indices...)
-end
+@propagate_inbounds Base.getindex(f::Field{T,N,L,H}, I::Vararg{Int,N}) where {T,N,L,H} = f.data[(I .+ 2 .* H)...]
 
 @propagate_inbounds function Base.setindex!(f::Field{T,N,L,H}, v, I::Vararg{Int,N}) where {T,N,L,H}
     f.data[(I .+ 2 .* H)...] = v
