@@ -27,6 +27,14 @@ function Base.show(io::IO, field::AbstractField{T,N,L}) where {T,N,L}
 end
 
 # grid operators
+@propagate_inbounds @add_cartesian function GridOperators.left(f::AbstractField, dim, I::Vararg{Integer,N}) where {N}
+    GridOperators.left(f, flip(location(f, dim)), dim, I...)
+end
+
+@propagate_inbounds @add_cartesian function GridOperators.right(f::AbstractField, dim, I::Vararg{Integer,N}) where {N}
+    GridOperators.right(f, flip(location(f, dim)), dim, I...)
+end
+
 @propagate_inbounds @add_cartesian function GridOperators.δ(f::AbstractField, dim, I::Vararg{Integer,N}) where {N}
     GridOperators.δ(f, flip(location(f, dim)), dim, I...)
 end
@@ -37,10 +45,20 @@ end
 
 # operators on Cartesian grids
 for (dim, coord) in enumerate((:x, :y, :z))
+    left = Symbol(:left, coord)
+    right = Symbol(:right, coord)
     δ = Symbol(:δ, coord)
     ∂ = Symbol(:∂, coord)
 
     @eval begin
+        @propagate_inbounds @add_cartesian function GridOperators.$left(f::AbstractField, I::Vararg{Integer,N}) where {N}
+            GridOperators.left(f, flip(location(f, Val($dim))), Val($dim), I...)
+        end
+
+        @propagate_inbounds @add_cartesian function GridOperators.$right(f::AbstractField, I::Vararg{Integer,N}) where {N}
+            GridOperators.right(f, flip(location(f, Val($dim))), Val($dim), I...)
+        end
+
         @propagate_inbounds @add_cartesian function GridOperators.$δ(f::AbstractField, I::Vararg{Integer,N}) where {N}
             GridOperators.δ(f, flip(location(f, Val($dim))), Val($dim), I...)
         end
