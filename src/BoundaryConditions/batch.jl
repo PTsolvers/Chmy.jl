@@ -44,7 +44,7 @@ struct FieldBatch{K,F,B} <: AbstractBatch
 end
 
 # adapt to GPU
-Adapt.adapt_structure(to, fb::FieldBatch{K}) where {K} = FieldBatch{K}(Adapt.adapt(to, fb.fields), fb.conditions)
+Adapt.adapt_structure(to, fb::FieldBatch{K}) where {K} = FieldBatch(Adapt.adapt(to, fb.fields), fb.conditions)
 
 regularise(::StructuredGrid{N}, bc::FieldBoundaryCondition) where {N} = ntuple(_ -> (bc, bc), N)
 
