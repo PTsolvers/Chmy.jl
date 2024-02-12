@@ -43,6 +43,9 @@ struct FieldBatch{K,F,B} <: AbstractBatch
     end
 end
 
+# adapt to GPU
+Adapt.adapt_structure(to, fb::FieldBatch{K}) where {K} = FieldBatch{K}(Adapt.adapt(to, fb.field), fb.condition)
+
 regularise(::StructuredGrid{N}, bc::FieldBoundaryCondition) where {N} = ntuple(_ -> (bc, bc), N)
 
 default_bcs(grid::StructuredGrid) = NamedTuple{axes_names(grid)}(ntuple(_ -> (nothing, nothing), Val(ndims(grid))))

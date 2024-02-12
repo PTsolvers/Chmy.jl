@@ -13,6 +13,7 @@ using Chmy.Architectures
 import Chmy: @add_cartesian
 
 using KernelAbstractions
+using Adapt
 
 import Base.@propagate_inbounds
 
