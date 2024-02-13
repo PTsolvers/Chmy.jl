@@ -75,7 +75,9 @@ Base.@assume_effects :foldable function outer_offset(launcher::Launcher, ::Dim{D
     end
 end
 
-function (launcher::Launcher)(arch::Architecture, grid, kernel::F, args...; bc=nothing, async=false) where {F}
+function (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,Args}; bc=nothing, async=false) where {F,Args}
+    kernel, args = kernel_and_args
+
     backend = Architectures.get_backend(arch)
     offset  = Offset(-1)
 

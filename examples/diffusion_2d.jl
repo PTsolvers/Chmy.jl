@@ -4,13 +4,15 @@ using KernelAbstractions
 using CairoMakie
 
 @kernel inbounds = true function compute_q!(q, C, χ, g::StructuredGrid, O)
-    I = @index(Global, NTuple); I = I + O
+    I = @index(Global, NTuple)
+    I = I + O
     q.x[I...] = -χ * ∂x(C, g, I...)
     q.y[I...] = -χ * ∂y(C, g, I...)
 end
 
 @kernel inbounds = true function update_C!(C, q, Δt, g::StructuredGrid, O)
-    I = @index(Global, NTuple); I = I + O
+    I = @index(Global, NTuple)
+    I = I + O
     C[I...] -= Δt * divg(q, g, I...)
 end
 
@@ -40,8 +42,8 @@ end
     # action
     nt = 100
     for it in 1:nt
-        @time launch(arch, grid, compute_q!, q, C, χ, grid)
-        @time launch(arch, grid, update_C!, C, q, Δt, grid; bc=batch(grid, C => Neumann(); exchange=C))
+        @time launch(arch, grid, compute_q! => (q, C, χ, grid))
+        @time launch(arch, grid, update_C! => (C, q, Δt, grid); bc=batch(grid, C => Neumann(); exchange=C))
     end
     KernelAbstractions.synchronize(backend)
     plt[3] = interior(C) |> Array
