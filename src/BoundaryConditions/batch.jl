@@ -21,8 +21,8 @@ Apply boundary conditions using a batch set `batch` containing an `AbstractBatch
     quote
         @inline
         Base.Cartesian.@nexprs $N D -> begin
-            bc!(Side(1), Dim($N - D + 1), arch, grid, batch[D][1])
-            bc!(Side(2), Dim($N - D + 1), arch, grid, batch[D][2])
+            bc!(Side(1), Dim($N - D + 1), arch, grid, batch[$N - D + 1][1])
+            bc!(Side(2), Dim($N - D + 1), arch, grid, batch[$N - D + 1][2])
         end
         return
     end
