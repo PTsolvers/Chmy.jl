@@ -52,11 +52,11 @@ for (dim, coord) in enumerate((:x, :y, :z))
 
     @eval begin
         @propagate_inbounds @add_cartesian function GridOperators.$left(f::AbstractField, I::Vararg{Integer,N}) where {N}
-            GridOperators.left(f, flip(location(f, Val($dim))), Val($dim), I...)
+            GridOperators.left(f, flip(location(f, Dim($dim))), Dim($dim), I...)
         end
 
         @propagate_inbounds @add_cartesian function GridOperators.$right(f::AbstractField, I::Vararg{Integer,N}) where {N}
-            GridOperators.right(f, flip(location(f, Val($dim))), Val($dim), I...)
+            GridOperators.right(f, flip(location(f, Dim($dim))), Dim($dim), I...)
         end
 
         @propagate_inbounds @add_cartesian function GridOperators.$δ(f::AbstractField, I::Vararg{Integer,N}) where {N}

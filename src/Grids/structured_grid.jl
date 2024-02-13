@@ -172,29 +172,29 @@ for (dim, c) in enumerate((:x, :y, :z))
     @eval begin
         export $_Δ, $_coord, $_coords, $_vertex, $_center, $_vertices, $_centers
 
-        @propagate_inbounds $_Δ(grid::SG{N}, loc, I::Vararg{Integer,N}) where {N} = spacing(grid, loc, Val($dim), I...)
-        @propagate_inbounds $_Δ(grid::SG, loc, I) = spacing(grid, loc, Val($dim), I)
+        @propagate_inbounds $_Δ(grid::SG{N}, loc, I::Vararg{Integer,N}) where {N} = spacing(grid, loc, Dim($dim), I...)
+        @propagate_inbounds $_Δ(grid::SG, loc, I) = spacing(grid, loc, Dim($dim), I)
 
-        @propagate_inbounds $_coord(grid::SG{N}, loc, I::Vararg{Integer,N}) where {N} = coord(grid, loc, Val($dim), I...)
-        @propagate_inbounds $_coord(grid::SG, loc, I) = coord(grid, loc, Val($dim), I)
+        @propagate_inbounds $_coord(grid::SG{N}, loc, I::Vararg{Integer,N}) where {N} = coord(grid, loc, Dim($dim), I...)
+        @propagate_inbounds $_coord(grid::SG, loc, I) = coord(grid, loc, Dim($dim), I)
 
-        @propagate_inbounds $_vertex(grid::SG{N}, I::Vararg{Integer,N}) where {N} = vertex(grid, Val($dim), I...)
-        @propagate_inbounds $_vertex(grid::SG, I) = vertex(grid, Val($dim), I)
+        @propagate_inbounds $_vertex(grid::SG{N}, I::Vararg{Integer,N}) where {N} = vertex(grid, Dim($dim), I...)
+        @propagate_inbounds $_vertex(grid::SG, I) = vertex(grid, Dim($dim), I)
 
-        @propagate_inbounds $_center(grid::SG{N}, I::Vararg{Integer,N}) where {N} = center(grid, Val($dim), I...)
-        @propagate_inbounds $_center(grid::SG, I) = center(grid, Val($dim), I)
+        @propagate_inbounds $_center(grid::SG{N}, I::Vararg{Integer,N}) where {N} = center(grid, Dim($dim), I...)
+        @propagate_inbounds $_center(grid::SG, I) = center(grid, Dim($dim), I)
 
-        @propagate_inbounds $_coords(grid::SG, loc) = coords(grid, loc, Val($dim))
+        @propagate_inbounds $_coords(grid::SG, loc) = coords(grid, loc, Dim($dim))
 
-        @propagate_inbounds $_vertices(grid::SG) = vertices(grid, Val($dim))
-        @propagate_inbounds $_centers(grid::SG) = centers(grid, Val($dim))
+        @propagate_inbounds $_vertices(grid::SG) = vertices(grid, Dim($dim))
+        @propagate_inbounds $_centers(grid::SG) = centers(grid, Dim($dim))
     end
 end
 
 # coordinate names and directions
-direction(::SG, ::Val{:x}) = Val(1)
-direction(::SG, ::Val{:y}) = Val(2)
-direction(::SG, ::Val{:z}) = Val(3)
+direction(::SG, ::Val{:x}) = Dim(1)
+direction(::SG, ::Val{:y}) = Dim(2)
+direction(::SG, ::Val{:z}) = Dim(3)
 
 axes_names(::SG{1}) = (:x,)
 axes_names(::SG{2}) = (:x, :y)
