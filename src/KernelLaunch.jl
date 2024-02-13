@@ -75,7 +75,9 @@ Base.@assume_effects :foldable function outer_offset(launcher::Launcher, ::Dim{D
     end
 end
 
-function (launcher::Launcher)(arch::Architecture, grid, kernel::F, args...; bc=nothing, async=false) where {F}
+function (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,Args}; bc=nothing, async=false) where {F,Args}
+    kernel, args = kernel_and_args
+
     backend = Architectures.get_backend(arch)
     offset  = Offset(-1)
 
@@ -99,12 +101,15 @@ end
 @inline function launch_with_bc(arch, grid, launcher, offset, kernel, bc, args...)
     backend   = Architectures.get_backend(arch)
     groupsize = heuristic_groupsize(backend, Val(ndims(launcher)))
-    inner_fun = kernel(backend, groupsize, inner_worksize(launcher))
-    inner_fun(args..., offset + Offset(inner_offset(launcher)...))
 
     if isnothing(outer_width(launcher))
+        fun = kernel(backend, groupsize, worksize(launcher))
+        fun(args..., offset)
         bc!(arch, grid, bc)
     else
+        inner_fun = kernel(backend, groupsize, inner_worksize(launcher))
+        inner_fun(args..., offset + Offset(inner_offset(launcher)...))
+
         N = ndims(grid)
         ntuple(Val(N)) do J
             Base.@_inline_meta
