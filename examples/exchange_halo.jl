@@ -1,15 +1,20 @@
 using Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.Distributed
 
 using KernelAbstractions
+using AMDGPU
 using MPI
 
 MPI.Init()
 
-backend = CPU()
+# backend = CPU()
+backend = ROCBackend()
 arch = Arch(backend, MPI.COMM_WORLD, (0, 0))
 topo = topology(arch)
 
-grid = UniformGrid(arch; origin=(0, 0), extent=(1, 1), dims=(12, 12))
+dims_l = (6, 6)
+dims_g = dims_l .* dims(topo)
+
+grid = UniformGrid(arch; origin=(0, 0), extent=(1, 1), dims=dims_g)
 
 field = Field(backend, grid, Center())
 fill!(parent(field), global_rank(topo))
