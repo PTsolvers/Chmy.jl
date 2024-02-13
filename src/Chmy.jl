@@ -19,6 +19,8 @@ include("BoundaryConditions/BoundaryConditions.jl")
 include("Workers.jl")
 include("Distributed/Distributed.jl")
 
+include("KernelLaunch.jl")
+
 using .Grids
 using .Fields
 using .Architectures

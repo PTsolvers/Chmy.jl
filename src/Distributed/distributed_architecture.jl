@@ -14,9 +14,10 @@ end
 Create a distributed Architecture using backend `backend` and `comm`.
 For GPU backends, device will be selected automatically based on a process id within a node.
 """
-function Architectures.Arch(backend::Backend, comm::MPI.Comm, dims)
+function Architectures.Arch(backend::Backend, comm::MPI.Comm, dims; device_id=nothing)
     topology   = CartesianTopology(comm, dims)
-    dev        = get_device(backend, shared_rank(topology) + 1)
+    dev_id     = isnothing(device_id) ? shared_rank(topology) + 1 : device_id
+    dev        = get_device(backend, dev_id)
     child_arch = SingleDeviceArchitecture(backend, dev)
     return DistributedArchitecture(child_arch, topology)
 end

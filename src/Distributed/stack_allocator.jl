@@ -75,12 +75,11 @@ The `align` parameter specifies the alignment of the buffer elements.
 function allocate(sa::StackAllocator, T::DataType, dims, align::Integer=sizeof(T))
     nbytes  = prod(dims) * sizeof(T)
     aligned = div(sa.offset + align - 1, align) * align
-    # reallocate buffer if allocation size is larger than buffer size
     if aligned + nbytes > length(sa.buffer)
         error("not enough memory to allocate")
     end
-    # get a slice of the buffer
     backend = KernelAbstractions.get_backend(sa.buffer)
+    # "reinterpret" won't work as an MPI buffer, need to use "unsafe_wrap"
     data_ptr = convert(pointertype(backend, T), pointer(sa.buffer) + aligned)
     sa.offset = aligned + nbytes
     sa.nallocs += 1
