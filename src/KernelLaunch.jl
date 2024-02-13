@@ -99,12 +99,15 @@ end
 @inline function launch_with_bc(arch, grid, launcher, offset, kernel, bc, args...)
     backend   = Architectures.get_backend(arch)
     groupsize = heuristic_groupsize(backend, Val(ndims(launcher)))
-    inner_fun = kernel(backend, groupsize, inner_worksize(launcher))
-    inner_fun(args..., offset + Offset(inner_offset(launcher)...))
 
     if isnothing(outer_width(launcher))
+        fun = kernel(backend, groupsize, worksize(launcher))
+        fun(args..., offset)
         bc!(arch, grid, bc)
     else
+        inner_fun = kernel(backend, groupsize, inner_worksize(launcher))
+        inner_fun(args..., offset + Offset(inner_offset(launcher)...))
+
         N = ndims(grid)
         ntuple(Val(N)) do J
             Base.@_inline_meta
