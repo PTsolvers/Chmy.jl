@@ -1,7 +1,7 @@
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators
 using KernelAbstractions
-# using AMDGPU
-# AMDGPU.allowscalar(false)
+using AMDGPU
+AMDGPU.allowscalar(false)
 using CairoMakie
 using Printf
 
@@ -84,7 +84,7 @@ end
     Ta    = 0.1               # atmospheric temperature
     λ_ρCp = 1e-4 * ly^2 / τsc # thermal diffusivity
     # numerics
-    nx = ny = nz = 64
+    nx = ny = nz = 319
     grid   = UniformGrid(arch; origin=(-lx/2, -ly/2, -lz/2), extent=(lx, ly, lz), dims=(nx, ny, nz))
     dx, dy, dz = spacing(grid, Center(), 1, 1, 1)
     nt     = 2
@@ -167,7 +167,7 @@ end
                            Vx=maximum(abs.(interior(r_V.x))) * ly / psc,
                            Vy=maximum(abs.(interior(r_V.y))) * ly / psc,
                            Vz=maximum(abs.(interior(r_V.z))) * ly / psc)
-                    @printf("  iter/nx=%.1f, err = [Pr=%1.3e, Vx=%1.3e, Vy=%1.3e, Vz=%1.3e] \n", iter , err...)
+                    @printf("  iter/nx=%.1f, err = [Pr=%1.3e, Vx=%1.3e, Vy=%1.3e, Vz=%1.3e] \n", iter / nx , err...)
                     # stop if converged or error if NaN
                     all(values(err) .< ϵ_it) && break
                     any(.!isfinite.(values(err))) && error("simulation failed, err = $err")
@@ -184,5 +184,5 @@ end
     return
 end
 
-# main(ROCBackend())
-main()
+main(ROCBackend())
+# main()

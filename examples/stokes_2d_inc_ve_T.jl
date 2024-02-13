@@ -1,7 +1,7 @@
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators
 using KernelAbstractions
-# using AMDGPU
-# AMDGPU.allowscalar(false)
+using AMDGPU
+AMDGPU.allowscalar(false)
 using CairoMakie
 using Printf
 
@@ -67,11 +67,11 @@ end
     Ta    = 0.1               # atmospheric temperature
     λ_ρCp = 1e-4 * ly^2 / τsc # thermal diffusivity
     # numerics
-    nx     = 128
+    nx     = 1023
     ny     = ceil(Int, nx * ly / lx)
     grid   = UniformGrid(arch; origin=(-lx/2, -ly/2), extent=(lx, ly), dims=(nx, ny))
     dx, dy = spacing(grid, Center(), 1, 1)
-    nt     = 2
+    nt     = 4
     niter  = 50nx
     ncheck = 2nx
     ϵ_it   = 1e-6
@@ -127,7 +127,7 @@ end
             update_old!(backend, 256, size(grid, Vertex()))(T, τ, T_old, τ_old)
             # time step
             dt_diff = min(dx, dy)^2 / λ_ρCp / ndims(grid) / 2.1
-            dt_adv  = 0.1 * min(dx / maximum(abs.(interior(V.x))), dy / maximum(abs.(interior(V.y)))) / ndims(grid) / 2.1 # needs 0.1 here ?!
+            dt_adv  = 0.01 * min(dx / maximum(abs.(interior(V.x))), dy / maximum(abs.(interior(V.y)))) / ndims(grid) / 2.1 # needs 0.1 here ?!
             dt      = min(dt_diff, dt_adv)
             # rheology
             η_ve = 1.0 / (1.0 / η + 1.0 / (G * dt))
@@ -146,7 +146,7 @@ end
                     err = (Pr=maximum(abs.(interior(∇V))) * τsc,
                            Vx=maximum(abs.(interior(r_V.x))) * ly / psc,
                            Vy=maximum(abs.(interior(r_V.y))) * ly / psc)
-                    @printf("  iter/nx=%.1f, err = [Pr=%1.3e, Vx=%1.3e, Vy=%1.3e] \n", iter , err...)
+                    @printf("  iter/nx=%.1f, err = [Pr=%1.3e, Vx=%1.3e, Vy=%1.3e] \n", iter / nx, err...)
                     # stop if converged or error if NaN
                     all(values(err) .< ϵ_it) && break
                     any(.!isfinite.(values(err))) && error("simulation failed, err = $err")
@@ -163,5 +163,5 @@ end
     return
 end
 
-# main(ROCBackend())
-main()
+main(ROCBackend())
+# main()
