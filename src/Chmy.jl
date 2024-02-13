@@ -1,12 +1,13 @@
 module Chmy
 
+using MacroTools
 using KernelAbstractions
 
+export Dim, Side, Left, Right
 export remove_dim, insert_dim
 
 include("macros.jl")
 include("utils.jl")
-include("kernel_abstractions.jl")
 
 include("Architectures.jl")
 include("Grids/Grids.jl")
@@ -19,7 +20,7 @@ include("Workers.jl")
 include("Distributed/Distributed.jl")
 
 using .Grids
-using .GridOperators
 using .Fields
+using .Architectures
 
 end # module Chmy

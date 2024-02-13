@@ -1,5 +1,3 @@
-using MacroTools
-
 # for a function with a last parameter being Vararg{Integer}, create additional definition for a CartesianIndex
 macro add_cartesian(ex)
     add_cartesian_impl(ex)

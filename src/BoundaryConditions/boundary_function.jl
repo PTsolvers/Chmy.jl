@@ -34,7 +34,7 @@ end
     bc.fun(grid, loc, dim, _reduce(RF, dim, I)..., _params(bc)...)
 end
 
-@propagate_inbounds function value(bc::FBC{<:BoundaryFunction}, grid::SG{N}, loc, dim, I::Vararg{Integer,N}) where {N}
+@propagate_inbounds function value(bc::FirstOrderBC{<:BoundaryFunction}, grid::SG{N}, loc, dim, I::Vararg{Integer,N}) where {N}
     bc.value(grid, loc, dim, I...)
 end
 
@@ -46,8 +46,8 @@ function BoundaryFunction(fun::Function; discrete=false, parameters=nothing, red
     discrete ? DiscreteBoundaryFunction{RF}(fun, parameters) : ContinuousBoundaryFunction{RF}(fun, parameters)
 end
 
-# constructor for FieldBoundaryCondition supporting functions
-function FieldBoundaryCondition{Kind}(f::F) where {Kind,F<:Function}
+# constructor for FirstOrderBC supporting functions
+function FirstOrderBC{Kind}(f::F) where {Kind,F<:Function}
     bf = ContinuousBoundaryFunction{ReducedDimensions}(f, nothing)
     return FieldBoundaryCondition{Kind}(bf)
 end

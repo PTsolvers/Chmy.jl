@@ -1,5 +1,5 @@
 """
-    struct DistributedArchitecture{ChildArch,Topo}
+    DistributedArchitecture <: Architecture
 
 A struct representing a distributed architecture.
 """
@@ -9,9 +9,10 @@ struct DistributedArchitecture{ChildArch,Topo} <: Architecture
 end
 
 """
-    Arch(backend::Backend, comm::MPI::Comm, dims; kwargs...) where {N}
+    Arch(backend, comm, dims; kwargs...)
 
-Create a distributed Architecture using backend `backend` and `comm`. For GPU backends, device will be selected automatically based on a process id within a node.
+Create a distributed Architecture using backend `backend` and `comm`.
+For GPU backends, device will be selected automatically based on a process id within a node.
 """
 function Architectures.Arch(backend::Backend, comm::MPI.Comm, dims)
     topology   = CartesianTopology(comm, dims)
