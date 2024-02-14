@@ -1,4 +1,4 @@
-using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators
+using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
 using KernelAbstractions
 using AMDGPU
 AMDGPU.allowscalar(false)
@@ -55,7 +55,7 @@ end
     T[I...] = T_old[I...] - dt * divg(qT, g, I...)
 end
 
-@views function main(backend=CPU(), n::Int=127)
+@views function main(backend=CPU(); nxy::Int=126)
     arch = Arch(backend)
     # geometry
     lx, ly = 2.0, 2.0
@@ -71,7 +71,7 @@ end
     Ta    = 0.1               # atmospheric temperature
     λ_ρCp = 1e-4 * ly^2 / τsc # thermal diffusivity
     # numerics
-    nx = ny = n
+    nx = ny = nxy
     grid   = UniformGrid(arch; origin=(-lx/2, -ly/2), extent=(lx, ly), dims=(nx, ny))
     dx, dy = spacing(grid, Center(), 1, 1)
     nt     = 4
@@ -167,5 +167,7 @@ end
     return
 end
 
-main(ROCBackend(), 256)
-# main()
+# main(ROCBackend(); nxy=254)
+main(; nxy=254)
+
+MPI.Finalize()
