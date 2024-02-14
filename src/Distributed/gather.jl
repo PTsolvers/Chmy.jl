@@ -38,5 +38,5 @@ end
 Gather the interior of a field `src` into a global array `dst`.
 """
 function gather!(arch::DistributedArchitecture, dst, src::Field; kwargs...)
-    gather!(dst, interior(src), cartesian_communicator(topology(arch)); kwargs...)
+    gather!(dst, interior(src), cart_comm(topology(arch)); kwargs...)
 end
