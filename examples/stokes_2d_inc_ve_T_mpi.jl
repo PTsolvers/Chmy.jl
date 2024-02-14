@@ -112,7 +112,7 @@ end
     set!(ρgy, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=ρg.y, out=0.0))
     set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=T0, out=Ta))
     η_ve = 0.0
-    launch = Launcher(arch, grid)
+    launch = Launcher(arch, grid; outer_width=(16, 8))
     # boundary conditions
     bc_V = (V.x => (x=Dirichlet(), y=Neumann()),
             V.y => (x=Neumann(), y=Dirichlet()))
@@ -136,40 +136,38 @@ end
     Colorbar(fig[2, 2][1, 2], plt.T)
     # display(fig)
     # action
-    @time begin
-        for it in 1:nt
-            (me==0) && @printf("it = %d/%d \n", it, nt)
-            launch(arch, grid, update_old! => (T, τ, T_old, τ_old))
-            # time step
-            dt_diff = min(dx, dy)^2 / λ_ρCp / ndims(grid) / 2.1
-            dt_adv  = 0.1 * min(dx / maximum(abs.(interior(V.x))), dy / maximum(abs.(interior(V.y)))) / ndims(grid) / 2.1
-            dt      = min(dt_diff, dt_adv)
-            # rheology
-            η_ve = 1.0 / (1.0 / η + 1.0 / (G * dt))
-            (it > 2) && (ncheck = ceil(Int, 0.5nx))
-            for iter in 1:niter
-                launch(arch, grid, update_stress! => (τ, Pr, ∇V, V, τ_old, η, η_ve, G, dt, dτ_Pr, dτ_r, grid))
-                launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgy, η_ve, νdτ, grid); bc=batch(grid, bc_V...; exchange=(V.x, V.y)))
-                if it > 1
-                    # launch(arch, grid, update_thermal_flux! => (qT, T, V, λ_ρCp, grid); bc=batch(grid, bc_qT...))
-                    # launch(arch, grid, update_thermal! => (T, T_old, qT, dt, grid); bc=batch(grid; exchange=T))
-                    launch(arch, grid, update_thermal_flux! => (qT, T, V, λ_ρCp, grid))
-                    launch(arch, grid, update_thermal! => (T, T_old, qT, dt, grid); bc=batch(grid, bc_T...; exchange=T))
-                end
-                if iter % ncheck == 0
-                    bc!(arch, grid, r_V.x => (x=Dirichlet(),), r_V.y => (y=Dirichlet(),))
-                    err = (Pr=maximum(abs.(interior(∇V))) * τsc,
-                           Vx=maximum(abs.(interior(r_V.x))) * ly / psc,
-                           Vy=maximum(abs.(interior(r_V.y))) * ly / psc)
-                    (me==0) && @printf("  iter/nx=%.1f, err = [Pr=%1.3e, Vx=%1.3e, Vy=%1.3e] \n", iter / nx, err...)
-                    # stop if converged or error if NaN
-                    all(values(err) .< ϵ_it) && break
-                    any(.!isfinite.(values(err))) && error("simulation failed, err = $err")
-                end
+    for it in 1:nt
+        (me==0) && @printf("it = %d/%d \n", it, nt)
+        launch(arch, grid, update_old! => (T, τ, T_old, τ_old))
+        # time step
+        dt_diff = min(dx, dy)^2 / λ_ρCp / ndims(grid) / 2.1
+        dt_adv  = 0.1 * min(dx / maximum(abs.(interior(V.x))), dy / maximum(abs.(interior(V.y)))) / ndims(grid) / 2.1
+        dt      = min(dt_diff, dt_adv)
+        # rheology
+        η_ve = 1.0 / (1.0 / η + 1.0 / (G * dt))
+        (it > 2) && (ncheck = ceil(Int, 0.5nx))
+        for iter in 1:niter
+            launch(arch, grid, update_stress! => (τ, Pr, ∇V, V, τ_old, η, η_ve, G, dt, dτ_Pr, dτ_r, grid))
+            launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgy, η_ve, νdτ, grid); bc=batch(grid, bc_V...; exchange=(V.x, V.y)))
+            if it > 1
+                # launch(arch, grid, update_thermal_flux! => (qT, T, V, λ_ρCp, grid); bc=batch(grid, bc_qT...))
+                # launch(arch, grid, update_thermal! => (T, T_old, qT, dt, grid); bc=batch(grid; exchange=T))
+                launch(arch, grid, update_thermal_flux! => (qT, T, V, λ_ρCp, grid))
+                launch(arch, grid, update_thermal! => (T, T_old, qT, dt, grid); bc=batch(grid, bc_T...; exchange=T))
+            end
+            if iter % ncheck == 0
+                bc!(arch, grid, r_V.x => (x=Dirichlet(),), r_V.y => (y=Dirichlet(),))
+                err = (Pr=maximum(abs.(interior(∇V))) * τsc,
+                Vx=maximum(abs.(interior(r_V.x))) * ly / psc,
+                Vy=maximum(abs.(interior(r_V.y))) * ly / psc)
+                (me==0) && @printf("  iter/nx=%.1f, err = [Pr=%1.3e, Vx=%1.3e, Vy=%1.3e] \n", iter / nx, err...)
+                # stop if converged or error if NaN
+                all(values(err) .< ϵ_it) && break
+                any(.!isfinite.(values(err))) && error("simulation failed, err = $err")
             end
         end
-        KernelAbstractions.synchronize(backend)
     end
+    KernelAbstractions.synchronize(backend)
     # local postprocess
     plt.Pr[3] = interior(Pr) |> Array
     plt.Vx[3] = interior(V.x) |> Array

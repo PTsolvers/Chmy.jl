@@ -38,7 +38,7 @@ end
     # initial conditions
     set!(C, grid, (x, y) -> exp(-x^2 - y^2))
     bc!(arch, grid, C => Neumann(); exchange=C)
-    launch = Launcher(arch, grid)
+    launch = Launcher(arch, grid; outer_width=(16, 8))
     # visualisation
     fig = Figure(; size=(400, 320))
     ax  = Axis(fig[1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="it = 0")
