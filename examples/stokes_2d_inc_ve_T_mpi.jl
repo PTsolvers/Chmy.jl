@@ -112,6 +112,7 @@ end
     T_old = Field(backend, grid, Center())
     qT    = VectorField(backend, grid)
     Pr_v  = KernelAbstractions.zeros(CPU(), Float64, size(interior(Pr)) .* dims(topo))
+    Pr_v  = (me==0) ? KernelAbstractions.zeros(CPU(), Float64, size(interior(Pr)) .* dims(topo)) : nothing
     # initial conditions
     init_incl(x, y, x0, y0, r, in, out) = ifelse((x - x0)^2 + (y - y0)^2 < r^2, in, out)
     set!(ρgy, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=ρg.y, out=0.0))

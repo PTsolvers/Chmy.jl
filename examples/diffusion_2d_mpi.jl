@@ -35,7 +35,7 @@ end
     # allocate fields
     C = Field(backend, grid, Center())
     q = VectorField(backend, grid)
-    C_v = KernelAbstractions.zeros(CPU(), Float64, size(interior(C)) .* dims(topo))
+    C_v = (me==0) ? KernelAbstractions.zeros(CPU(), Float64, size(interior(C)) .* dims(topo)) : nothing
     # initial conditions
     set!(C, grid, (x, y) -> exp(-x^2 - y^2))
     bc!(arch, grid, C => Neumann(); exchange=C)
