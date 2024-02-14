@@ -21,8 +21,8 @@ Apply boundary conditions using a batch set `batch` containing an `AbstractBatch
     quote
         @inline
         Base.Cartesian.@nexprs $N D -> begin
-            bc!(Side(1), Dim($N - D + 1), arch, grid, batch[$N - D + 1][1])
-            bc!(Side(2), Dim($N - D + 1), arch, grid, batch[$N - D + 1][2])
+            bc!(Side(1), Dim($N - D + 1), arch, grid, batch[$N-D+1][1])
+            bc!(Side(2), Dim($N - D + 1), arch, grid, batch[$N-D+1][2])
         end
         return
     end
@@ -73,13 +73,18 @@ function batch(grid, fields_bcs::Vararg{Pair{<:Field,<:PerFieldBC}}; exchange=no
     return batch_set(grid, fields, bcs, exchange)
 end
 
+function batch(grid; exchange=nothing)
+    exchange = regularise_exchange(grid, exchange)
+    return exchange_set(grid, exchange)
+end
+
 @generated function batch_set(grid::StructuredGrid{N}, fields, bcs, exch) where {N}
     quote
         @inline
         Base.Cartesian.@ntuple $N D -> begin
             Base.Cartesian.@ntuple 2 S -> begin
                 if connectivity(grid, Dim(D), Side(S)) isa Connected
-                    batch_impl_connected(fields, exch[D])
+                    batch_impl_connected(exch[D])
                 else
                     batch_impl_bounded(fields, bcs[D][S])
                 end
@@ -88,8 +93,23 @@ end
     end
 end
 
-batch_impl_connected(fields, ::Nothing) = EmptyBatch()
-batch_impl_connected(fields, exch)      = ExchangeBatch(exch)
+@generated function exchange_set(grid::StructuredGrid{N}, exch) where {N}
+    quote
+        @inline
+        Base.Cartesian.@ntuple $N D -> begin
+            Base.Cartesian.@ntuple 2 S -> begin
+                if connectivity(grid, Dim(D), Side(S)) isa Connected
+                    batch_impl_connected(exch[D])
+                else
+                    EmptyBatch()
+                end
+            end
+        end
+    end
+end
+
+batch_impl_connected(::Nothing) = EmptyBatch()
+batch_impl_connected(exch)      = ExchangeBatch(exch)
 
 batch_impl_bounded(fields, ::Tuple{Vararg{Nothing}}) = EmptyBatch()
 batch_impl_bounded(fields, bc)                       = FieldBatch(prune(fields, bc)...)
@@ -131,12 +151,6 @@ end
     f_bc   = (zip(fields, bcs)...,)
     pruned = filter(x -> !isnothing(last(x)), f_bc)
     return (zip(pruned...)...,)
-end
-
-@inline function batch(::Architecture, grid::StructuredGrid{N}, f_bcs::Vararg{FieldAndBC,K}) where {N,K}
-    fs, bcs = zip(f_bcs...)
-    bcs_reg = map(x -> regularise(grid, x), bcs) |> reorder
-    return _batch(fs, bcs_reg)
 end
 
 bc!(arch::Architecture, grid::SG, f_bc::Vararg{FieldAndBC}; kwargs...) = bc!(arch, grid, batch(grid, f_bc...; kwargs...))
