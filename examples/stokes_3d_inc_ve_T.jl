@@ -87,7 +87,7 @@ end
     # heat
     T0    = 1.0               # initial temperature
     Ta    = 0.1               # atmospheric temperature
-    λ_ρCp = 1e-4 * ly^2 / τsc # thermal diffusivity
+    λ_ρCp = 1e-4 * lz^2 / τsc # thermal diffusivity
     # numerics
     nx = ny = nz = nxyz
     grid   = UniformGrid(arch; origin=(-lx/2, -ly/2, -lz/2), extent=(lx, ly, lz), dims=(nx, ny, nz))
@@ -166,9 +166,9 @@ end
                 if iter % ncheck == 0
                     bc!(arch, grid, r_V.x => (x=Dirichlet(),), r_V.y => (y=Dirichlet(),), r_V.z => (z=Dirichlet(),))
                     err = (Pr=maximum(abs.(interior(∇V))) * τsc,
-                           Vx=maximum(abs.(interior(r_V.x))) * ly / psc,
-                           Vy=maximum(abs.(interior(r_V.y))) * ly / psc,
-                           Vz=maximum(abs.(interior(r_V.z))) * ly / psc)
+                           Vx=maximum(abs.(interior(r_V.x))) * lz / psc,
+                           Vy=maximum(abs.(interior(r_V.y))) * lz / psc,
+                           Vz=maximum(abs.(interior(r_V.z))) * lz / psc)
                     @printf("  iter/nx=%.1f, err = [Pr=%1.3e, Vx=%1.3e, Vy=%1.3e, Vz=%1.3e] \n", iter / nx , err...)
                     # stop if converged or error if NaN
                     all(values(err) .< ϵ_it) && break
