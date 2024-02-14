@@ -1,6 +1,7 @@
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
 using KernelAbstractions
-# using AMDGPU
+using AMDGPU
+AMDGPU.allowscalar(false)
 using CairoMakie
 
 @kernel inbounds = true function compute_q!(q, C, χ, g::StructuredGrid, O)
@@ -32,7 +33,6 @@ end
     set!(C, grid, (_, _) -> rand())
     bc!(arch, grid, C => Neumann(); exchange=C)
     launch = Launcher(arch, grid)
-    @show typeof(launch)
     # visualisation
     fig = Figure(; size=(400, 320))
     ax  = Axis(fig[1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="it = 0")
@@ -52,5 +52,5 @@ end
     return
 end
 
-# main(ROCBackend())
-main()
+main(ROCBackend())
+# main()

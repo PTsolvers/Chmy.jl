@@ -5,7 +5,7 @@ AMDGPU.allowscalar(false)
 using CairoMakie
 using Printf
 
-@kernel inbounds = true function update_old!(T, τ, T_old, τ_old)
+@kernel inbounds = true function update_old!(T, τ, T_old, τ_old, O)
     I = @index(Global, NTuple)
     T_old[I...] = T[I...]
     τ_old.xx[I...] = τ.xx[I...]
@@ -13,8 +13,9 @@ using Printf
     τ_old.xy[I...] = τ.xy[I...]
 end
 
-@kernel inbounds = true function update_stress!(τ, Pr, ∇V, V, τ_old, η, η_ve, G, dt, dτ_Pr, dτ_r, g::StructuredGrid)
+@kernel inbounds = true function update_stress!(τ, Pr, ∇V, V, τ_old, η, η_ve, G, dt, dτ_Pr, dτ_r, g::StructuredGrid, O)
     I = @index(Global, NTuple)
+    I = I + O
     ε̇xx = ∂x(V.x, g, I...)
     ε̇yy = ∂y(V.y, g, I...)
     ε̇xy = 0.5 * (∂y(V.x, g, I...) + ∂x(V.y, g, I...))
@@ -28,16 +29,18 @@ end
     τ.xy[I...] += r_τxy * η_ve * dτ_r
 end
 
-@kernel inbounds = true function update_velocity!(V, r_V, Pr, τ, ρgy, η_ve, νdτ, g::StructuredGrid)
+@kernel inbounds = true function update_velocity!(V, r_V, Pr, τ, ρgy, η_ve, νdτ, g::StructuredGrid, O)
     I = @index(Global, NTuple)
+    I = I + O
     r_V.x[I...] = -∂x(Pr, g, I...) + ∂x(τ.xx, g, I...) + ∂y(τ.xy, g, I...)
     r_V.y[I...] = -∂y(Pr, g, I...) + ∂y(τ.yy, g, I...) + ∂x(τ.xy, g, I...) - ρgy[I...]
     V.x[I...] += r_V.x[I...] * νdτ / η_ve
     V.y[I...] += r_V.y[I...] * νdτ / η_ve
 end
 
-@kernel inbounds = true function update_thermal_flux!(qT, T, V, λ_ρCp, g::StructuredGrid)
+@kernel inbounds = true function update_thermal_flux!(qT, T, V, λ_ρCp, g::StructuredGrid, O)
     I = @index(Global, NTuple)
+    I = I + O
     qT.x[I...] = -λ_ρCp * ∂x(T, g, I...) +
                  max(V.x[I...], 0.0) * leftx(T, I...) +
                  min(V.x[I...], 0.0) * rightx(T, I...)
@@ -46,15 +49,16 @@ end
                  min(V.y[I...], 0.0) * righty(T, I...)
 end
 
-@kernel inbounds = true function update_thermal!(T, T_old, qT, dt, g::StructuredGrid)
+@kernel inbounds = true function update_thermal!(T, T_old, qT, dt, g::StructuredGrid, O)
     I = @index(Global, NTuple)
+    I = I + O
     T[I...] = T_old[I...] - dt * divg(qT, g, I...)
 end
 
-@views function main(backend=CPU())
+@views function main(backend=CPU(), n::Int=127)
     arch = Arch(backend)
     # geometry
-    lx, ly = 2.0, 1.8
+    lx, ly = 2.0, 2.0
     # mechanics
     η    = 1.0e1 # solid viscosity
     G    = 1.0e0 # shear modulus
@@ -67,8 +71,7 @@ end
     Ta    = 0.1               # atmospheric temperature
     λ_ρCp = 1e-4 * ly^2 / τsc # thermal diffusivity
     # numerics
-    nx     = 1023
-    ny     = ceil(Int, nx * ly / lx)
+    nx = ny = n
     grid   = UniformGrid(arch; origin=(-lx/2, -ly/2), extent=(lx, ly), dims=(nx, ny))
     dx, dy = spacing(grid, Center(), 1, 1)
     nt     = 4
@@ -95,11 +98,13 @@ end
     T     = Field(backend, grid, Center())
     T_old = Field(backend, grid, Center())
     qT    = VectorField(backend, grid)
+    # initial conditions
     init_incl(x, y, x0, y0, r, in, out) = ifelse((x - x0)^2 + (y - y0)^2 < r^2, in, out)
     set!(ρgy, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=ρg.y, out=0.0))
     set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=T0, out=Ta))
     η_ve = 0.0
     bc!(arch, grid, T => Neumann())
+    launch = Launcher(arch, grid)
     # boundary conditions
     bc_qT = (qT.x => (x=Dirichlet(),),
              qT.y => (y=Dirichlet(),))
@@ -124,7 +129,7 @@ end
     @time begin
         for it in 1:nt
             @printf("it = %d/%d \n", it, nt)
-            update_old!(backend, 256, size(grid, Vertex()))(T, τ, T_old, τ_old)
+            launch(arch, grid, update_old! => (T, τ, T_old, τ_old))
             # time step
             dt_diff = min(dx, dy)^2 / λ_ρCp / ndims(grid) / 2.1
             dt_adv  = 0.01 * min(dx / maximum(abs.(interior(V.x))), dy / maximum(abs.(interior(V.y)))) / ndims(grid) / 2.1 # needs 0.1 here ?!
@@ -133,13 +138,12 @@ end
             η_ve = 1.0 / (1.0 / η + 1.0 / (G * dt))
             (it > 2) && (ncheck = ceil(Int, 0.5nx))
             for iter in 1:niter
-                update_stress!(backend, 256, size(grid, Vertex()))(τ, Pr, ∇V, V, τ_old, η, η_ve, G, dt, dτ_Pr, dτ_r, grid)
-                update_velocity!(backend, 256, size(grid, Vertex()))(V, r_V, Pr, τ, ρgy, η_ve, νdτ, grid)
-                bc!(arch, grid, bc_V...)
+                launch(arch, grid, update_stress! => (τ, Pr, ∇V, V, τ_old, η, η_ve, G, dt, dτ_Pr, dτ_r, grid))
+                launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgy, η_ve, νdτ, grid); bc=batch(grid, bc_V...; exchange=V))
+                # bc!(arch, grid, bc_V...)
                 if it > 1
-                    update_thermal_flux!(backend, 256, size(grid, Vertex()))(qT, T, V, λ_ρCp, grid)
-                    bc!(arch, grid, bc_qT...)
-                    update_thermal!(backend, 256, size(grid, Center()))(T, T_old, qT, dt, grid)
+                    launch(arch, grid, update_thermal_flux! => (qT, T, V, λ_ρCp, grid); bc=batch(grid, bc_qT...))
+                    launch(arch, grid, update_thermal! => (T, T_old, qT, dt, grid); bc=batch(grid; exchange=T))
                 end
                 if iter % ncheck == 0
                     bc!(arch, grid, r_V.x => (x=Dirichlet(),), r_V.y => (y=Dirichlet(),))
@@ -163,5 +167,5 @@ end
     return
 end
 
-main(ROCBackend())
+main(ROCBackend(), 256)
 # main()
