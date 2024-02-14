@@ -209,6 +209,6 @@ end
 end
 
 # main(ROCBackend(); nxyz=126)
-main(; nxyz=180)
+main(; nxyz=94)
 
 MPI.Finalize()
