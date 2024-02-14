@@ -24,6 +24,7 @@ end
 @views function main(backend=CPU(); n=254)
     arch = Arch(backend, MPI.COMM_WORLD, (0, 0))
     topo = topology(arch)
+    me = global_rank(topo)
     # geometry
     grid = UniformGrid(arch; origin=(-2, -2), extent=(4, 4), dims=(n, n))
     # physics
@@ -54,10 +55,10 @@ end
     plt[3] = interior(C) |> Array
     ax.title = "it = $nt"
     # display(fig)
-    save("out$(global_rank(topo)).png", fig)
+    save("out$me.png", fig)
     # global postprocess
     gather!(arch, C_v, C)
-    if global_rank(topo) == 0
+    if me == 0
         fig = Figure(; size=(400, 320))
         ax  = Axis(fig[1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="it = 0")
         plt = heatmap!(ax, C_v; colormap=:turbo) # how to get the global grid for axes?
