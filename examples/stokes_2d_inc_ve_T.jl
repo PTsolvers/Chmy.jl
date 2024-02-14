@@ -7,6 +7,7 @@ using Printf
 
 @kernel inbounds = true function update_old!(T, τ, T_old, τ_old, O)
     I = @index(Global, NTuple)
+    I = I + O
     T_old[I...] = T[I...]
     τ_old.xx[I...] = τ.xx[I...]
     τ_old.yy[I...] = τ.yy[I...]
@@ -103,13 +104,14 @@ end
     set!(ρgy, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=ρg.y, out=0.0))
     set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=T0, out=Ta))
     η_ve = 0.0
-    bc!(arch, grid, T => Neumann())
     launch = Launcher(arch, grid)
     # boundary conditions
-    bc_qT = (qT.x => (x=Dirichlet(),),
-             qT.y => (y=Dirichlet(),))
     bc_V = (V.x => (x=Dirichlet(), y=Neumann()),
             V.y => (x=Neumann(), y=Dirichlet()))
+    bc_T = (T => Neumann(),)
+    # bc_qT = (qT.x => (x=Dirichlet(),),
+    #          qT.y => (y=Dirichlet(),))
+    bc!(arch, grid, bc_T...)
     # visualisation
     fig = Figure(; size=(800, 600))
     axs = (Pr = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel="x", title="Pr"),
@@ -132,18 +134,19 @@ end
             launch(arch, grid, update_old! => (T, τ, T_old, τ_old))
             # time step
             dt_diff = min(dx, dy)^2 / λ_ρCp / ndims(grid) / 2.1
-            dt_adv  = 0.01 * min(dx / maximum(abs.(interior(V.x))), dy / maximum(abs.(interior(V.y)))) / ndims(grid) / 2.1 # needs 0.1 here ?!
+            dt_adv  = 0.1 * min(dx / maximum(abs.(interior(V.x))), dy / maximum(abs.(interior(V.y)))) / ndims(grid) / 2.1
             dt      = min(dt_diff, dt_adv)
             # rheology
             η_ve = 1.0 / (1.0 / η + 1.0 / (G * dt))
             (it > 2) && (ncheck = ceil(Int, 0.5nx))
             for iter in 1:niter
                 launch(arch, grid, update_stress! => (τ, Pr, ∇V, V, τ_old, η, η_ve, G, dt, dτ_Pr, dτ_r, grid))
-                launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgy, η_ve, νdτ, grid); bc=batch(grid, bc_V...; exchange=V))
-                # bc!(arch, grid, bc_V...)
+                launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgy, η_ve, νdτ, grid); bc=batch(grid, bc_V...; exchange=V)) # bc!(arch, grid, bc_V...)
                 if it > 1
-                    launch(arch, grid, update_thermal_flux! => (qT, T, V, λ_ρCp, grid); bc=batch(grid, bc_qT...))
-                    launch(arch, grid, update_thermal! => (T, T_old, qT, dt, grid); bc=batch(grid; exchange=T))
+                    # launch(arch, grid, update_thermal_flux! => (qT, T, V, λ_ρCp, grid); bc=batch(grid, bc_qT...))
+                    # launch(arch, grid, update_thermal! => (T, T_old, qT, dt, grid); bc=batch(grid; exchange=T))
+                    launch(arch, grid, update_thermal_flux! => (qT, T, V, λ_ρCp, grid))
+                    launch(arch, grid, update_thermal! => (T, T_old, qT, dt, grid); bc=batch(grid, bc_T...; exchange=T))
                 end
                 if iter % ncheck == 0
                     bc!(arch, grid, r_V.x => (x=Dirichlet(),), r_V.y => (y=Dirichlet(),))
@@ -167,7 +170,5 @@ end
     return
 end
 
-# main(ROCBackend(); nxy=254)
-main(; nxy=254)
-
-MPI.Finalize()
+main(ROCBackend(); nxy=254)
+# main(; nxy=254)
