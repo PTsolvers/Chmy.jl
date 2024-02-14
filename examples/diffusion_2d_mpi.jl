@@ -1,6 +1,7 @@
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
 using KernelAbstractions
 using CairoMakie
+using Printf
 # using AMDGPU
 # AMDGPU.allowscalar(false)
 
@@ -47,6 +48,7 @@ end
     # action
     nt = 100
     for it in 1:nt
+        (me==0) && @printf("it = %d/%d \n", it, nt)
         launch(arch, grid, compute_q! => (q, C, χ, grid))
         launch(arch, grid, update_C! => (C, q, Δt, grid); bc=batch(grid, C => Neumann(); exchange=C))
     end
@@ -55,7 +57,7 @@ end
     plt[3] = interior(C) |> Array
     ax.title = "it = $nt"
     # display(fig)
-    save("out$me.png", fig)
+    # save("out$me.png", fig)
     # global postprocess
     gather!(arch, C_v, C)
     if me == 0
