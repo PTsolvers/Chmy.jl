@@ -27,4 +27,4 @@ topology(arch::DistributedArchitecture) = arch.topology
 # Implement Architecture API
 Architectures.get_backend(arch::DistributedArchitecture) = Architectures.get_backend(arch.child_arch)
 Architectures.get_device(arch::DistributedArchitecture) = get_device(arch.child_arch)
-Architectures.activate!(arch::DistributedArchitecture) = activate!(arch.child_arch)
+Architectures.activate!(arch::DistributedArchitecture; kwargs...) = activate!(arch.child_arch; kwargs...)
