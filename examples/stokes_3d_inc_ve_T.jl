@@ -123,7 +123,6 @@ end
     set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, z0=0.0, r=0.1lx, in=T0, out=Ta))
     η_ve = 0.0
     launch = Launcher(arch, grid)
-    bc!(arch, grid, T => Neumann())
     # boundary conditions
     bc_V = (V.x => (x=Dirichlet(), y=Neumann(), z=Neumann()),
             V.y => (x=Neumann(), y=Dirichlet(), z=Neumann()),
@@ -159,8 +158,7 @@ end
             (it > 2) && (ncheck = ceil(Int, 0.5nx))
             for iter in 1:niter
                 launch(arch, grid, update_stress! => (τ, Pr, ∇V, V, τ_old, η, η_ve, G, dt, dτ_Pr, dτ_r, grid))
-                launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgz, η_ve, νdτ, grid))
-                bc!(arch, grid, bc_V...)
+                launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgz, η_ve, νdτ, grid); bc=batch(grid, bc_V...; exchange=(V.x, V.y)))
                 if it > 1
                     launch(arch, grid, update_thermal_flux! => (qT, T, V, λ_ρCp, grid))
                     launch(arch, grid, update_thermal! => (T, T_old, qT, dt, grid); bc=batch(grid, bc_T...; exchange=T))

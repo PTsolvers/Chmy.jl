@@ -173,16 +173,16 @@ end
     plt.Vx[3] = interior(V.x) |> Array
     plt.Vy[3] = interior(V.y) |> Array
     plt.T[3] = interior(T) |> Array
-    display(fig)
-    save("out_stokes$me.png", fig)
-    global postprocess
+    # display(fig)
+    save("out_stokes2d_$me.png", fig)
+    # global postprocess
     gather!(arch, Pr_v, Pr)
     if me == 0
         fig = Figure(; size=(400, 320))
         ax  = Axis(fig[1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="it = 0")
         plt = heatmap!(ax, Pr_v; colormap=:turbo) # how to get the global grid for axes?
         Colorbar(fig[1, 2], plt)
-        save("out_gather_stokes.png", fig)
+        save("out_gather_stokes2d.png", fig)
     end
     return
 end
