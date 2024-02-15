@@ -121,6 +121,7 @@ import KernelAbstractions.NDIteration.StaticSize
                 put!(launcher.workers[D][S]) do
                     outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(S))...))
                     bc!(Side(S), Dim(D), arch, grid, bc[D][S])
+                    KernelAbstractions.synchronize(backend)
                 end
             end
             wait(launcher.workers[D][1])
