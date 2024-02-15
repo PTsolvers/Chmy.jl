@@ -21,6 +21,10 @@ A struct representing an architecture that operates on a single CPU or GPU devic
 struct SingleDeviceArchitecture{B,D} <: Architecture
     backend::B
     device::D
+    function SingleDeviceArchitecture(backend, device)
+        set_device!(device)
+        return new{typeof(backend),typeof(device)}(backend, device)
+    end
 end
 
 """
