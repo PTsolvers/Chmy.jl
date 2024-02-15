@@ -1,9 +1,12 @@
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
 using KernelAbstractions
-using AMDGPU
-AMDGPU.allowscalar(false)
 using CairoMakie
 using Printf
+
+# using AMDGPU
+# AMDGPU.allowscalar(false)
+using CUDA
+CUDA.allowscalar(false)
 
 @kernel inbounds = true function update_old!(T, τ, T_old, τ_old, O)
     I = @index(Global, NTuple)
@@ -143,7 +146,7 @@ end
     Colorbar(fig[1, 2][1, 2], plt.Vx)
     Colorbar(fig[2, 1][1, 2], plt.Vz)
     Colorbar(fig[2, 2][1, 2], plt.T)
-    display(fig)
+    # display(fig)
     # action
     @time begin
         for it in 1:nt
@@ -182,9 +185,11 @@ end
     plt.Vx[3] = interior(V.x)[:, ysl, :] |> Array
     plt.Vz[3] = interior(V.z)[:, ysl, :] |> Array
     plt.T[3]  = interior(T)[:, ysl, :] |> Array
-    display(fig)
+    # display(fig)
+    save("out_stokes3d.png", fig)
     return
 end
 
-main(ROCBackend(); nxyz=126)
-# main(; nxy=63)
+# main(ROCBackend(); nxyz=126)
+main(CUDABackend(); nxyz=510)
+# main(; nxyz=63)

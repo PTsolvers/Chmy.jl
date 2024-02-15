@@ -5,6 +5,8 @@ using Printf
 
 # using AMDGPU
 # AMDGPU.allowscalar(false)
+using CUDA
+CUDA.allowscalar(false)
 
 using Chmy.Distributed
 using MPI
@@ -83,7 +85,7 @@ end
     T[I...] = T_old[I...] - dt * divg(qT, g, I...)
 end
 
-@views function main(backend=CPU(); nxyz::Int=62)
+@views function main(backend=CPU(); nxyz_l=(126, 126, 126))
     arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0))
     topo = topology(arch)
     me   = global_rank(topo)
@@ -101,8 +103,10 @@ end
     Ta    = 0.1               # atmospheric temperature
     λ_ρCp = 1e-4 * lz^2 / τsc # thermal diffusivity
     # numerics
-    nx = ny = nz = nxyz
-    grid   = UniformGrid(arch; origin=(-lx/2, -ly/2, -lz/2), extent=(lx, ly, lz), dims=(nx, ny, nz))
+    dims_l = nxyz_l
+    dims_g = dims_l .* dims(topo)
+    grid   = UniformGrid(arch; origin=(-lx/2, -ly/2, -lz/2), extent=(lx, ly, lz), dims=dims_g)
+    nx, ny, nz = dims_g
     dx, dy, dz = spacing(grid, Center(), 1, 1, 1)
     nt     = 2
     niter  = 50nx
@@ -121,7 +125,6 @@ end
     # allocate fields
     Pr    = Field(backend, grid, Center())
     ∇V    = Field(backend, grid, Center())
-    ρgz   = Field(backend, grid, (Center(), Center(), Vertex()))
     V     = VectorField(backend, grid)
     r_V   = VectorField(backend, grid)
     τ     = TensorField(backend, grid)
@@ -132,10 +135,10 @@ end
     Pr_v  = (me==0) ? KernelAbstractions.zeros(CPU(), Float64, size(interior(Pr)) .* dims(topo)) : nothing
     # initial conditions
     init_incl(x, y, z, x0, y0, z0, r, in, out) = ifelse((x - x0)^2 + (y - y0)^2 + (z - z0)^2 < r^2, in, out)
-    set!(ρgz, grid, init_incl; parameters=(x0=0.0, y0=0.0, z0=0.0, r=0.1lx, in=ρg.z, out=0.0))
+    ρgz = FunctionField(init_incl, grid, (Center(), Center(), Vertex()); parameters=(x0=0.0, y0=0.0, z0=0.0, r=0.1lx, in=ρg.z, out=0.0))
     set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, z0=0.0, r=0.1lx, in=T0, out=Ta))
     η_ve = 0.0
-    launch = Launcher(arch, grid; outer_width=(16, 8, 4))
+    launch = Launcher(arch, grid; outer_width=(32, 8, 4))
     # boundary conditions
     bc_V = (V.x => (x=Dirichlet(), y=Neumann(), z=Neumann()),
             V.y => (x=Neumann(), y=Dirichlet(), z=Neumann()),
@@ -203,12 +206,13 @@ end
         ax  = Axis(fig[1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="it = 0")
         plt = heatmap!(ax, Pr_v[:, ceil(Int, size(Pr_v, 2) / 2), :]; colormap=:turbo) # how to get the global grid for axes?
         Colorbar(fig[1, 2], plt)
-        save("out_gather_stokes3d.png", fig)
+        save("out_gather_stokes3d_$nx.png", fig)
     end
     return
 end
 
-# main(ROCBackend(); nxyz=126)
-main(; nxyz=94)
+# main(ROCBackend(); nxyz_l=(254, 254, 254))
+main(CUDABackend(); nxyz_l=(254, 254, 254))
+# main(; nxyz_l=(254, 254, 254))
 
 MPI.Finalize()

@@ -107,7 +107,6 @@ end
     # allocate fields
     Pr    = Field(backend, grid, Center())
     ∇V    = Field(backend, grid, Center())
-    ρgy   = Field(backend, grid, (Center(), Vertex()))
     V     = VectorField(backend, grid)
     r_V   = VectorField(backend, grid)
     τ     = TensorField(backend, grid)
@@ -119,7 +118,7 @@ end
     Pr_v  = (me==0) ? KernelAbstractions.zeros(CPU(), Float64, size(interior(Pr)) .* dims(topo)) : nothing
     # initial conditions
     init_incl(x, y, x0, y0, r, in, out) = ifelse((x - x0)^2 + (y - y0)^2 < r^2, in, out)
-    set!(ρgy, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=ρg.y, out=0.0))
+    ρgy = FunctionField(init_incl, grid, (Center(), Vertex()); parameters=(x0=0.0, y0=0.0, r=0.1lx, in=ρg.y, out=0.0))
     set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=T0, out=Ta))
     η_ve = 0.0
     launch = Launcher(arch, grid; outer_width=(16, 8))

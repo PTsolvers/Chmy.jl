@@ -1,9 +1,12 @@
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
 using KernelAbstractions
-using AMDGPU
-AMDGPU.allowscalar(false)
 using CairoMakie
 using Printf
+
+# using AMDGPU
+# AMDGPU.allowscalar(false)
+using CUDA
+CUDA.allowscalar(false)
 
 @kernel inbounds = true function update_old!(T, τ, T_old, τ_old, O)
     I = @index(Global, NTuple)
@@ -91,7 +94,6 @@ end
     # allocate fields
     Pr    = Field(backend, grid, Center())
     ∇V    = Field(backend, grid, Center())
-    ρgy   = Field(backend, grid, (Center(), Vertex()))
     V     = VectorField(backend, grid)
     r_V   = VectorField(backend, grid)
     τ     = TensorField(backend, grid)
@@ -101,7 +103,7 @@ end
     qT    = VectorField(backend, grid)
     # initial conditions
     init_incl(x, y, x0, y0, r, in, out) = ifelse((x - x0)^2 + (y - y0)^2 < r^2, in, out)
-    set!(ρgy, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=ρg.y, out=0.0))
+    ρgy = FunctionField(init_incl, grid, (Center(), Vertex()); parameters=(x0=0.0, y0=0.0, r=0.1lx, in=ρg.y, out=0.0))
     set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=T0, out=Ta))
     η_ve = 0.0
     launch = Launcher(arch, grid)
@@ -170,5 +172,6 @@ end
     return
 end
 
-main(ROCBackend(); nxy=254)
+# main(ROCBackend(); nxy=254)
+main(CUDABackend(); nxy=510)
 # main(; nxy=254)
