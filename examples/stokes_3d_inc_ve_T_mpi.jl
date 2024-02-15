@@ -138,7 +138,8 @@ end
     ρgz = FunctionField(init_incl, grid, (Center(), Center(), Vertex()); parameters=(x0=0.0, y0=0.0, z0=0.0, r=0.1lx, in=ρg.z, out=0.0))
     set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, z0=0.0, r=0.1lx, in=T0, out=Ta))
     η_ve = 0.0
-    launch = Launcher(arch, grid; outer_width=(32, 8, 4))
+    # launch = Launcher(arch, grid; outer_width=(32, 8, 4))
+    launch = Launcher(arch, grid)
     # boundary conditions
     bc_V = (V.x => (x=Dirichlet(), y=Neumann(), z=Neumann()),
             V.y => (x=Neumann(), y=Dirichlet(), z=Neumann()),
