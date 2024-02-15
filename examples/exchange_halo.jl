@@ -1,11 +1,13 @@
 using Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.Distributed
 
 using KernelAbstractions
+using AMDGPU
 using MPI
 
 MPI.Init()
 
-backend = CPU()
+# backend = CPU()
+backend = ROCBackend()
 arch = Arch(backend, MPI.COMM_WORLD, (0, 0))
 topo = topology(arch)
 
