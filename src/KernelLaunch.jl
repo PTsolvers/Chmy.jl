@@ -98,23 +98,25 @@ end
     return
 end
 
+import KernelAbstractions.NDIteration.StaticSize
+
 @inline function launch_with_bc(arch, grid, launcher, offset, kernel, bc, args...)
     backend   = Architectures.get_backend(arch)
-    groupsize = heuristic_groupsize(backend, Val(ndims(launcher)))
+    groupsize = StaticSize(heuristic_groupsize(backend, Val(ndims(launcher))))
 
     if isnothing(outer_width(launcher))
-        fun = kernel(backend, groupsize, worksize(launcher))
+        fun = kernel(backend, groupsize, StaticSize(worksize(launcher)))
         fun(args..., offset)
         bc!(arch, grid, bc)
     else
-        inner_fun = kernel(backend, groupsize, inner_worksize(launcher))
+        inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
         inner_fun(args..., offset + Offset(inner_offset(launcher)...))
 
         N = ndims(grid)
         ntuple(Val(N)) do J
             Base.@_inline_meta
             D = N - J + 1
-            outer_fun = kernel(backend, groupsize, outer_worksize(launcher, Dim(D)))
+            outer_fun = kernel(backend, groupsize, StaticSize(outer_worksize(launcher, Dim(D))))
             ntuple(Val(2)) do S
                 put!(launcher.workers[D][S]) do
                     outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(S))...))
@@ -125,6 +127,7 @@ end
             wait(launcher.workers[D][2])
         end
     end
+    return
 end
 
 end
