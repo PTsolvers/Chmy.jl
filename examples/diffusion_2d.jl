@@ -20,7 +20,6 @@ end
     arch = Arch(backend)
     # geometry
     grid = UniformGrid(arch; origin=(-1, -1), extent=(2, 2), dims=(1022, 1022))
-
     # physics
     χ = 1.0
     # numerics
