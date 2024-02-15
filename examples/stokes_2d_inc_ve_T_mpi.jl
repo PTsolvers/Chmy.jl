@@ -5,6 +5,8 @@ using Printf
 
 # using AMDGPU
 # AMDGPU.allowscalar(false)
+using CUDA
+CUDA.allowscalar(false)
 
 using Chmy.Distributed
 using MPI
@@ -66,7 +68,7 @@ end
     T[I...] = T_old[I...] - dt * divg(qT, g, I...)
 end
 
-@views function main(backend=CPU(); nxy::Int=126)
+@views function main(backend=CPU(); nxy_l=(126, 126))
     arch = Arch(backend, MPI.COMM_WORLD, (0, 0))
     topo = topology(arch)
     me   = global_rank(topo)
@@ -84,8 +86,10 @@ end
     Ta    = 0.1               # atmospheric temperature
     λ_ρCp = 1e-4 * ly^2 / τsc # thermal diffusivity
     # numerics
-    nx = ny = nxy
-    grid   = UniformGrid(arch; origin=(-lx/2, -ly/2), extent=(lx, ly), dims=(nx, ny))
+    dims_l = nxy_l
+    dims_g = dims_l .* dims(topo)
+    grid   = UniformGrid(arch; origin=(-lx/2, -ly/2), extent=(lx, ly), dims=dims_g)
+    nx, ny = dims_g
     dx, dy = spacing(grid, Center(), 1, 1)
     nt     = 4
     niter  = 50nx
@@ -188,12 +192,13 @@ end
         ax  = Axis(fig[1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="it = 0")
         plt = heatmap!(ax, Pr_v; colormap=:turbo) # how to get the global grid for axes?
         Colorbar(fig[1, 2], plt)
-        save("out_gather_stokes2d.png", fig)
+        save("out_gather_stokes2d_$nx.png", fig)
     end
     return
 end
 
-# main(ROCBackend(); nxy=254)
-main(; nxy=254)
+# main(ROCBackend(); nxy_l=(254, 254))
+main(CUDABackend(); nxy_l=(254, 254))
+# main(; nnxy_l=(254, 254))
 
 MPI.Finalize()

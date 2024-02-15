@@ -158,7 +158,7 @@ end
             (it > 2) && (ncheck = ceil(Int, 0.5nx))
             for iter in 1:niter
                 launch(arch, grid, update_stress! => (τ, Pr, ∇V, V, τ_old, η, η_ve, G, dt, dτ_Pr, dτ_r, grid))
-                launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgz, η_ve, νdτ, grid); bc=batch(grid, bc_V...; exchange=(V.x, V.y)))
+                launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgz, η_ve, νdτ, grid); bc=batch(grid, bc_V...; exchange=(V.x, V.y, V.z)))
                 if it > 1
                     launch(arch, grid, update_thermal_flux! => (qT, T, V, λ_ρCp, grid))
                     launch(arch, grid, update_thermal! => (T, T_old, qT, dt, grid); bc=batch(grid, bc_T...; exchange=T))
