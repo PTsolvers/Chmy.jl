@@ -18,7 +18,9 @@ Offset() = Offset{0}()
 
 Base.:+(::Offset{O1}, ::Offset{O2}) where {O1,O2} = Offset((O1 .+ O2)...)
 Base.:+(::Offset{O}, tp::Tuple{Vararg{Integer}}) where {O} = O .+ tp
-Base.:+(tp::Tuple{Vararg{Integer}}, off::Offset) = off + tp
+Base.:+(::Offset{O}, tp::CartesianIndex) where {O} = CartesianIndex(O .+ Tuple(tp))
+
+Base.:+(tp, off::Offset) = off + tp
 
 struct Launcher{Worksize,OuterWidth,Workers}
     workers::Workers
