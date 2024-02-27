@@ -2,7 +2,6 @@ using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions
 using KernelAbstractions
 # using CairoMakie
 using Printf
-using JSON
 
 using AMDGPU
 AMDGPU.allowscalar(false)
@@ -86,9 +85,7 @@ end
     T[I...] = T_old[I...] - dt * divg(qT, g, I...)
 end
 
-@views function main(backend=CPU(); nxyz_l=(126, 126, 126), params=(nt=1e2, re_m=2.3π, r=0.5))
-    @show params
-    error("stop")
+@views function main(backend=CPU(); nxyz_l=(126, 126, 126))
     arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0))
     topo = topology(arch)
     me   = global_rank(topo)
@@ -109,17 +106,17 @@ end
     dims_l = nxyz_l
     dims_g = dims_l .* dims(topo)
     grid   = UniformGrid(arch; origin=(-lx/2, -ly/2, -lz/2), extent=(lx, ly, lz), dims=dims_g)
-    launch = Launcher(arch, grid; outer_width=(128, 8, 4))
     nx, ny, nz = dims_g
     dx, dy, dz = spacing(grid, Center(), 1, 1, 1)
-    nt     = params.nt #1e3
-    niter  = 50nx
-    ncheck = 0.5nx
+    nt     = 1
+    # niter  = 50nx
+    niter, warmup = 110, 10
+    ncheck = 2nx
     ϵ_it   = 1e-6
     ysl    = ceil(Int, length(ycenters(grid)) / 2) # for visu
     # PT params
-    re_m    = params.re_m #2.3π
-    r       = params.r #0.5
+    re_m    = 2.3π
+    r       = 0.5
     lτ_re_m = min(lx, ly, lz) / re_m
     vdτ     = min(dx, dy, dz) / sqrt(ndims(grid) * 1.1)
     θ_dτ    = lτ_re_m * (r + 4 / 3) / vdτ
@@ -142,6 +139,8 @@ end
     ρgz = FunctionField(init_incl, grid, (Center(), Center(), Vertex()); parameters=(x0=0.0, y0=0.0, z0=0.0, r=0.1lx, in=ρg.z, out=0.0))
     set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, z0=0.0, r=0.1lx, in=T0, out=Ta))
     η_ve = 0.0
+    # launch = Launcher(arch, grid)
+    launch = Launcher(arch, grid; outer_width=(128, 8, 4))
     # boundary conditions
     bc_V = (V.x => (x=Dirichlet(), y=Neumann(), z=Neumann()),
             V.y => (x=Neumann(), y=Dirichlet(), z=Neumann()),
@@ -165,10 +164,11 @@ end
     # Colorbar(fig[2, 2][1, 2], plt.T)
     # display(fig)
     KernelAbstractions.synchronize(backend)
-    tic, ttot = 0.0, 0.0
     # action
+    tic, wtime = 0.0, 0.0
     for it in 1:nt
-        (me==0) && @printf("it = %d/%d \n", it, nt)
+        (me==0) && (sleep(2); @printf("it = %d/%d \n", it, nt))
+        MPI.Barrier(cart_comm(topo))
         launch(arch, grid, update_old! => (T, τ, T_old, τ_old))
         # time step
         dt_diff = min(dx, dy, dz)^2 / λ_ρCp / ndims(grid) / 2.1
@@ -176,41 +176,36 @@ end
         dt      = min(dt_diff, dt_adv)
         # rheology
         η_ve = 1.0 / (1.0 / η + 1.0 / (G * dt))
-        (it > 2) && (ncheck = ceil(Int, 0.2nx))
-        itp = 0
+        (it > 2) && (ncheck = ceil(Int, 0.5nx))
+
+        MPI.Barrier(cart_comm(topo))
         for iter in 1:niter
-            (iter == 10) && (MPI.Barrier(cart_comm(topo)); tic = time_ns())
+            (iter == warmup) && (tic = time_ns())
             launch(arch, grid, update_stress! => (τ, Pr, ∇V, V, τ_old, η, η_ve, G, dt, dτ_Pr, dτ_r, grid))
             launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgz, η_ve, νdτ, grid); bc=batch(grid, bc_V...; exchange=(V.x, V.y, V.z)))
-            if it > 1
-                launch(arch, grid, update_thermal_flux! => (qT, T, V, λ_ρCp, grid))
-                launch(arch, grid, update_thermal! => (T, T_old, qT, dt, grid); bc=batch(grid, bc_T...; exchange=T))
-            end
-            if iter % ncheck == 0
-                bc!(arch, grid, r_V.x => (x=Dirichlet(),), r_V.y => (y=Dirichlet(),), r_V.z => (z=Dirichlet(),))
-                err = (Pr=max_mpi(abs.(interior(∇V))) * τsc,
-                       Vx=max_mpi(abs.(interior(r_V.x))) * lz / psc,
-                       Vy=max_mpi(abs.(interior(r_V.y))) * lz / psc,
-                       Vz=max_mpi(abs.(interior(r_V.z))) * lz / psc)
-                (me==0) && @printf("  iter/nx=%.1f, err = [Pr=%1.3e, Vx=%1.3e, Vy=%1.3e, Vz=%1.3e] \n", iter / nx , err...)
-                # stop if converged or error if NaN
-                all(values(err) .< ϵ_it) && break
-                any(.!isfinite.(values(err))) && error("simulation failed, err = $err")
-            end
-            itp += 1
+            # if it > 1
+            #     launch(arch, grid, update_thermal_flux! => (qT, T, V, λ_ρCp, grid))
+            #     launch(arch, grid, update_thermal! => (T, T_old, qT, dt, grid); bc=batch(grid, bc_T...; exchange=T))
+            # end
+            # if iter % ncheck == 0
+            #     bc!(arch, grid, r_V.x => (x=Dirichlet(),), r_V.y => (y=Dirichlet(),), r_V.z => (z=Dirichlet(),))
+            #     err = (Pr=max_mpi(abs.(interior(∇V))) * τsc,
+            #            Vx=max_mpi(abs.(interior(r_V.x))) * lz / psc,
+            #            Vy=max_mpi(abs.(interior(r_V.y))) * lz / psc,
+            #            Vz=max_mpi(abs.(interior(r_V.z))) * lz / psc)
+            #     (me==0) && @printf("  iter/nx=%.1f, err = [Pr=%1.3e, Vx=%1.3e, Vy=%1.3e, Vz=%1.3e] \n", iter / nx , err...)
+            #     # stop if converged or error if NaN
+            #     all(values(err) .< ϵ_it) && break
+            #     any(.!isfinite.(values(err))) && error("simulation failed, err = $err")
+            # end
         end
-        ttot = float(time_ns() - tic)
-        ttot /= (itp - 10)
-        MPI.Barrier(cart_comm(topo))
-        ttot_min = MPI.Allreduce(ttot, MPI.MIN, cart_comm(topo))
-        ttot_max = MPI.Allreduce(ttot, MPI.MAX, cart_comm(topo))
+        wtime = (time_ns() - tic) * 1e-9
         # report
-        if me == 0
-            nIO = (it == 1) ? (2*10 + 17) : (2*10 + 17 + 9)
-            Teff_min = nIO * sizeof(Float64) * prod(nxyz_l) / ttot_max
-            Teff_max = nIO * sizeof(Float64) * prod(nxyz_l) / ttot_min
-            printstyled("Performance: T_eff [min max] = $(round(Teff_min, sigdigits=6)) $(round(Teff_max, sigdigits=6)) \n"; bold=true, color=:green)
-        end
+        A_eff = (2*10 + 17) / 1e9 * prod(nxyz_l) * sizeof(Float64)
+        wtime_it = wtime ./ (niter - warmup)
+        T_eff = A_eff ./ wtime_it
+        @printf("  Executed %d steps in = %1.3e sec (@ T_eff = %1.2f GB/s - device %s) \n", (niter - warmup), wtime,
+                round(T_eff, sigdigits=6), AMDGPU.device_id())
     end
     KernelAbstractions.synchronize(backend)
     # local postprocess
@@ -220,7 +215,6 @@ end
     # plt.T[3]  = interior(T)[:, ysl, :] |> Array
     # # display(fig)
     # save("out_stokes3d_$me.png", fig)
-
     # global postprocess
     # gather!(arch, Pr_v, Pr)
     # if me == 0
@@ -233,12 +227,8 @@ end
     return
 end
 
-input = open(JSON.parse, "params.json")
-params = NamedTuple(Symbol.(keys(input)) .=> values(input))
-res = params.res
-
-main(ROCBackend(); nxyz_l=(res, res, res) .- 2, params)
-# main(ROCBackend(); nxyz_l=(res, res, res) .- 2)
+res = 640
+main(ROCBackend(); nxyz_l=(res, res, res) .- 2)
 # main(CUDABackend(); nxyz_l=(254, 254, 254))
 # main(; nxyz_l=(254, 254, 254))
 

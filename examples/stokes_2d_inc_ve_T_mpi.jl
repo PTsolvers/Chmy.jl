@@ -3,10 +3,10 @@ using KernelAbstractions
 using CairoMakie
 using Printf
 
-# using AMDGPU
-# AMDGPU.allowscalar(false)
-using CUDA
-CUDA.allowscalar(false)
+using AMDGPU
+AMDGPU.allowscalar(false)
+# using CUDA
+# CUDA.allowscalar(false)
 
 using Chmy.Distributed
 using MPI
@@ -72,6 +72,7 @@ end
     arch = Arch(backend, MPI.COMM_WORLD, (0, 0))
     topo = topology(arch)
     me   = global_rank(topo)
+    println("AMDGPU device $(AMDGPU.device_id())")
     # geometry
     lx, ly = 2.0, 2.0
     # mechanics
@@ -196,8 +197,8 @@ end
     return
 end
 
-# main(ROCBackend(); nxy_l=(254, 254))
-main(CUDABackend(); nxy_l=(254, 254))
+main(ROCBackend(); nxy_l=(254, 254))
+# main(CUDABackend(); nxy_l=(254, 254))
 # main(; nnxy_l=(254, 254))
 
 MPI.Finalize()

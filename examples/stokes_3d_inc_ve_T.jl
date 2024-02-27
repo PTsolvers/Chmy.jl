@@ -131,6 +131,7 @@ end
             V.y => (x=Neumann(), y=Dirichlet(), z=Neumann()),
             V.z => (x=Neumann(), y=Neumann(), z=Dirichlet()))
     bc_T = (T => Neumann(),)
+    bc!(arch, grid, bc_V...)
     bc!(arch, grid, bc_T...)
     # visualisation
     fig = Figure(; size=(800, 600))
