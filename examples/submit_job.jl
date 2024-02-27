@@ -45,10 +45,6 @@ sbatch_name = joinpath(run_dir, "submit.sh")
 
 params = Dict("res"=>res, "nt"=>nt, "re_m"=>re_m, "r"=>r)
 
-open(params_name, "w") do io
-    JSON.print(io, params)
-end
-
 open(io -> JSON.print(io, params), params_name, "w")
 
 open(runme_name, "w") do io
