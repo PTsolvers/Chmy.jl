@@ -13,8 +13,8 @@ r = 0.5
 
 # run params
 submit = true
-time = "00:05:00"
-num_gpus = 8
+time = "12:00:00"
+num_gpus = 512
 
 gpus_per_node = 8
 MPICH_GPU_SUPPORT_ENABLED = 1

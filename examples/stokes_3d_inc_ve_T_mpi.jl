@@ -87,8 +87,6 @@ end
 end
 
 @views function main(backend=CPU(); nxyz_l=(126, 126, 126), params=(nt=1e2, re_m=2.3π, r=0.5))
-    @show params
-    error("stop")
     arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0))
     topo = topology(arch)
     me   = global_rank(topo)
