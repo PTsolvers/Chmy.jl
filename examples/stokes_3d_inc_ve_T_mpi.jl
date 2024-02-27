@@ -233,7 +233,7 @@ end
     return
 end
 
-input = open(JSON.parse, "params.json")
+input = open(JSON.parse, joinpath(@__DIR__, "params.json"))
 params = NamedTuple(Symbol.(keys(input)) .=> values(input))
 res = params.res
 
