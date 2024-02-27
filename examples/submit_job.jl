@@ -42,6 +42,7 @@ run(`cp $exename $run_dir`)
 params_name = joinpath(run_dir, "params.json")
 runme_name = joinpath(run_dir, "runme.sh")
 sbatch_name = joinpath(run_dir, "submit.sh")
+proj_dir =  joinpath(run_dir, "../..")
 
 params = Dict("res"=>res, "nt"=>nt, "re_m"=>re_m, "r"=>r)
 
@@ -53,7 +54,7 @@ open(runme_name, "w") do io
             #!/bin/bash
             source /users/lurass/scratch/setenv_lumi.sh
             export MPICH_GPU_SUPPORT_ENABLED=$(MPICH_GPU_SUPPORT_ENABLED)
-            julia --project --color=yes ./$exename
+            julia --project=$proj_dir --color=yes $(joinpath(run_dir, exename))
             """)
 end
 
