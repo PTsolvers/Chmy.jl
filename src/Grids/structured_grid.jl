@@ -59,7 +59,7 @@ connectivity(::SG{N,T,C}, ::Dim{D}, ::Side{S}) where {N,T,C,D,S} = C.instance[D]
 """
     bounds(grid, loc, [dim::Dim])
 
-Compute the bounds of a structured grid at the specified location(s).
+Return the bounds of a structured grid at the specified location(s).
 """
 bounds(grid::SG{N}, loc::LocOrLocs{N}) where {N} = bounds.(grid.axes, loc)
 bounds(grid::SG, loc::Location, ::Dim{dim}) where {dim} = bounds(grid.axes[dim], loc)
@@ -68,11 +68,20 @@ bounds(grid::SG{N}, locs::Locs{N}, ::Dim{dim}) where {N,dim} = bounds(grid.axes[
 """
     extent(grid, loc, [dim::Dim])
 
-Compute the extent of a structured grid at the specified location(s).
+Return the extent of a structured grid at the specified location(s).
 """
 extent(grid::SG{N}, loc::LocOrLocs{N}) where {N} = extent.(grid.axes, loc)
 extent(grid::SG, loc::Location, ::Dim{dim}) where {dim} = extent(grid.axes[dim], loc)
 extent(grid::SG{N}, locs::Locs{N}, ::Dim{dim}) where {N,dim} = extent(grid.axes[dim], locs[dim])
+
+"""
+    origin(grid, loc, [dim::Dim])
+
+Return the origin of a structured grid at the specified location(s).
+"""
+origin(grid::SG{N}, loc::LocOrLocs{N}) where {N} = origin.(grid.axes, loc)
+origin(grid::SG, loc::Location, ::Dim{dim}) where {dim} = origin(grid.axes[dim], loc)
+origin(grid::SG{N}, locs::Locs{N}, ::Dim{dim}) where {N,dim} = origin(grid.axes[dim], locs[dim])
 
 """
     axis(grid, dim::Dim)
