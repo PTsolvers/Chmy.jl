@@ -59,6 +59,8 @@ function Field(backend::Backend, grid::StructuredGrid{N}, loc::LocOrLocs{N}, typ
     return Field{typeof(loc),halo}(data, dims)
 end
 
+Field(arch::Architecture, args...) = Field(Architectures.get_backend(arch), args...)
+
 # set fields
 
 set!(f::Field, other::Field) = (copy!(interior(f), interior(other)); nothing)
@@ -78,7 +80,7 @@ end
 function set!(f::Field{T,N}, grid::StructuredGrid{N}, fun::F; discrete=false, parameters=(), async=false) where {T,F,N}
     loc = location(f)
     dst = interior(f)
-    backend = get_backend(dst)
+    backend = KernelAbstractions.get_backend(dst)
     if discrete
         _set_discrete!(backend, 256, size(dst))(dst, grid, loc, fun, parameters...)
     else
@@ -105,17 +107,17 @@ function VectorField(backend::Backend, grid::StructuredGrid{N}, args...; kwargs.
 end
 
 # tensor fields
-TensorField(backend::Backend, grid::StructuredGrid{2}, args...; kwargs...) = (
-    xx = Field(backend, grid, Center(), args...; kwargs...),
-    yy = Field(backend, grid, Center(), args...; kwargs...),
-    xy = Field(backend, grid, Vertex(), args...; kwargs...)
-)
+function TensorField(backend::Backend, grid::StructuredGrid{2}, args...; kwargs...)
+    (xx = Field(backend, grid, Center(), args...; kwargs...),
+     yy = Field(backend, grid, Center(), args...; kwargs...),
+     xy = Field(backend, grid, Vertex(), args...; kwargs...))
+end
 
-TensorField(backend::Backend, grid::StructuredGrid{3}, args...; kwargs...) = (
-    xx = Field(backend, grid, Center(), args...; kwargs...),
-    yy = Field(backend, grid, Center(), args...; kwargs...),
-    zz = Field(backend, grid, Center(), args...; kwargs...),
-    xy = Field(backend, grid, (Vertex(), Vertex(), Center()), args...; kwargs...),
-    xz = Field(backend, grid, (Vertex(), Center(), Vertex()), args...; kwargs...),
-    yz = Field(backend, grid, (Center(), Vertex(), Vertex()), args...; kwargs...)
-)
+function TensorField(backend::Backend, grid::StructuredGrid{3}, args...; kwargs...)
+    (xx = Field(backend, grid, Center(), args...; kwargs...),
+     yy = Field(backend, grid, Center(), args...; kwargs...),
+     zz = Field(backend, grid, Center(), args...; kwargs...),
+     xy = Field(backend, grid, (Vertex(), Vertex(), Center()), args...; kwargs...),
+     xz = Field(backend, grid, (Vertex(), Center(), Vertex()), args...; kwargs...),
+     yz = Field(backend, grid, (Center(), Vertex(), Vertex()), args...; kwargs...))
+end
