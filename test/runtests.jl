@@ -48,9 +48,7 @@ function runtests()
             # if basename(f) ∈ test_distributed
             #     nprocs = contains(f, "2D") ? nprocs_2D : nprocs_3D
             #     cmd(n=nprocs) = `$(mpiexec()) -n $n $exename --startup-file=no --color=yes $(joinpath(testdir, f))`
-            #     withenv("JULIA_NUM_THREADS" => "4") do
-            #         run(cmd())
-            #     end
+            #     run(cmd())
             # else
                 run(`$exename --startup-file=no $(joinpath(testdir, f))`)
             # end
