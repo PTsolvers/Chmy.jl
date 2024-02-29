@@ -54,7 +54,7 @@ Arguments:
 function Field(backend::Backend, grid::StructuredGrid{N}, loc::LocOrLocs{N}, type=eltype(grid); halo=1) where {N}
     dims = size(grid, loc)
     data_size = size(grid, loc) .+ 4 .* halo
-    data = KernelAbstractions.allocate(backend, type, data_size)
+    data = KernelAbstractions.zeros(backend, type, data_size)
     loc = expand_loc(Val(N), loc)
     return Field{typeof(loc),halo}(data, dims)
 end
@@ -75,14 +75,16 @@ end
     dst[I] = fun(grid, loc, I, args...)
 end
 
-function set!(f::Field{T,N}, grid::StructuredGrid{N}, fun::F; discrete=false, parameters=()) where {T,F,N}
+function set!(f::Field{T,N}, grid::StructuredGrid{N}, fun::F; discrete=false, parameters=(), async=false) where {T,F,N}
     loc = location(f)
     dst = interior(f)
+    backend = get_backend(dst)
     if discrete
-        _set_discrete!(get_backend(dst), 256, size(dst))(dst, grid, loc, fun, parameters...)
+        _set_discrete!(backend, 256, size(dst))(dst, grid, loc, fun, parameters...)
     else
-        _set_continuous!(get_backend(dst), 256, size(dst))(dst, grid, loc, fun, parameters...)
+        _set_continuous!(backend, 256, size(dst))(dst, grid, loc, fun, parameters...)
     end
+    async || KernelAbstractions.synchronize(backend)
     return
 end
 

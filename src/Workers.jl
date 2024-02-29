@@ -3,12 +3,12 @@ module Workers
 export Worker
 
 """
-    mutable struct Worker{T}
+    Worker
 
 A worker that performs tasks asynchronously.
 
 # Constructor
-    Worker{T}(; setup=nothing, teardown=nothing) where {T}
+    Worker{T}(; [setup], [teardown]) where {T}
 
 Constructs a new `Worker` object.
 
@@ -25,14 +25,14 @@ mutable struct Worker{T}
         src = Channel{T}()
         out = Base.Event(true)
         task = Threads.@spawn begin
-            isnothing(setup) || Base.invokelatest(setup)
+            isnothing(setup) || invokelatest(setup)
             try
                 for work in src
-                    Base.invokelatest(work)
+                    invokelatest(work)
                     notify(out)
                 end
             finally
-                isnothing(teardown) || Base.invokelatest(teardown)
+                isnothing(teardown) || invokelatest(teardown)
             end
         end
         errormonitor(task)

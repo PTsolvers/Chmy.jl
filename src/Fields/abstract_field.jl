@@ -5,7 +5,7 @@ Base.@assume_effects :foldable halo(::AbstractArray) = 0
 Base.IndexStyle(::Type{<:AbstractField}) = IndexCartesian()
 
 Base.@assume_effects :foldable location(::AbstractField{T,N,L}) where {T,N,L} = L.instance
-Base.@assume_effects :foldable location(::AbstractField{T,N,L}, ::Val{D}) where {T,N,L,D} = L.instance[D]
+Base.@assume_effects :foldable location(::AbstractField{T,N,L}, ::Dim{D}) where {T,N,L,D} = L.instance[D]
 
 interior(f::AbstractField) = f
 
@@ -52,29 +52,27 @@ for (dim, coord) in enumerate((:x, :y, :z))
 
     @eval begin
         @propagate_inbounds @add_cartesian function GridOperators.$left(f::AbstractField, I::Vararg{Integer,N}) where {N}
-            GridOperators.left(f, flip(location(f, Val($dim))), Val($dim), I...)
+            GridOperators.left(f, flip(location(f, Dim($dim))), Dim($dim), I...)
         end
 
         @propagate_inbounds @add_cartesian function GridOperators.$right(f::AbstractField, I::Vararg{Integer,N}) where {N}
-            GridOperators.right(f, flip(location(f, Val($dim))), Val($dim), I...)
+            GridOperators.right(f, flip(location(f, Dim($dim))), Dim($dim), I...)
         end
 
         @propagate_inbounds @add_cartesian function GridOperators.$δ(f::AbstractField, I::Vararg{Integer,N}) where {N}
-            GridOperators.δ(f, flip(location(f, Val($dim))), Val($dim), I...)
+            GridOperators.δ(f, flip(location(f, Dim($dim))), Dim($dim), I...)
         end
 
         @propagate_inbounds @add_cartesian function GridOperators.$∂(f::AbstractField, grid, I::Vararg{Integer,N}) where {N}
-            GridOperators.∂(f, flip(location(f, Val($dim))), grid, Val($dim), I...)
+            GridOperators.∂(f, flip(location(f, Dim($dim))), grid, Dim($dim), I...)
         end
     end
 end
 
 const SG = StructuredGrid
 
-# TODO: proper boundscheck
-@add_cartesian function divg(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::SG{N}, I::Vararg{Integer,N}) where {names,N}
-    ntuple(Val(N)) do D
-        Base.@_propagate_inbounds_meta
-        @inbounds GridOperators.∂(V[D], grid, Val(D), I...)
-    end |> sum
+@propagate_inbounds @generated function divg(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::SG{N}, I::Vararg{Integer,N}) where {names,N}
+    :(Base.Cartesian.@ncall $N (+) D -> GridOperators.∂(V[D], grid, Dim(D), I...))
 end
+
+@propagate_inbounds divg(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::SG{N}, I::CartesianIndex{N}) where {names,N} = divg(V, grid, Tuple(I)...)

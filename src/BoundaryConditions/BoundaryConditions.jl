@@ -1,9 +1,9 @@
 module BoundaryConditions
 
-export FieldBoundaryCondition, Dirichlet, Neumann, bc!
+export FieldBoundaryCondition, FirstOrderBC, Dirichlet, Neumann, bc!
 export BoundaryFunction
-
-export AbstractBatch, FieldBatch, EmptyBatch, BatchSet, batch
+export DimSide
+export AbstractBatch, FieldBatch, ExchangeBatch, EmptyBatch, BatchSet, batch
 
 using Chmy
 using Chmy.Grids
@@ -19,7 +19,22 @@ import Base.@propagate_inbounds
 const SDA = SingleDeviceArchitecture
 const SG  = StructuredGrid
 
-include("field_boundary_condition.jl")
+"""
+    FieldBoundaryCondition
+
+Abstract supertype for all boundary conditions that are specified per-field.
+"""
+abstract type FieldBoundaryCondition end
+
+const FBC          = FieldBoundaryCondition
+const FBCOrNothing = Union{FBC,Nothing}
+const SidesBCs     = Tuple{FBCOrNothing,FBCOrNothing}
+const BCOrTuple    = Union{FBCOrNothing,SidesBCs}
+const TupleBC      = NamedTuple{Names,<:Tuple{Vararg{BCOrTuple}}} where {Names}
+const PerFieldBC   = Union{FBCOrNothing,TupleBC}
+const FieldAndBC   = Pair{<:Field,<:PerFieldBC}
+
+include("first_order_boundary_condition.jl")
 include("batch.jl")
 include("boundary_function.jl")
 

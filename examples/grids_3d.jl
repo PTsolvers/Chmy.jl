@@ -1,9 +1,10 @@
-using Chmy.Grids
+using Chmy.Grids, Chmy.Architectures
+using KernelAbstractions
 using GLMakie
 
 import .Iterators: product, flatten
 
-grid = UniformGrid(; origin=(0, 0, 0), extent=(1, 1, 1), dims=(1, 1, 1))
+grid = UniformGrid(Arch(CPU()); origin=(0, 0, 0), extent=(1, 1, 1), dims=(1, 1, 1))
 
 fig = Figure(; size=(400, 450))
 ax  = Axis3(fig[2, 1]; aspect=:data, xlabel="x", ylabel="y", zlabel="z")

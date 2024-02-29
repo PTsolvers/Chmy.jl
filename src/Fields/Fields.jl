@@ -7,6 +7,7 @@ export location, halo, interior, set!
 
 export divg
 
+using Chmy
 using Chmy.Grids
 import Chmy.GridOperators
 import Chmy: @add_cartesian

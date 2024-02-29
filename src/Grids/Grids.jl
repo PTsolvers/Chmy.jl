@@ -1,7 +1,7 @@
 module Grids
 
 export Location, Center, Vertex, flip
-export Connectivity, Bounded, Periodic, Flat
+export Connectivity, Bounded, Connected, Periodic, Flat
 export AbstractAxis, UniformAxis, FunctionAxis
 export StructuredGrid, UniformGrid
 
@@ -10,6 +10,7 @@ export origin, extent, bounds
 export direction, axes_names
 export connectivity
 
+using Chmy
 using Chmy.Architectures
 
 import Chmy: @add_cartesian
@@ -30,6 +31,7 @@ abstract type Connectivity end
 
 struct Bounded <: Connectivity end
 struct Periodic <: Connectivity end
+struct Connected <: Connectivity end
 struct Flat <: Connectivity end
 
 include("abstract_axis.jl")

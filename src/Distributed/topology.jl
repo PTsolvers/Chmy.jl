@@ -17,7 +17,7 @@ struct CartesianTopology{N}
 end
 
 """
-    CartesianTopology(comm::MPI.Comm, dims::NTuple{N,Int}) where {N}
+    CartesianTopology(comm, dims)
 
 Create an N-dimensional Cartesian topology using base MPI communicator `comm` with dimensions `dims`.
 If all entries in `dims` are not equal to `0`, the product of `dims` should be equal to the total number of MPI processes `MPI.Comm_size(comm)`.
@@ -41,86 +41,86 @@ function CartesianTopology(comm::MPI.Comm, dims::NTuple{N,Int}) where {N}
 end
 
 """
-    global_rank(t::CartesianTopology)
+    global_rank(topo)
 
 Global id of a process in a Cartesian topology.
 """
 global_rank(t::CartesianTopology) = t.global_rank
 
 """
-    shared_rank(t::CartesianTopology)
+    shared_rank(topo)
 
 Local id of a process within a single node. Can be used to set the GPU device.
 """
 shared_rank(t::CartesianTopology) = t.shared_rank
 
 """
-    node_name(t::CartesianTopology)
+    node_name(topo)
 
 Name of a node according to `MPI.Get_processor_name()`.
 """
 node_name(t::CartesianTopology) = t.node_name
 
 """
-    cart_comm(t::CartesianTopology)
+    cart_comm(topo)
 
 MPI Cartesian communicator for the topology.
 """
 cart_comm(t::CartesianTopology) = t.cart_comm
 
 """
-    shared_comm(t::CartesianTopology)
+    shared_comm(topo)
 
 MPI communicator for the processes sharing the same node.
 """
 shared_comm(t::CartesianTopology) = t.shared_comm
 
 """
-    dims(t::CartesianTopology)
+    dims(topo)
 
 Dimensions of the topology as NTuple.
 """
 dims(t::CartesianTopology) = t.dims
 
 """
-    coords(t::CartesianTopology)
+    coords(topo)
 
 Coordinates of a current process within a Cartesian topology.
 """
 coords(t::CartesianTopology) = t.cart_coords
 
 """
-    neighbors(t::CartesianTopology)
+    neighbors(topo)
 
 Neighbors of a current process.
 
-Returns NTuple containing process ids of the two immediate neighbors in each spatial direction, or MPI.PROC_NULL if no neighbor on a corresponding side.
+Returns tuple of ranks of the two immediate neighbors in each spatial direction, or MPI.PROC_NULL if there is no neighbor on a corresponding side.
 """
 neighbors(t::CartesianTopology) = t.neighbors
 
 """
-    neighbor(t::CartesianTopology, dim, side)
+    neighbor(topo, dim, side)
 
 Returns id of a neighbor process in spatial direction `dim` on the side `side`, if this neighbor exists, or MPI.PROC_NULL otherwise.
 """
 neighbor(t::CartesianTopology, dim, side) = t.neighbors[dim][side]
 
 """
-    has_neighbor(t::CartesianTopology, dim, side)
+    has_neighbor(topo, dim, side)
 
 Returns true if there a neighbor process in spatial direction `dim` on the side `side`, or false otherwise.
 """
 has_neighbor(t::CartesianTopology, dim, side) = t.neighbors[dim][side] != MPI.PROC_NULL
 
 """
-    global_size(t::CartesianTopology)
+    global_size(topo)
 
 Total number of processes withing the topology.
 """
 global_size(t::CartesianTopology) = MPI.Comm_size(t.cart_comm)
 
 """
-    node_size(t::CartesianTopology)
+    node_size(topo)
 
 Number of processes sharing the same node.
 """

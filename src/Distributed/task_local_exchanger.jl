@@ -37,34 +37,26 @@ function reset_reqs!(tle::TaskLocalExchanger)
     return
 end
 
-@inline function pick_send_buffer(::TaskLocalExchanger, ex::Exchange{AbstractArray,<:Any}, T, dims, backend)
-    return ex.send_buffer
-end
-
-@inline function pick_recv_buffer(::TaskLocalExchanger, ex::Exchange{<:Any,AbstractArray}, T, dims, backend)
-    return ex.recv_buffer
-end
-
-@inline function pick_send_buffer(tle::TaskLocalExchanger, ::Exchange{Nothing,<:Any}, T, dims, backend)
-    return allocate(get_allocator(tle, backend), T, dims)
-end
-
-@inline function pick_recv_buffer(tle::TaskLocalExchanger, ::Exchange{<:Any,Nothing}, T, dims, backend)
-    return allocate(get_allocator(tle, backend), T, dims)
-end
-
-function init!(tle::TaskLocalExchanger, batch::ExchangeBatch, backend::Backend, dim, side)
-    resize!(tle, length(batch.fields))
+function init!(tle::TaskLocalExchanger, backend::Backend, dim, side, fields::Tuple{Vararg{Field}})
+    resize!(tle, length(fields))
     reset_reqs!(tle)
 
-    for idx in eachindex(batch.fields)
-        field = batch.fields[idx]
-        exch = batch.exchanges[idx]
+    alloc_size = 0
+    foreach(fields) do field
         send_view = get_send_view(side, dim, field)
         recv_view = get_recv_view(side, dim, field)
-        # use user-provided MPI buffers if any, otherwise use stack allocator
-        tle.send_bufs[idx] = pick_send_buffer(tle, exch, eltype(field), size(send_view), backend)
-        tle.recv_bufs[idx] = pick_recv_buffer(tle, exch, eltype(field), size(recv_view), backend)
+        alloc_size += prod(size(send_view)) * sizeof(eltype(field))
+        alloc_size += prod(size(recv_view)) * sizeof(eltype(field))
+    end
+
+    tla = get_allocator(tle, backend)
+    resize!(tla, alloc_size)
+
+    foreach(enumerate(fields)) do (idx, field)
+        send_view = get_send_view(side, dim, field)
+        recv_view = get_recv_view(side, dim, field)
+        tle.send_bufs[idx] = allocate(tla, eltype(field), size(send_view))
+        tle.recv_bufs[idx] = allocate(tla, eltype(field), size(recv_view))
     end
 
     return

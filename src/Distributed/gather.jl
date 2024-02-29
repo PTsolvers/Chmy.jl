@@ -1,5 +1,5 @@
 """
-    gather!(dst::Union{AbstractArray{T,N},Nothing}, src::AbstractArray{T,N}, comm::MPI.Comm; root=0) where {T,N}
+    gather!(dst, src, comm::MPI.Comm; root=0)
 
 Gather local array `src` into a global array `dst`.
 Size of the global array `size(dst)` should be equal to the product of the size of a local array `size(src)` and the dimensions of a Cartesian communicator `comm`.
@@ -33,10 +33,10 @@ function gather!(dst::Union{AbstractArray{T,N},Nothing}, src::AbstractArray{T,N}
 end
 
 """
-    gather!(arch::DistributedArchitecture, dst, src::Field; kwargs...)
+    gather!(arch, dst, src::Field; kwargs...)
 
 Gather the interior of a field `src` into a global array `dst`.
 """
 function gather!(arch::DistributedArchitecture, dst, src::Field; kwargs...)
-    gather!(dst, interior(src), cartesian_communicator(details(arch)); kwargs...)
+    gather!(dst, interior(src), cart_comm(topology(arch)); kwargs...)
 end

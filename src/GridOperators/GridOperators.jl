@@ -1,12 +1,13 @@
 module GridOperators
 
+using Chmy
 using Chmy.Grids
 import Chmy.@add_cartesian
 
 export left, right, δ, ∂, lerp
 
-Base.@assume_effects :foldable p(::Val{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] + oneunit(I[i]) : I[i], Val(N))
-Base.@assume_effects :foldable m(::Val{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] - oneunit(I[i]) : I[i], Val(N))
+Base.@assume_effects :foldable p(::Dim{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] + oneunit(I[i]) : I[i], Val(N))
+Base.@assume_effects :foldable m(::Dim{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] - oneunit(I[i]) : I[i], Val(N))
 
 @add_cartesian left(f, ::Vertex, dim, I::Vararg{Integer,N}) where {N} = f[m(dim, I...)...]
 @add_cartesian left(f, ::Center, dim, I::Vararg{Integer,N}) where {N} = f[I...]
@@ -26,7 +27,7 @@ Base.@assume_effects :foldable m(::Val{D}, I::Vararg{Integer,N}) where {D,N} = n
     t = eltype(f)(0.5) * Δ(grid, Center(), dim, m(dim, I...)...) * iΔ(grid, Vertex(), dim, I...)
     a = f[I...]
     b = f[m(dim, I...)...]
-    return fma(t, a - b, b)
+    return muladd(t, a - b, b)
 end
 
 # more efficient for uniform grids

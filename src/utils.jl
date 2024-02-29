@@ -1,44 +1,59 @@
 """
-    remove_dim(::Val{D}, A::NTuple{N}) where {D,N}
+    Dim(D)
 
-Remove the dimension specified by `D` from the tuple `A`.
+Return Dim{D}() which contains no run-time data like `Val`.
+Used to statically dispatch on the spatial dimension of the computational grid.
 """
-@inline function remove_dim(::Val{D}, A::NTuple{N}) where {D,N}
+struct Dim{D} end
+Dim(D::Integer) = Dim{D}()
+
+"""
+    Side(S)
+
+Return Side{S}() which contains no run-time data like `Val`.
+Used to statically dispatch on the left (Side(1)) or right (Side(2)) sides of the computational domain.
+"""
+struct Side{S} end
+Side(S::Integer) = Side{S}()
+
+const Left  = Side{1}()
+const Right = Side{2}()
+
+"""
+    remove_dim(dim::Dim, A::NTuple)
+
+Remove the dimension specified by `dim` from the tuple `A`.
+"""
+@inline function remove_dim(::Dim{D}, A::NTuple{N}) where {D,N}
     ntuple(Val(N - 1)) do I
         Base.@_inline_meta
         I < D ? A[I] : A[I+1]
     end
 end
 
-@inline remove_dim(::Val{1}, I::NTuple{1}) = 1
+@inline remove_dim(::Dim{1}, I::NTuple{1}) = 1
 
 """
-    remove_dim(::Val{D}, A::CartesianIndex) where {D}
+    remove_dim(dim::Dim, I::CartesianIndex)
 
-Remove the dimension specified by `D` from the CartesianIndex `I`.
+Remove the dimension specified by `dim` from the CartesianIndex `I`.
 """
 @inline remove_dim(dim, I::CartesianIndex) = remove_dim(dim, Tuple(I)) |> CartesianIndex
 
 """
-    insert_dim(::Val{D}, A::NTuple{N}, i) where {D,N}
+    insert_dim(dim::Dim, A::NTuple, i)
 
-Inserts a dimension into a tuple.
-
-This function takes a tuple `A` of length `N` and inserts a new element `i` at position `D`.
-The resulting tuple has length `N + 1`.
+Takes a tuple `A` and inserts a new element `i` at position specified by `dim`.
 """
-@inline insert_dim(::Val{D}, A::NTuple{N}, i) where {D,N} =
+@inline insert_dim(::Dim{D}, A::NTuple{N}, i) where {D,N} =
     ntuple(Val(N + 1)) do I
         Base.@_inline_meta
         @inbounds (I < D) ? A[I] : (I == D) ? i : A[I-1]
     end
 
 """
-    insert_dim(::Val{D}, A::CartesianIndex{N}, i) where {D,N}
+    insert_dim(dim::Dim, I::CartesianIndex, i)
 
-Inserts a dimension into a CartesianIndex.
-
-This function takes a CartesianIndex `A` of length `N` and inserts a new element `i` at position `D`.
-The resulting CartesianIndex has length `N + 1`.
+Takes a CartesianIndex `I` and inserts a new element `i` at position specified by `dim`.
 """
-@inline insert_dim(dim, A::CartesianIndex, i) = insert_dim(dim, Tuple(A), i) |> CartesianIndex
+@inline insert_dim(dim, I::CartesianIndex, i) = insert_dim(dim, Tuple(I), i) |> CartesianIndex

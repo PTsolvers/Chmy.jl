@@ -1,25 +1,30 @@
 module Architectures
 
 export Architecture, SingleDeviceArchitecture
-export Arch, get_backend, get_device, activate!, set_device!, heuristic_groupsize
+export Arch, get_backend, get_device, activate!, set_device!, heuristic_groupsize, pointertype
 
+using Chmy
 using KernelAbstractions
 
 """
-    abstract type Architecture
+    Architecture
 
 Abstract type representing an architecture.
 """
 abstract type Architecture end
 
 """
-    struct SingleDeviceArchitecture{B,D} <: Architecture
+    SingleDeviceArchitecture <: Architecture
 
 A struct representing an architecture that operates on a single CPU or GPU device.
 """
 struct SingleDeviceArchitecture{B,D} <: Architecture
     backend::B
     device::D
+    function SingleDeviceArchitecture(backend, device)
+        set_device!(device)
+        return new{typeof(backend),typeof(device)}(backend, device)
+    end
 end
 
 """
@@ -64,5 +69,9 @@ end
 get_device(::CPU, device_id) = nothing
 set_device!(::Nothing) = nothing
 heuristic_groupsize(::CPU, ::Val{N}) where {N} = 256
+
+Base.unsafe_wrap(::CPU, ptr::Ptr, dims) = unsafe_wrap(Array, ptr, dims)
+
+pointertype(::CPU, T::DataType) = Ptr{T}
 
 end

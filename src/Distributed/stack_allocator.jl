@@ -32,6 +32,22 @@ function reset!(sa::StackAllocator)
 end
 
 """
+    resize!(sa::StackAllocator, sz::Integer)
+
+Resize the StackAllocator's buffer to capacity of `sz` bytes.
+This method will throw an error if any arrays were already allocated using this allocator.
+"""
+function Base.resize!(sa::StackAllocator, sz::Integer)
+    if sa.offset != UInt(0)
+        error("reset StackAllocator before resizing")
+    end
+    if sz > length(sa.buffer)
+        resize!(sa.buffer, ceil(Int, 1.5 * sz)) # add extra capacity
+    end
+    return
+end
+
+"""
     nallocs(sa::StackAllocator)
 
 Get the number of allocations made by the given `StackAllocator`.
@@ -59,13 +75,12 @@ The `align` parameter specifies the alignment of the buffer elements.
 function allocate(sa::StackAllocator, T::DataType, dims, align::Integer=sizeof(T))
     nbytes  = prod(dims) * sizeof(T)
     aligned = div(sa.offset + align - 1, align) * align
-    # reallocate buffer if allocation size is larger than buffer size
     if aligned + nbytes > length(sa.buffer)
-        resize!(sa.buffer, aligned + nbytes)
+        error("not enough memory to allocate")
     end
-    # get a slice of the buffer
     backend = KernelAbstractions.get_backend(sa.buffer)
-    data_ptr = convert(Chmy.pointertype(backend, T), pointer(sa.buffer) + aligned)
+    # "reinterpret" won't work as an MPI buffer, need to use "unsafe_wrap"
+    data_ptr = convert(pointertype(backend, T), pointer(sa.buffer) + aligned)
     sa.offset = aligned + nbytes
     sa.nallocs += 1
     return unsafe_wrap(backend, data_ptr, dims)

@@ -2,12 +2,12 @@ struct Continuous end
 struct Discrete end
 
 """
-    struct FunctionField{T,N,L,CD,F,G,P} <: AbstractField{T,N,L}
+    FunctionField <: AbstractField
 
 Continuous or discrete field with values computed at runtime.
 
 ## Constructors
-- `FunctionField{CD,L}(func::F, grid::G, parameters::P) where {CD,L,F,G,P}`: Create a new `FunctionField` object.
+- `FunctionField(func, grid, loc; [discrete], [parameters])`: Create a new `FunctionField` object.
 """
 struct FunctionField{T,N,L,CD,F,G,P} <: AbstractField{T,N,L}
     func::F
