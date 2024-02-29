@@ -5,10 +5,10 @@ Represents a structured grid with orthogonal axes.
 """
 struct StructuredGrid{N,T,C,A}
     axes::A
-    StructuredGrid{C}(axes::Vararg{<:AbstractAxis{T},N}) where {N,T,C} = new{N,T,C,typeof(axes)}(axes)
+    StructuredGrid{C}(axes::Vararg{AbstractAxis{T},N}) where {N,T,C} = new{N,T,C,typeof(axes)}(axes)
 end
 
-StructuredGrid{C}(::SingleDeviceArchitecture, axes::Vararg{<:AbstractAxis}) where {C} = StructuredGrid{C}(axes...)
+StructuredGrid{C}(::SingleDeviceArchitecture, axes::Vararg{AbstractAxis}) where {C} = StructuredGrid{C}(axes...)
 
 const UniformGrid{N,T,C} = StructuredGrid{N,T,C,NTuple{N,UniformAxis{T}}}
 
