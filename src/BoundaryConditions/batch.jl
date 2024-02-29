@@ -165,10 +165,10 @@ bc!(arch::Architecture, grid::SG, f_bc::Vararg{FieldAndBC}; kwargs...) = bc!(arc
     ntuple(Val(K)) do ifield
         Base.@_inline_meta
         @inbounds begin
-            f   = fields[ifield]
-            bc  = conditions[ifield]
-            Ibc = insert_dim(dim, I, halo_index(side, dim, f, location(f, dim)))
-            bc!(side, dim, grid, f, location(f, dim), bc, Ibc...)
+            f = fields[ifield]
+            bc = conditions[ifield]
+            loc = location(f, dim)
+            bc!(side, dim, grid, f, loc, bc, I...)
         end
     end
 end
