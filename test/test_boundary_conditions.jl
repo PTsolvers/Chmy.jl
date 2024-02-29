@@ -15,8 +15,8 @@ for backend in backends
         @testset "default Dirichlet" begin
             set!(field, 1)
             bc!(arch, grid, field => Dirichlet())
-            @test field_i[1, 2:end-1] ≈ -field_i[2, 2:end-1]
-            @test field_i[end, 2:end-1] ≈ -field_i[end-1, 2:end-1]
+            @test all(field_i[1, 2:end-1] .≈ -field_i[2, 2:end-1])
+            @test all(field_i[end, 2:end-1] .≈ -field_i[end-1, 2:end-1])
 
             @test all(field_i[2:end-1, 2] .≈ 0.0)
             @test all(field_i[2:end-1, end-1] .≈ 0.0)
@@ -25,19 +25,19 @@ for backend in backends
         @testset "default Neumann" begin
             set!(field, 1)
             bc!(arch, grid, field => Neumann())
-            @test field_i[1, 2:end-1] ≈ field_i[2, 2:end-1]
-            @test field_i[end, 2:end-1] ≈ field_i[end-1, 2:end-1]
+            @test all(field_i[1, 2:end-1] .≈ field_i[2, 2:end-1])
+            @test all(field_i[end, 2:end-1] .≈ field_i[end-1, 2:end-1])
 
-            @test field_i[2:end-1, 1] ≈ field_i[2:end-1, 2]
-            @test field_i[2:end-1, end] ≈ field_i[2:end-1, end-1]
+            @test all(field_i[2:end-1, 1] .≈ field_i[2:end-1, 2])
+            @test all(field_i[2:end-1, end] .≈ field_i[2:end-1, end-1])
         end
 
         @testset "non-homogenous Dirichlet" begin
             set!(field, 1)
             v = 2.0
             bc!(arch, grid, field => Dirichlet(v))
-            @test field_i[1, 2:end-1] ≈ -field_i[2, 2:end-1] .+ 2v
-            @test field_i[end, 2:end-1] ≈ -field_i[end-1, 2:end-1] .+ 2v
+            @test all(field_i[1, 2:end-1] .≈ -field_i[2, 2:end-1] .+ 2v)
+            @test all(field_i[end, 2:end-1] .≈ -field_i[end-1, 2:end-1] .+ 2v)
 
             @test all(field_i[2:end-1, 2] .≈ v)
             @test all(field_i[2:end-1, end-1] .≈ v)
