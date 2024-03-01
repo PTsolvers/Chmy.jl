@@ -16,7 +16,7 @@ function overwrite_connectivity(conn, topo::CartesianTopology{N}) where {N}
     end
 end
 
-function Grids.StructuredGrid{C}(arch::DistributedArchitecture, axes::Vararg{<:AbstractAxis,N}; kwargs...) where {C,N}
+function Grids.StructuredGrid{C}(arch::DistributedArchitecture, axes::Vararg{AbstractAxis,N}; kwargs...) where {C,N}
     global_dims = ntuple(Val(N)) do D
         Base.@_inline_meta
         length(axes[D], Center())
