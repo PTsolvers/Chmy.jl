@@ -136,6 +136,7 @@ using Chmy.Architectures
             end
 
             @testset "shortcut coords" begin
+                # short coords
                 @test vertex(grid, Dim(1), 1) == vertex(grid, Dim(1), 1, 1) == coord(grid, Vertex(), Dim(1), 1)
                 @test vertex(grid, Dim(2), 1) == vertex(grid, Dim(2), 1, 1) == coord(grid, Vertex(), Dim(2), 1)
                 @test center(grid, Dim(1), 1) == center(grid, Dim(1), 1, 1) == coord(grid, Center(), Dim(1), 1)
