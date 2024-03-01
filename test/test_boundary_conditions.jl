@@ -36,8 +36,8 @@ for backend in backends
             set!(field, 1)
             v = 2.0
             bc!(arch, grid, field => Dirichlet(v))
-            @test all(field_i[1, 2:end-1] .≈ -field_i[2, 2:end-1] .+ 2v)
-            @test all(field_i[end, 2:end-1] .≈ -field_i[end-1, 2:end-1] .+ 2v)
+            @test all(field_i[1, 2:end-1] .≈ .-field_i[2, 2:end-1] .+ 2v)
+            @test all(field_i[end, 2:end-1] .≈ .-field_i[end-1, 2:end-1] .+ 2v)
 
             @test all(field_i[2:end-1, 2] .≈ v)
             @test all(field_i[2:end-1, end-1] .≈ v)
