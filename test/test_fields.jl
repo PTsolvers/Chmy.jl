@@ -6,6 +6,7 @@ using Chmy.Grids
 
 for backend in backends
     @testset "$(basename(@__FILE__)) (backend: $backend)" begin
+        # test setup
         arch = Arch(backend)
         grid = UniformGrid(arch; origin=(0.0, 0.0, 0.0), extent=(1.0, 1.0, 1.0), dims=(2, 2, 2))
         loc = (Center(), Vertex(), Center())

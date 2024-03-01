@@ -35,6 +35,13 @@ Modules = [Chmy.BoundaryConditions]
 Order   = [:type, :function]
 ```
 
+## Kernel launcher
+
+```@autodocs
+Modules = [Chmy.KernelLaunch]
+Order   = [:type, :function]
+```
+
 ## Distributed
 
 ```@autodocs
