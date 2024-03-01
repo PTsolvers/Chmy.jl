@@ -4,7 +4,10 @@ using Chmy.Grids
 using Chmy.Architectures
 
 @testset "$(basename(@__FILE__)) (backend: CPU)" begin
-    @testset "axes" begin end
+    @testset "common" begin
+        @test flip(Center()) == Vertex()
+        @test flip(Vertex()) == Center()
+    end
 
     @testset "grids" begin
         arch = Arch(CPU())
