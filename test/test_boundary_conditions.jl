@@ -8,7 +8,8 @@ using Chmy.BoundaryConditions
 for backend in backends
     @testset "$(basename(@__FILE__)) (backend: $backend)" begin
         arch = Arch(backend)
-        grid = UniformGrid(arch; origin=(0.0, 0.0), extent=(1.0, 1.0), dims=(8, 8))
+        nx, ny = 8, 8
+        grid = UniformGrid(arch; origin=(-π, -π), extent=(2π, 2π), dims=(nx, ny))
         field = Field(arch, grid, (Center(), Vertex()))
 
         @testset "default Dirichlet" begin
@@ -40,7 +41,7 @@ for backend in backends
             field_i = interior(field; with_halo=true) |> Array
             @test all(field_i[1, 2:end-1] .≈ .-field_i[2, 2:end-1] .+ 2v)
             @test all(field_i[end, 2:end-1] .≈ .-field_i[end-1, 2:end-1] .+ 2v)
-            
+
             @test all(field_i[2:end-1, 2] .≈ v)
             @test all(field_i[2:end-1, end-1] .≈ v)
         end
@@ -51,10 +52,10 @@ for backend in backends
             bc!(arch, grid, field => Neumann(q))
             field_i = interior(field; with_halo=true) |> Array
             @test all((field_i[2, 2:end-1] .- field_i[1, 2:end-1]) ./ Δx(grid, Vertex(), 1, 1) .≈ q)
-            @test all((field_i[end, 2:end-1] .- field_i[end-1, 2:end-1]) ./ Δx(grid, Vertex(), 8, 1) .≈ q)
+            @test all((field_i[end, 2:end-1] .- field_i[end-1, 2:end-1]) ./ Δx(grid, Vertex(), nx + 1, 1) .≈ q)
 
-            @test all((field_i[2:end-1, 2] .- field_i[2:end-1, 1]) ./ Δy(grid, Center(), 1, 1) .≈ q)
-            @test all((field_i[2:end-1, end] .- field_i[2:end-1, end-1]) ./ Δy(grid, Center(), 1, 8) .≈ q)
+            @test all((field_i[2:end-1, 2] .- field_i[2:end-1, 1]) ./ Δy(grid, Center(), 1, 0) .≈ q)
+            @test all((field_i[2:end-1, end] .- field_i[2:end-1, end-1]) ./ Δy(grid, Center(), 1, ny + 1) .≈ q)
         end
     end
 end
