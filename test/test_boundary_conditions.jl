@@ -10,11 +10,11 @@ for backend in backends
         arch = Arch(backend)
         grid = UniformGrid(arch; origin=(0.0, 0.0), extent=(1.0, 1.0), dims=(8, 8))
         field = Field(arch, grid, (Center(), Vertex()))
-        field_i = interior(field; with_halo=true)
 
         @testset "default Dirichlet" begin
             set!(field, 1)
             bc!(arch, grid, field => Dirichlet())
+            field_i = interior(field; with_halo=true) |> Array
             @test all(field_i[1, 2:end-1] .≈ .-field_i[2, 2:end-1])
             @test all(field_i[end, 2:end-1] .≈ .-field_i[end-1, 2:end-1])
 
@@ -25,6 +25,7 @@ for backend in backends
         @testset "default Neumann" begin
             set!(field, 1)
             bc!(arch, grid, field => Neumann())
+            field_i = interior(field; with_halo=true) |> Array
             @test all(field_i[1, 2:end-1] .≈ field_i[2, 2:end-1])
             @test all(field_i[end, 2:end-1] .≈ field_i[end-1, 2:end-1])
 
@@ -36,9 +37,10 @@ for backend in backends
             set!(field, 1)
             v = 2.0
             bc!(arch, grid, field => Dirichlet(v))
+            field_i = interior(field; with_halo=true) |> Array
             @test all(field_i[1, 2:end-1] .≈ .-field_i[2, 2:end-1] .+ 2v)
             @test all(field_i[end, 2:end-1] .≈ .-field_i[end-1, 2:end-1] .+ 2v)
-
+            
             @test all(field_i[2:end-1, 2] .≈ v)
             @test all(field_i[2:end-1, end-1] .≈ v)
         end
@@ -47,6 +49,7 @@ for backend in backends
             set!(field, 1)
             q = 2.0
             bc!(arch, grid, field => Neumann(q))
+            field_i = interior(field; with_halo=true) |> Array
             @test all((field_i[2, 2:end-1] .- field_i[1, 2:end-1]) ./ Δx(grid, Vertex(), 1, 1) .≈ q)
             @test all((field_i[end, 2:end-1] .- field_i[end-1, 2:end-1]) ./ Δx(grid, Vertex(), 8, 1) .≈ q)
 
