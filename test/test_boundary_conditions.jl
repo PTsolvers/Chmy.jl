@@ -15,8 +15,8 @@ for backend in backends
         @testset "default Dirichlet" begin
             set!(field, 1)
             bc!(arch, grid, field => Dirichlet())
-            @test all(field_i[1, 2:end-1] .≈ -field_i[2, 2:end-1])
-            @test all(field_i[end, 2:end-1] .≈ -field_i[end-1, 2:end-1])
+            @test all(field_i[1, 2:end-1] .≈ .-field_i[2, 2:end-1])
+            @test all(field_i[end, 2:end-1] .≈ .-field_i[end-1, 2:end-1])
 
             @test all(field_i[2:end-1, 2] .≈ 0.0)
             @test all(field_i[2:end-1, end-1] .≈ 0.0)
