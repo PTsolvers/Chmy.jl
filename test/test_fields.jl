@@ -4,6 +4,8 @@ using Chmy.Architectures
 using Chmy.Fields
 using Chmy.Grids
 
+using LinearAlgebra
+
 for backend in backends
     @testset "$(basename(@__FILE__)) (backend: $backend)" begin
         # test setup
@@ -50,6 +52,12 @@ for backend in backends
                 @test Array(interior(f)) == [0.0; 0.0;; 1.0; 1.0;; 2.0; 2.0;;;
                                              0.0; 0.0;; 1.0; 1.0;; 2.0; 2.0]
             end
+        end
+        @testset "linalg" begin
+            f = Field(backend, grid, Center())
+            set!(f, 1.0)
+            @test norm(f, 1) ≈ 8
+            @test norm(f, 2) ≈ norm(f) ≈ sqrt(8)
         end
         @testset "constant field" begin
             @testset "zero" begin
