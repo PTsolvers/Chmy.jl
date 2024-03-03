@@ -56,16 +56,19 @@ for backend in backends
                 field = ZeroField{Float64}()
                 @test field[1, 1, 1] ≈ 0.0
                 @test field[2, 2, 2] ≈ 0.0
+                @test size(field) == ()
             end
             @testset "one" begin
                 field = OneField{Float64}()
                 @test field[1, 1, 1] ≈ 1.0
                 @test field[2, 2, 2] ≈ 1.0
+                @test size(field) == ()
             end
             @testset "const" begin
                 field = ValueField(2.0)
                 @test field[1, 1, 1] ≈ 2.0
                 @test field[2, 2, 2] ≈ 2.0
+                @test size(field) == ()
             end
         end
     end
