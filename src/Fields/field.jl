@@ -59,7 +59,7 @@ function Field(backend::Backend, grid::StructuredGrid{N}, loc::LocOrLocs{N}, typ
     return Field{typeof(loc),halo}(data, dims)
 end
 
-Field(arch::Architecture, args...) = Field(Architectures.get_backend(arch), args...)
+Field(arch::Architecture, args...; kwargs...) = Field(Architectures.get_backend(arch), args...; kwargs...)
 
 # set fields
 
@@ -121,3 +121,6 @@ function TensorField(backend::Backend, grid::StructuredGrid{3}, args...; kwargs.
      xz = Field(backend, grid, (Vertex(), Center(), Vertex()), args...; kwargs...),
      yz = Field(backend, grid, (Center(), Vertex(), Vertex()), args...; kwargs...))
 end
+
+VectorField(arch::Architecture, args...; kwargs...) = VectorField(Architectures.get_backend(arch), args...; kwargs...)
+TensorField(arch::Architecture, args...; kwargs...) = TensorField(Architectures.get_backend(arch), args...; kwargs...)
