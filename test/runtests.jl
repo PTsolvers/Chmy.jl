@@ -29,7 +29,6 @@ function parse_flags!(args, flag; default=nothing, typ=typeof(default))
 end
 
 function runtests()
-    exename   = joinpath(Sys.BINDIR, Base.julia_exename())
     testdir   = pwd()
     istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")
     testfiles = sort(filter(istest, vcat([joinpath.(root, files) for (root, dirs, files) in walkdir(testdir)]...)))
