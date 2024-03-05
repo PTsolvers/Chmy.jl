@@ -83,11 +83,11 @@ Dimensions of the topology as NTuple.
 dims(t::CartesianTopology) = t.dims
 
 """
-    coords(topo)
+    cart_coords(topo)
 
 Coordinates of a current process within a Cartesian topology.
 """
-coords(t::CartesianTopology) = t.cart_coords
+cart_coords(t::CartesianTopology) = t.cart_coords
 
 """
     neighbors(topo)

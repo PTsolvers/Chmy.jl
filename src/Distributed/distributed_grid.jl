@@ -23,7 +23,7 @@ function Grids.StructuredGrid{C}(arch::DistributedArchitecture, axes::Vararg{Abs
     end
 
     local_dims = cld.(global_dims, dims(arch.topology))
-    offsets = coords(arch.topology) .* local_dims
+    offsets = cart_coords(arch.topology) .* local_dims
 
     local_axes = ntuple(Val(N)) do D
         Base.@_inline_meta
