@@ -159,7 +159,7 @@ end
 Return a tuple of grid spacing for a uniform grid `grid`.
 """
 spacing(grid::UniformGrid) = getfield.(grid.axes, :spacing)
-spacing(grid::UniformGrid, ::Dim{dim}) where {dim} = getfield.(grid.axes, :spacing)[dim]
+spacing(grid::UniformGrid, ::Dim{dim}) where {dim} = grid.axes[dim].spacing
 
 """
     inv_spacing(grid::UniformGrid)
