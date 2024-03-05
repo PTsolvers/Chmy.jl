@@ -153,6 +153,22 @@ for (sp, desc) in ((:spacing, "grid spacings"), (:inv_spacing, "inverse grid spa
     end
 end
 
+"""
+    spacing(grid::UniformGrid)
+
+Return a tuple of grid spacing for a uniform grid `grid`.
+"""
+spacing(grid::UniformGrid) = getfield.(grid.axes, :spacing)
+spacing(grid::UniformGrid, ::Dim{dim}) where {dim} = grid.axes[dim].spacing
+
+"""
+    inv_spacing(grid::UniformGrid)
+
+Return a tuple of inverse grid spacing for a uniform grid `grid`.
+"""
+inv_spacing(grid::UniformGrid) = getfield.(grid.axes, :inv_spacing)
+inv_spacing(grid::UniformGrid, ::Dim{dim}) where {dim} = grid.axes[dim].inv_spacing
+
 # coordinate lists
 
 coords(grid::SG{N}, loc::LocOrLocs{N}) where {N} = coords.(grid.axes, loc)
@@ -180,6 +196,8 @@ for (dim, c) in enumerate((:x, :y, :z))
 
     @eval begin
         export $_Δ, $_coord, $_coords, $_vertex, $_center, $_vertices, $_centers
+
+        @propagate_inbounds $_Δ(grid::UniformGrid) = spacing(grid, Dim($dim))
 
         @propagate_inbounds $_Δ(grid::SG{N}, loc, I::Vararg{Integer,N}) where {N} = spacing(grid, loc, Dim($dim), I...)
         @propagate_inbounds $_Δ(grid::SG, loc, I) = spacing(grid, loc, Dim($dim), I)

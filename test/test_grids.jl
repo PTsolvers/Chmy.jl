@@ -109,6 +109,16 @@ using Chmy.Architectures
                 @test inv_spacing(grid, Center(), 1, 1) == inv_spacing(grid, (Center(), Center()), 1, 1)
             end
 
+            @testset "uniform spacing" begin
+                # spacing
+                @test all(spacing(grid) .≈ (0.4, 0.2))
+                # inverse
+                @test all(inv_spacing(grid) .≈ (2.5, 5.0))
+                # cartesian
+                @test Δx(grid) ≈ 0.4
+                @test Δy(grid) ≈ 0.2
+            end
+
             @testset "coords" begin
                 # one index
                 @test coord(grid, Vertex(), Dim(1), 1) ≈ -1.0
