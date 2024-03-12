@@ -158,7 +158,7 @@ end
 
 Return a tuple of grid spacing for a uniform grid `grid`.
 """
-spacing(grid::UniformGrid) = getfield.(grid.axes, :spacing)
+spacing(grid::UniformGrid{N}) where {N} = ntuple(D -> grid.axes[D].spacing, Val(N))
 spacing(grid::UniformGrid, ::Dim{dim}) where {dim} = grid.axes[dim].spacing
 
 """
@@ -166,7 +166,7 @@ spacing(grid::UniformGrid, ::Dim{dim}) where {dim} = grid.axes[dim].spacing
 
 Return a tuple of inverse grid spacing for a uniform grid `grid`.
 """
-inv_spacing(grid::UniformGrid) = getfield.(grid.axes, :inv_spacing)
+inv_spacing(grid::UniformGrid{N}) where {N} = ntuple(D -> grid.axes[D].inv_spacing, Val(N))
 inv_spacing(grid::UniformGrid, ::Dim{dim}) where {dim} = grid.axes[dim].inv_spacing
 
 # coordinate lists
