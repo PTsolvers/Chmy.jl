@@ -31,10 +31,10 @@ function compute(arch, grid, launch, q, C, χ, Δt, nt)
     return wtime
 end
 
-@views function main(backend=CPU(); nxy_l=(126, 126))
+@views function main(backend=CPU(); nxy=(126, 126))
     arch = Arch(backend; device_id=1)
     # geometry
-    grid = UniformGrid(arch; origin=(-1, -1), extent=(2, 2), dims=nxy_l)
+    grid = UniformGrid(arch; origin=(-1, -1), extent=(2, 2), dims=nxy)
     # physics
     χ = 1.0
     # numerics
@@ -66,7 +66,7 @@ end
             println("Experiment = $ex")
             wtime = compute(arch, grid, lau, q, C, χ, Δt, (iters - warmup))
             # report
-            A_eff = 6 / 1e9 * prod(nxy_l) * sizeof(Float64)
+            A_eff = 6 / 1e9 * prod(nxy) * sizeof(Float64)
             wtime_it = wtime ./ (iters - warmup)
             T_eff = A_eff ./ wtime_it
             @printf("  Executed %d steps in = %1.3e sec (@ T_eff = %1.2f GB/s - device %s) \n", (iters - warmup), wtime,
@@ -80,8 +80,8 @@ end
 end
 
 res = 1024 * 1
-# main(ROCBackend(); nxy_l=(1022, 1022))
-# main(CUDABackend(); nxy_l=(16382, 16382))
-main(ROCBackend(); nxy_l=(res, res) .- 2)
-# main(CUDABackend(); nxy_l=(res, res) .- 2)
-# main(; nxy_l=(256, 256))
+# main(ROCBackend(); nxy=(1022, 1022))
+# main(CUDABackend(); nxy=(16382, 16382))
+main(ROCBackend(); nxy=(res, res) .- 2)
+# main(CUDABackend(); nxy=(res, res) .- 2)
+# main(; nxy=(256, 256))
