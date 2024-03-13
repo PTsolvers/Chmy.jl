@@ -35,8 +35,8 @@ end
 """
     gather!(arch, dst, src::Field; kwargs...)
 
-Gather the interior of a field `src` into a global array `dst`.
+Gather the interior of a field `src` into a global array `dst` on the CPU.
 """
 function gather!(arch::DistributedArchitecture, dst, src::Field; kwargs...)
-    gather!(dst, interior(src), cart_comm(topology(arch)); kwargs...)
+    gather!(dst, interior(src) |> Array, cart_comm(topology(arch)); kwargs...)
 end
