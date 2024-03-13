@@ -1,8 +1,8 @@
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
 using KernelAbstractions
-# using CairoMakie
 using Printf
 using JSON
+# using CairoMakie
 
 using AMDGPU
 AMDGPU.allowscalar(false)
@@ -109,7 +109,7 @@ end
     grid   = UniformGrid(arch; origin=(-lx/2, -ly/2, -lz/2), extent=(lx, ly, lz), dims=dims_g)
     launch = Launcher(arch, grid; outer_width=(128, 8, 4))
     nx, ny, nz = dims_g
-    dx, dy, dz = spacing(grid, Center(), 1, 1, 1)
+    dx, dy, dz = spacing(grid)
     nt     = params.nt #1e3
     niter  = 50nx
     ncheck = 0.5nx

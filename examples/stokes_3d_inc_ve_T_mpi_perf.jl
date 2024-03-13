@@ -106,16 +106,17 @@ end
     dims_l = nxyz_l
     dims_g = dims_l .* dims(topo)
     grid   = UniformGrid(arch; origin=(-lx/2, -ly/2, -lz/2), extent=(lx, ly, lz), dims=dims_g)
+    launch = Launcher(arch, grid; outer_width=(128, 8, 4))
     nx, ny, nz = dims_g
     dx, dy, dz = spacing(grid, Center(), 1, 1, 1)
-    nt     = 1
+    nt     = 8
     # niter  = 50nx
     niter, warmup = 110, 10
     ncheck = 2nx
     ϵ_it   = 1e-6
     ysl    = ceil(Int, length(ycenters(grid)) / 2) # for visu
     # PT params
-    re_m    = 2.3π
+    re_m    = 2.5π
     r       = 0.5
     lτ_re_m = min(lx, ly, lz) / re_m
     vdτ     = min(dx, dy, dz) / sqrt(ndims(grid) * 1.1)
@@ -139,8 +140,6 @@ end
     ρgz = FunctionField(init_incl, grid, (Center(), Center(), Vertex()); parameters=(x0=0.0, y0=0.0, z0=0.0, r=0.1lx, in=ρg.z, out=0.0))
     set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, z0=0.0, r=0.1lx, in=T0, out=Ta))
     η_ve = 0.0
-    # launch = Launcher(arch, grid)
-    launch = Launcher(arch, grid; outer_width=(128, 8, 4))
     # boundary conditions
     bc_V = (V.x => (x=Dirichlet(), y=Neumann(), z=Neumann()),
             V.y => (x=Neumann(), y=Dirichlet(), z=Neumann()),
@@ -178,9 +177,8 @@ end
         η_ve = 1.0 / (1.0 / η + 1.0 / (G * dt))
         (it > 2) && (ncheck = ceil(Int, 0.5nx))
 
-        MPI.Barrier(cart_comm(topo))
         for iter in 1:niter
-            (iter == warmup) && (tic = time_ns())
+            (iter == warmup) && (MPI.Barrier(cart_comm(topo)); tic = time_ns())
             launch(arch, grid, update_stress! => (τ, Pr, ∇V, V, τ_old, η, η_ve, G, dt, dτ_Pr, dτ_r, grid))
             launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgz, η_ve, νdτ, grid); bc=batch(grid, bc_V...; exchange=(V.x, V.y, V.z)))
             # if it > 1

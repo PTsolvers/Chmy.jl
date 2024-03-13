@@ -1,12 +1,12 @@
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
 using KernelAbstractions
-using CairoMakie
 using Printf
+# using CairoMakie
 
 # using AMDGPU
 # AMDGPU.allowscalar(false)
-using CUDA
-CUDA.allowscalar(false)
+# using CUDA
+# CUDA.allowscalar(false)
 
 using Chmy.Distributed
 using MPI
@@ -28,16 +28,17 @@ end
 @views function main(backend=CPU(); nxy_l=(126, 126))
     arch = Arch(backend, MPI.COMM_WORLD, (0, 0))
     topo = topology(arch)
-    me = global_rank(topo)
+    me   = global_rank(topo)
     # geometry
     dims_l = nxy_l
     dims_g = dims_l .* dims(topo)
-    grid = UniformGrid(arch; origin=(-2, -2), extent=(4, 4), dims=dims_g)
+    grid   = UniformGrid(arch; origin=(-2, -2), extent=(4, 4), dims=dims_g)
+    launch = Launcher(arch, grid, outer_width=(16, 8))
     nx, ny = dims_g
     # physics
     χ = 1.0
     # numerics
-    Δt = minimum(spacing(grid, Center(), 1, 1))^2 / χ / ndims(grid) / 2.1
+    Δt = minimum(spacing(grid))^2 / χ / ndims(grid) / 2.1
     # allocate fields
     C = Field(backend, grid, Center())
     q = VectorField(backend, grid)
@@ -45,7 +46,6 @@ end
     # initial conditions
     set!(C, grid, (x, y) -> exp(-x^2 - y^2))
     bc!(arch, grid, C => Neumann(); exchange=C)
-    launch = Launcher(arch, grid, outer_width=(16, 8)) # ; outer_width=(16, 8)
     # visualisation
     fig = Figure(; size=(400, 320))
     ax  = Axis(fig[1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="it = 0")
@@ -60,8 +60,8 @@ end
     end
     KernelAbstractions.synchronize(backend)
     # local postprocess
-    plt[3] = interior(C) |> Array
-    ax.title = "it = $nt"
+    # plt[3] = interior(C) |> Array
+    # ax.title = "it = $nt"
     # display(fig)
     # save("out$me.png", fig)
     # global postprocess
@@ -76,8 +76,10 @@ end
     return
 end
 
-# main(ROCBackend(); n=1022)
-main(CUDABackend(); nxy_l=(254, 254))
-# main(; n=1022)
+n = 128
+
+# main(ROCBackend(); nxy_l=(n, n) .- 2)
+# main(CUDABackend(); nxy_l=(n, n) .- 2)
+main(; nxy_l=(n, n) .- 2)
 
 MPI.Finalize()

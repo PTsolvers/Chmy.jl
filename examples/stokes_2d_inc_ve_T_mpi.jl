@@ -1,7 +1,7 @@
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
 using KernelAbstractions
-using CairoMakie
 using Printf
+using CairoMakie
 
 using AMDGPU
 AMDGPU.allowscalar(false)
@@ -90,8 +90,9 @@ end
     dims_l = nxy_l
     dims_g = dims_l .* dims(topo)
     grid   = UniformGrid(arch; origin=(-lx/2, -ly/2), extent=(lx, ly), dims=dims_g)
+    launch = Launcher(arch, grid; outer_width=(16, 8))
     nx, ny = dims_g
-    dx, dy = spacing(grid, Center(), 1, 1)
+    dx, dy = spacing(grid)
     nt     = 4
     niter  = 50nx
     ncheck = 2nx
@@ -122,7 +123,6 @@ end
     ρgy = FunctionField(init_incl, grid, (Center(), Vertex()); parameters=(x0=0.0, y0=0.0, r=0.1lx, in=ρg.y, out=0.0))
     set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=T0, out=Ta))
     η_ve = 0.0
-    launch = Launcher(arch, grid; outer_width=(16, 8))
     # boundary conditions
     bc_V = (V.x => (x=Dirichlet(), y=Neumann()),
             V.y => (x=Neumann(), y=Dirichlet()))
