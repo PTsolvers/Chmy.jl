@@ -63,18 +63,18 @@ Field(arch::Architecture, args...; kwargs...) = Field(Architectures.get_backend(
 
 # set fields
 
-set!(f::Field, other::Field) = (copy!(interior(f), interior(other)); nothing)
+set!(f::Field, other::Field) = (copyto!(interior(f), interior(other)); nothing)
 set!(f::Field, val::Number) = (fill!(interior(f), val); nothing)
-set!(f::Field, A::AbstractArray) = (copy!(interior(f), A); nothing)
+set!(f::Field, A::AbstractArray) = (copyto!(interior(f), A); nothing)
 
 @kernel inbounds = true function _set_continuous!(dst, grid, loc, fun::F, args...) where {F}
-    I = @index(Global, Cartesian)
-    dst[I] = fun(coord(grid, loc, I)..., args...)
+    I = @index(Global, NTuple)
+    dst[I] = fun(coord(grid, loc, I...)..., args...)
 end
 
 @kernel inbounds = true function _set_discrete!(dst, grid, loc, fun::F, args...) where {F}
-    I = @index(Global, Cartesian)
-    dst[I] = fun(grid, loc, I, args...)
+    I = @index(Global, NTuple)
+    dst[I] = fun(grid, loc, I..., args...)
 end
 
 function set!(f::Field{T,N}, grid::StructuredGrid{N}, fun::F; discrete=false, parameters=(), async=false) where {T,F,N}
