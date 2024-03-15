@@ -69,12 +69,12 @@ set!(f::Field, A::AbstractArray) = (copyto!(interior(f), A); nothing)
 
 @kernel inbounds = true function _set_continuous!(dst, grid, loc, fun::F, args...) where {F}
     I = @index(Global, NTuple)
-    dst[I] = fun(coord(grid, loc, I...)..., args...)
+    dst[I...] = fun(coord(grid, loc, I...)..., args...)
 end
 
 @kernel inbounds = true function _set_discrete!(dst, grid, loc, fun::F, args...) where {F}
     I = @index(Global, NTuple)
-    dst[I] = fun(grid, loc, I..., args...)
+    dst[I...] = fun(grid, loc, I..., args...)
 end
 
 function set!(f::Field{T,N}, grid::StructuredGrid{N}, fun::F; discrete=false, parameters=(), async=false) where {T,F,N}
