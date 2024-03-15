@@ -21,17 +21,17 @@ for backend in backends
             @testset "discrete" begin
                 # no parameters vertex
                 fill!(parent(f), NaN)
-                set!(f, grid, (grid, loc, I) -> ycoord(grid, loc, I[2]); discrete=true)
+                set!(f, grid, (grid, loc, ix, iy, iz) -> ycoord(grid, loc, iy); discrete=true)
                 @test Array(interior(f)) == [0.0; 0.0;; 0.5; 0.5;; 1.0; 1.0;;;
                                              0.0; 0.0;; 0.5; 0.5;; 1.0; 1.0]
                 # no parameters center
                 fill!(parent(f), NaN)
-                set!(f, grid, (grid, loc, I) -> xcoord(grid, loc, I[1]); discrete=true)
+                set!(f, grid, (grid, loc, ix, iy, iz) -> xcoord(grid, loc, ix); discrete=true)
                 @test Array(interior(f)) == [0.25; 0.75;; 0.25; 0.75;; 0.25; 0.75;;;
                                              0.25; 0.75;; 0.25; 0.75;; 0.25; 0.75]
                 # with parameters
                 fill!(parent(f), NaN)
-                set!(f, grid, (grid, loc, I, sc) -> ycoord(grid, loc, I[2]) * sc; discrete=true, parameters=(2.0,))
+                set!(f, grid, (grid, loc, ix, iy, iz, sc) -> ycoord(grid, loc, iy) * sc; discrete=true, parameters=(2.0,))
                 @test Array(interior(f)) == [0.0; 0.0;; 1.0; 1.0;; 2.0; 2.0;;;
                                              0.0; 0.0;; 1.0; 1.0;; 2.0; 2.0]
             end
