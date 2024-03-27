@@ -6,7 +6,7 @@ struct UniformAxis{T} <: AbstractAxis{T}
     length::Int
     function UniformAxis(origin::T, extent::T, len::Integer) where {T}
         spacing = extent / len
-        inv_spacing = one(T) / spacing
+        inv_spacing = inv(spacing)
         new{T}(origin, extent, spacing, inv_spacing, len)
     end
 end
