@@ -51,6 +51,12 @@ end
 
 # interpolation interface
 
+"""
+    itp(f, to, r, grid, I...)
+
+Interpolates the field `f` from its current location to the specified location(s) `to` using the given interpolation rule `r`.
+The indices specify the position within the grid at location(s) `to`.
+"""
 @add_cartesian function itp(f::AbstractField, to::NTuple{N,Location}, r::InterpolationRule, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {N}
     from = location(f)
     if typeof(from) === typeof(to)
@@ -74,6 +80,18 @@ end
 
 # shortcuts for common use cases
 
+"""
+    lerp(f, to, grid, I...)
+
+Linearly interpolate values of a field `f` to location `to`.
+"""
 @add_cartesian lerp(f, to, grid, I::Vararg{Integer,N}) where {N} = itp(f, to, Linear(), grid, I...)
 
+"""
+    hlerp(f, to, grid, I...)
+
+Interpolate a field `f` to location to using harmonic linear interpolation rule.
+
+`rule(t, v0, v1) = 1/(1/v0 + t * (1/v1 - 1/v0))`
+"""
 @add_cartesian hlerp(f, to, grid, I::Vararg{Integer,N}) where {N} = itp(f, to, HarmonicLinear(), grid, I...)
