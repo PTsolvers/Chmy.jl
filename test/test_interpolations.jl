@@ -5,54 +5,73 @@ using Chmy.GridOperators
 using Chmy.Fields
 using Chmy.Architectures
 
-@testset "$(basename(@__FILE__)) (backend: CPU)" begin
-    arch = Arch(CPU())
-    grid = UniformGrid(arch; origin=(0, 0), extent=(1, 1), dims=(2, 2))
-    r    = Linear()
-    @testset "center" begin
-        field = Field(arch, grid, Center())
-        src = reshape(1:4, size(grid, Center())) |> collect
-        set!(field, src)
-        @testset "c2v" begin
-            @test itp(field, (Vertex(), Vertex()), r, grid, 2, 2) ≈ 2.5
+@views av4(A) = 0.25 .* (A[1:end-1, 1:end-1] .+ A[2:end, 1:end-1] .+ A[2:end, 2:end] .+ A[1:end-1, 2:end])
+@views avx(A) = 0.5 .* (A[1:end-1, :] .+ A[2:end, :])
+@views avy(A) = 0.5 .* (A[:, 1:end-1] .+ A[:, 2:end])
+
+for backend in backends
+    @testset "$(basename(@__FILE__)) (backend: $backend)" begin
+        arch = Arch(backend)
+        grid = UniformGrid(arch; origin=(0, 0), extent=(1, 1), dims=(2, 2))
+        @testset "center" begin
+            f_c = Field(arch, grid, Center())
+            src = reshape(1:4, size(grid, Center())) |> collect
+            set!(f_c, src)
+            f_c_i = interior(f_c) |> Array
+            @testset "c2v" begin
+                f_v = Field(arch, grid, Vertex())
+                set!(f_v, grid, (grid, loc, ix, iy, f_c) -> lerp(f_c, loc, grid, ix, iy); discrete=true, parameters=(f_c,))
+                f_v_i = interior(f_v) |> Array
+                @test f_v_i[2:end-1, 2:end-1] ≈ av4(f_c_i)
+            end
+            @testset "c2c" begin
+                f_c2 = Field(arch, grid, Center())
+                set!(f_c2, grid, (grid, loc, ix, iy, f_c) -> lerp(f_c, loc, grid, ix, iy); discrete=true, parameters=(f_c,))
+                f_c2_i = interior(f_c2) |> Array
+                @test f_c_i ≈ f_c2_i
+            end
+            @testset "c2cv" begin
+                f_cv = Field(arch, grid, (Center(), Vertex()))
+                set!(f_cv, grid, (grid, loc, ix, iy, f_c) -> lerp(f_c, loc, grid, ix, iy); discrete=true, parameters=(f_c,))
+                f_cv_i = interior(f_cv) |> Array
+                @test f_cv_i[:, 2:end-1] ≈ avy(f_c_i)
+            end
+            @testset "c2vc" begin
+                f_vc = Field(arch, grid, (Vertex(), Center()))
+                set!(f_vc, grid, (grid, loc, ix, iy, f_c) -> lerp(f_c, loc, grid, ix, iy); discrete=true, parameters=(f_c,))
+                f_vc_i = interior(f_vc) |> Array
+                @test f_vc_i[2:end-1, :] ≈ avx(f_c_i)
+            end
         end
-        @testset "c2c" for ix in 1:2, iy in 1:2
-            @test itp(field, (Center(), Center()), r, grid, ix, iy) == src[ix, iy]
-        end
-        @testset "c2cv" begin
-            @test itp(field, (Center(), Vertex()), r, grid, 1, 2) ≈ 2.0
-            @test itp(field, (Center(), Vertex()), r, grid, 2, 2) ≈ 3.0
-        end
-        @testset "c2vc" begin
-            @test itp(field, (Vertex(), Center()), r, grid, 2, 1) ≈ 1.5
-            @test itp(field, (Vertex(), Center()), r, grid, 2, 2) ≈ 3.5
-        end
-    end
-    @testset "vertex" begin
-        field = Field(arch, grid, Vertex())
-        src = reshape(1:9, size(grid, Vertex())) |> collect
-        set!(field, src)
-        @testset "v2c" begin
-            @test itp(field, (Center(), Center()), r, grid, 1, 1) ≈ 3.0
-        end
-        @testset "v2v" for ix in 1:3, iy in 1:3
-            @test itp(field, (Vertex(), Vertex()), r, grid, ix, iy) == src[ix, iy]
-        end
-        @testset "v2cv" begin
-            @test itp(field, (Center(), Vertex()), r, grid, 1, 1) ≈ 1.5
-            @test itp(field, (Center(), Vertex()), r, grid, 2, 1) ≈ 2.5
-            @test itp(field, (Center(), Vertex()), r, grid, 1, 2) ≈ 4.5
-            @test itp(field, (Center(), Vertex()), r, grid, 2, 2) ≈ 5.5
-            @test itp(field, (Center(), Vertex()), r, grid, 1, 3) ≈ 7.5
-            @test itp(field, (Center(), Vertex()), r, grid, 2, 3) ≈ 8.5
-        end
-        @testset "v2vc" begin
-            @test itp(field, (Vertex(), Center()), r, grid, 1, 1) ≈ 2.5
-            @test itp(field, (Vertex(), Center()), r, grid, 1, 2) ≈ 5.5
-            @test itp(field, (Vertex(), Center()), r, grid, 2, 1) ≈ 3.5
-            @test itp(field, (Vertex(), Center()), r, grid, 2, 2) ≈ 6.5
-            @test itp(field, (Vertex(), Center()), r, grid, 3, 1) ≈ 4.5
-            @test itp(field, (Vertex(), Center()), r, grid, 3, 2) ≈ 7.5
+        @testset "vertex" begin
+            f_v = Field(arch, grid, Vertex())
+            src = reshape(1:9, size(grid, Vertex())) |> collect
+            set!(f_v, src)
+            f_v_i = interior(f_v) |> Array
+            @testset "v2c" begin
+                f_c = Field(arch, grid, Center())
+                set!(f_c, grid, (grid, loc, ix, iy, f_v) -> lerp(f_v, loc, grid, ix, iy); discrete=true, parameters=(f_v,))
+                f_c_i = interior(f_c) |> Array
+                @test f_c_i ≈ av4(f_v_i)
+            end
+            @testset "v2v" begin
+                f_v2 = Field(arch, grid, Vertex())
+                set!(f_v2, grid, (grid, loc, ix, iy, f_v) -> lerp(f_v, loc, grid, ix, iy); discrete=true, parameters=(f_v,))
+                f_v2_i = interior(f_v2) |> Array
+                @test f_v2_i ≈ f_v_i
+            end
+            @testset "v2cv" begin
+                f_cv = Field(arch, grid, (Center(), Vertex()))
+                set!(f_cv, grid, (grid, loc, ix, iy, f_v) -> lerp(f_v, loc, grid, ix, iy); discrete=true, parameters=(f_v,))
+                f_cv_i = interior(f_cv) |> Array
+                @test f_cv_i ≈ avx(f_v_i)
+            end
+            @testset "v2vc" begin
+                f_vc = Field(arch, grid, (Vertex(), Center()))
+                set!(f_vc, grid, (grid, loc, ix, iy, f_v) -> lerp(f_v, loc, grid, ix, iy); discrete=true, parameters=(f_v,))
+                f_vc_i = interior(f_vc) |> Array
+                @test f_vc_i ≈ avy(f_v_i)
+            end
         end
     end
 end
