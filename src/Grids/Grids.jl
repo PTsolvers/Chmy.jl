@@ -8,6 +8,7 @@ export StructuredGrid, UniformGrid
 export nvertices, ncenters, spacing, inv_spacing, Δ, iΔ, coord, coords, center, vertex, centers, vertices
 export origin, extent, bounds, axis
 export direction, axes_names
+export expand_loc
 export connectivity
 
 using Chmy
@@ -33,6 +34,9 @@ struct Bounded <: Connectivity end
 struct Periodic <: Connectivity end
 struct Connected <: Connectivity end
 struct Flat <: Connectivity end
+
+expand_loc(::Val{N}, locs::NTuple{N,Location}) where {N} = locs
+expand_loc(::Val{N}, loc::Location) where {N} = ntuple(_ -> loc, Val(N))
 
 include("abstract_axis.jl")
 include("uniform_axis.jl")

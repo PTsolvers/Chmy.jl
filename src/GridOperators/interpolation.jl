@@ -69,6 +69,9 @@ end
     return itp_impl(r, t, v...)
 end
 
+# version for repeated locations
+@add_cartesian itp(f, to::Location, r, grid, I::Vararg{Integer,N}) where {N} = itp(f, expand_loc(Val(N), to), r, grid, I...)
+
 # shortcuts for common use cases
 
 @add_cartesian lerp(f, to, grid, I::Vararg{Integer,N}) where {N} = itp(f, to, Linear(), grid, I...)

@@ -1,9 +1,9 @@
 module GridOperators
 
-export left, right, δ, ∂, itp
+export left, right, δ, ∂
 
 export InterpolationRule, Linear, HarmonicLinear
-export itp_rule, itp_weight
+export itp, lerp, hlerp
 
 using Chmy
 using Chmy.Grids
