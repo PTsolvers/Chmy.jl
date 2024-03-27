@@ -1,76 +1,35 @@
 module GridOperators
 
+export left, right, δ, ∂, itp
+
+export InterpolationRule, Linear, HarmonicLinear
+export itp_rule, itp_weight
+
 using Chmy
 using Chmy.Grids
+using Chmy.Fields
+
 import Chmy.@add_cartesian
 
-export left, right, δ, ∂, lerp
+import Base: @propagate_inbounds, front
 
-Base.@assume_effects :foldable p(::Dim{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] + oneunit(I[i]) : I[i], Val(N))
-Base.@assume_effects :foldable m(::Dim{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] - oneunit(I[i]) : I[i], Val(N))
+p(::Dim{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] + oneunit(I[i]) : I[i], Val(N))
+m(::Dim{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] - oneunit(I[i]) : I[i], Val(N))
 
-@add_cartesian left(f, ::Vertex, dim, I::Vararg{Integer,N}) where {N} = f[m(dim, I...)...]
-@add_cartesian left(f, ::Center, dim, I::Vararg{Integer,N}) where {N} = f[I...]
+@add_cartesian il(loc::Vertex, from::Center, dim, I::Vararg{Integer,N}) where {N} = I
+@add_cartesian il(loc::Center, from::Vertex, dim, I::Vararg{Integer,N}) where {N} = m(dim, I...)
 
-@add_cartesian right(f, ::Vertex, dim, I::Vararg{Integer,N}) where {N} = f[I...]
-@add_cartesian right(f, ::Center, dim, I::Vararg{Integer,N}) where {N} = f[p(dim, I...)...]
+@add_cartesian ir(loc::Vertex, from::Center, dim, I::Vararg{Integer,N}) where {N} = p(dim, I...)
+@add_cartesian ir(loc::Center, from::Vertex, dim, I::Vararg{Integer,N}) where {N} = I
 
-# finite difference
-@add_cartesian δ(f, loc, dim, I::Vararg{Integer,N}) where {N} = right(f, loc, dim, I...) - left(f, loc, dim, I...)
+@add_cartesian il(loc::L, from::L, dim, I::Vararg{Integer,N}) where {N,L<:Location} = m(dim, I...)
+@add_cartesian ir(loc::L, from::L, dim, I::Vararg{Integer,N}) where {N,L<:Location} = p(dim, I...)
 
-# partial derivative
-@add_cartesian ∂(f, loc, grid, dim, I::Vararg{Integer,N}) where {N} = δ(f, loc, dim, I...) * iΔ(grid, loc, dim, I...)
+@add_cartesian left(f, loc, from, dim, I::Vararg{Integer,N}) where {N} = f[il(loc, from, dim, I...)...]
+@add_cartesian right(f, loc, from, dim, I::Vararg{Integer,N}) where {N} = f[ir(loc, from, dim, I...)...]
 
-# interpolation
-@add_cartesian lerp(f, ::Center, grid, dim, I::Vararg{Integer,N}) where {N} = eltype(f)(0.5) * (f[I...] + f[p(dim, I...)...])
-@add_cartesian function lerp(f, ::Vertex, grid, dim, I::Vararg{Integer,N}) where {N}
-    t = eltype(f)(0.5) * Δ(grid, Center(), dim, m(dim, I...)...) * iΔ(grid, Vertex(), dim, I...)
-    a = f[I...]
-    b = f[m(dim, I...)...]
-    return muladd(t, a - b, b)
-end
-
-# more efficient for uniform grids
-@add_cartesian lerp(f, ::Vertex, grid::UniformGrid, dim, I::Vararg{Integer,N}) where {N} = eltype(f)(0.5) * (f[m(dim, I...)...] + f[I...])
-
-# operators on Cartesian grids
-for (dim, coord) in enumerate((:x, :y, :z))
-    left = Symbol(:left, coord)
-    right = Symbol(:right, coord)
-    δ = Symbol(:δ, coord)
-    ∂ = Symbol(:∂, coord)
-
-    @eval begin
-        export $δ, $∂, $left, $right
-
-        """
-            $($left)(f, loc, I)
-
-        "left side" of a field (`[1:end-1]`) in $($(string(coord))) direction.
-        """
-        @add_cartesian $left(f, loc, I::Vararg{Integer,N}) where {N} = left(f, loc, Val($dim), I...)
-
-        """
-            $($right)(f, loc, I)
-
-        "right side" of a field (`[2:end]`) in $($(string(coord))) direction.
-        """
-        @add_cartesian $right(f, loc, I::Vararg{Integer,N}) where {N} = right(f, loc, Val($dim), I...)
-
-        """
-            $($δ)(f, loc, I)
-
-        Finite difference in $($(string(coord))) direction.
-        """
-        @add_cartesian $δ(f, loc, I::Vararg{Integer,N}) where {N} = δ(f, loc, Val($dim), I...)
-
-        """
-            $($∂)(f, loc, grid, I)
-
-        Directional partial derivative in $($(string(coord))) direction.
-        """
-        @add_cartesian $∂(f, loc, grid, I::Vararg{Integer,N}) where {N} = ∂(f, loc, grid, Val($dim), I...)
-    end
-end
+include("partial_derivatives.jl")
+include("interpolation.jl")
+include("field_operators.jl")
 
 end

@@ -10,7 +10,6 @@ export divg
 using Chmy
 using Chmy.Grids
 using Chmy.Architectures
-import Chmy.GridOperators
 import Chmy: @add_cartesian
 
 import Base.@propagate_inbounds

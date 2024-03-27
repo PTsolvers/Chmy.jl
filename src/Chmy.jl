@@ -11,8 +11,8 @@ include("utils.jl")
 
 include("Architectures.jl")
 include("Grids/Grids.jl")
-include("GridOperators/GridOperators.jl")
 include("Fields/Fields.jl")
+include("GridOperators/GridOperators.jl")
 
 include("BoundaryConditions/BoundaryConditions.jl")
 
