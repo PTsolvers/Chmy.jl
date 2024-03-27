@@ -1,5 +1,7 @@
 abstract type AbstractAxis{T} end
 
+Base.eltype(::AbstractAxis{T}) where {T} = T
+
 ncenters(ax::AbstractAxis{T}) where {T} = nvertices(ax) - 1
 
 Base.length(ax::AbstractAxis, ::Vertex) = nvertices(ax)
@@ -19,7 +21,7 @@ origin(ax::AbstractAxis, ::Center) = @inbounds center(ax, 1)
 @propagate_inbounds spacing(ax::AbstractAxis, ::Center, i::Integer) = vertex(ax, i + 1) - vertex(ax, i)
 @propagate_inbounds spacing(ax::AbstractAxis, ::Vertex, i::Integer) = center(ax, i) - center(ax, i - 1)
 
-@propagate_inbounds inv_spacing(ax::AbstractAxis{T}, loc, i) where {T} = one(T) / spacing(ax, loc, i)
+@propagate_inbounds inv_spacing(ax::AbstractAxis{T}, loc, i) where {T} = inv(spacing(ax, loc, i))
 
 coords(ax::AbstractAxis, loc::Location) = @inbounds [coord(ax, loc, i) for i in 1:length(ax, loc)]
 

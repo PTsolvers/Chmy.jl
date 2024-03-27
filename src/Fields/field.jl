@@ -34,11 +34,6 @@ const LocOrLocs{N} = Union{Location,NTuple{N,Location}}
 # adapt to GPU
 Adapt.adapt_structure(to, f::Field{T,N,L,H}) where {T,N,L,H} = Field{L,H}(Adapt.adapt(to, f.data), f.dims)
 
-# fields on grids
-
-expand_loc(::Val{N}, locs::NTuple{N,Location}) where {N} = locs
-expand_loc(::Val{N}, loc::Location) where {N} = ntuple(_ -> loc, Val(N))
-
 """
     Field(backend, grid, loc, type=eltype(grid); halo=1)
 
