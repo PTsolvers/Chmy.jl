@@ -90,7 +90,7 @@ end
 
 # one-sided batch
 
-batch(side::Side, dim::Dim, grid::SG, fields, bcs; exchange=nothing) = batch_impl(connectivity(grid, dim, side), fields, bcs, exchange)
+batch(side::Side, dim::Dim, grid::SG, fields::Tuple, bcs::Tuple; exchange=nothing) = batch_impl(connectivity(grid, dim, side), fields, bcs, exchange)
 
 batch_impl(::Connected, fields, bcs, exch::Nothing)                = EmptyBatch()
 batch_impl(::Connected, fields, bcs, exch::Tuple{})                = EmptyBatch()
