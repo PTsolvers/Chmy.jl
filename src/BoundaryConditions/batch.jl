@@ -67,52 +67,50 @@ end
 
 Base.show(io::IO, ::ExchangeBatch{K}) where {K} = print(io, "ExchangeBatch ($K fields)")
 
+# per-field interface
+
 function batch(grid, fields_bcs::Vararg{Pair{<:Field,<:PerFieldBC}}; exchange=nothing)
     fields, bcs = regularise(grid, fields_bcs)
     exchange = regularise_exchange(grid, exchange)
     return batch_set(grid, fields, bcs, exchange)
 end
 
+# exchange-only interface
+
 function batch(grid; exchange=nothing)
     exchange = regularise_exchange(grid, exchange)
-    return exchange_set(grid, exchange)
+    return batch_set(grid, (), (), exchange)
 end
 
-@generated function batch_set(grid::StructuredGrid{N}, fields, bcs, exch) where {N}
+# custom batcher interface
+function batch(grid, fields, bcs; exchange=nothing)
+    exchange = regularise_exchange(grid, exchange)
+    return batch_set(grid, fields, bcs, exchange)
+end
+
+# one-sided batch
+
+batch(side::Side, dim::Dim, grid::SG, fields, bcs; exchange=nothing) = batch_impl(connectivity(grid, dim, side), fields, bcs, exchange)
+
+batch_impl(::Connected, fields, bcs, exch::Nothing)                = EmptyBatch()
+batch_impl(::Connected, fields, bcs, exch::Tuple{})                = EmptyBatch()
+batch_impl(::Connected, fields, bcs, exch::Tuple{Vararg{Nothing}}) = EmptyBatch()
+batch_impl(::Connected, fields, bcs, exch::Tuple)                  = ExchangeBatch(exch)
+
+batch_impl(::Bounded, fields::Tuple{}, bcs::Tuple{}, exch)              = EmptyBatch()
+batch_impl(::Bounded, fields::Tuple, bcs::Tuple{Vararg{Nothing}}, exch) = EmptyBatch()
+batch_impl(::Bounded, fields::Tuple, bcs::Tuple, exch)                  = FieldBatch(prune(fields, bcs)...)
+
+# make a set from regularised list of fields, boundary conditions, and exchange overrides
+@generated function batch_set(grid::SG{N}, fields, bcs, exch) where {N}
     quote
         @inline
         Base.Cartesian.@ntuple $N D -> begin
-            Base.Cartesian.@ntuple 2 S -> begin
-                if connectivity(grid, Dim(D), Side(S)) isa Connected
-                    batch_impl_connected(exch[D])
-                else
-                    batch_impl_bounded(fields, bcs[D][S])
-                end
-            end
+            batch(Side(1), Dim(D), grid, fields, bcs[D][1]; exchange=exch[D]),
+            batch(Side(2), Dim(D), grid, fields, bcs[D][2]; exchange=exch[D])
         end
     end
 end
-
-@generated function exchange_set(grid::StructuredGrid{N}, exch) where {N}
-    quote
-        @inline
-        Base.Cartesian.@ntuple $N D -> begin
-            Base.Cartesian.@ntuple 2 S -> begin
-                if connectivity(grid, Dim(D), Side(S)) isa Connected
-                    batch_impl_connected(exch[D])
-                else
-                    EmptyBatch()
-                end
-            end
-        end
-    end
-end
-
-batch_impl_connected(::Nothing) = EmptyBatch()
-batch_impl_connected(exch)      = ExchangeBatch(exch)
-
-batch_impl_bounded(fields, ::Tuple{Vararg{Nothing}}) = EmptyBatch()
-batch_impl_bounded(fields, bc)                       = FieldBatch(prune(fields, bc)...)
 
 @inline function regularise(grid, fields_bcs::Tuple{Vararg{Pair{<:Field,<:PerFieldBC}}})
     fields, bcs = zip(fields_bcs...) # split into fields and bcs
@@ -177,4 +175,22 @@ function bc!(side::Side, dim::Dim, arch::Architecture, grid::SG, batch::FieldBat
     worksize = remove_dim(dim, size(grid, Center()) .+ 2)
     bc_kernel!(Architectures.get_backend(arch), 256, worksize)(side, dim, grid, batch.fields, batch.conditions)
     return
+end
+
+# merging batches and batch sets
+Base.merge(b1::FieldBatch, b2::FieldBatch) = FieldBatch((b1.fields..., b2.fields...), (b1.conditions..., b2.conditions...))
+Base.merge(b1::FieldBatch, b2::EmptyBatch) = b1
+Base.merge(b1::EmptyBatch, b2::FieldBatch) = b2
+
+Base.merge(b1::ExchangeBatch, b2::ExchangeBatch) = ExchangeBatch((b1.fields..., b2.fields...))
+Base.merge(b1::ExchangeBatch, b2::EmptyBatch)    = b1
+Base.merge(b1::EmptyBatch, b2::ExchangeBatch)    = b2
+
+@inline function Base.merge(b1::NTuple{N,Tuple{AbstractBatch,AbstractBatch}},
+                            b2::NTuple{N,Tuple{AbstractBatch,AbstractBatch}}) where {N}
+    ntuple(Val(N)) do D
+        Base.@_inline_meta
+        merge(b1[D][1], b2[D][1]),
+        merge(b1[D][2], b2[D][2])
+    end
 end
