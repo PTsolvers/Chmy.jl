@@ -197,13 +197,22 @@ end
             #     any(.!isfinite.(values(err))) && error("simulation failed, err = $err")
             # end
         end
-        wtime = (time_ns() - tic) * 1e-9
+        wtime = (time_ns() - tic)
+        wtime_it /= (niter - warmup)
+        MPI.Barrier(cart_comm(topo))
+        wtime_min = MPI.Allreduce(wtime_it, MPI.MIN, cart_comm(topo))
+        wtime_max = MPI.Allreduce(wtime_it, MPI.MAX, cart_comm(topo))
         # report
-        A_eff = (2*10 + 17) / 1e9 * prod(nxyz_l) * sizeof(Float64)
-        wtime_it = wtime ./ (niter - warmup)
-        T_eff = A_eff ./ wtime_it
-        @printf("  Executed %d steps in = %1.3e sec (@ T_eff = %1.2f GB/s - device %s) \n", (niter - warmup), wtime,
-                round(T_eff, sigdigits=6), AMDGPU.device_id())
+        if me == 0
+            nIO = 2*10 + 17
+            Teff_min = nIO * sizeof(Float64) * prod(nxyz_l) / wtime_max
+            Teff_max = nIO * sizeof(Float64) * prod(nxyz_l) / wtime_min
+            printstyled("Performance: T_eff [min max] = $(round(Teff_min, sigdigits=8)) $(round(Teff_max, sigdigits=6)) \n"; bold=true, color=:green)
+        end
+        # A_eff = (2*10 + 17) / 1e9 * prod(nxyz_l) * sizeof(Float64)
+        # T_eff = A_eff ./ wtime_it
+        # @printf("  Executed %d steps in = %1.3e sec (@ T_eff = %1.2f GB/s - device %s) \n", (niter - warmup), wtime,
+        #         round(T_eff, sigdigits=6), AMDGPU.device_id())
     end
     KernelAbstractions.synchronize(backend)
     # local postprocess
