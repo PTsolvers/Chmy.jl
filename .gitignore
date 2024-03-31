@@ -6,3 +6,5 @@ LocalPreferences.toml
 
 .DS_Store
 .vscode
+
+run_*
