@@ -79,8 +79,7 @@ open(sbatch_name, "w") do io
             #SBATCH --time=$time
             #SBATCH --nodes=$num_nodes
             #SBATCH --ntasks=$num_gpus
-            #SBATCH --gpus-per-node=$gpus_per_node
-            """)
+            #SBATCH --gpus-per-node=$gpus_per_node""")
 
     for (k, v) in sbatch_params
         println(io, "#SBATCH --$k=$v")
@@ -88,6 +87,7 @@ open(sbatch_name, "w") do io
 
     println(io,
             """
+
             CPU_BIND="map_cpu:49,57,17,25,1,9,33,41"
 
             srun --cpu-bind=\${CPU_BIND} $runme_name
