@@ -5,6 +5,8 @@ export left, right, δ, ∂
 export InterpolationRule, Linear, HarmonicLinear
 export itp, lerp, hlerp
 
+export divg
+
 using Chmy
 using Chmy.Grids
 using Chmy.Fields
