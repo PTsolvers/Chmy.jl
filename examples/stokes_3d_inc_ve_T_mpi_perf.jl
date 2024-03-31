@@ -197,7 +197,7 @@ end
             #     any(.!isfinite.(values(err))) && error("simulation failed, err = $err")
             # end
         end
-        wtime = (time_ns() - tic)
+        wtime_it = (time_ns() - tic)
         wtime_it /= (niter - warmup)
         MPI.Barrier(cart_comm(topo))
         wtime_min = MPI.Allreduce(wtime_it, MPI.MIN, cart_comm(topo))
