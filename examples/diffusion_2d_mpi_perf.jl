@@ -71,11 +71,10 @@ end
         MPI.Barrier(cart_comm(topo))
         wtime = compute(arch, grid, launch, q, C, χ, Δt, (iters - warmup))
         # report
-        A_eff = 6 / 1e9 * prod(nxy_l) * sizeof(Float64)
+        A_eff = 7 / 1e9 * prod(nxy_l) * sizeof(Float64)
         wtime_it = wtime ./ (iters - warmup)
         T_eff = A_eff ./ wtime_it
-        @printf("  Executed %d steps in = %1.3e sec (@ T_eff = %1.2f GB/s - device %s) \n", (iters - warmup), wtime,
-                round(T_eff, sigdigits=6), AMDGPU.device_id())
+        @printf("  Executed %d steps in = %1.3e sec (@ T_eff = %1.2f GB/s) \n", (iters - warmup), wtime, round(T_eff, sigdigits=6))
     end
     KernelAbstractions.synchronize(backend)
     # local postprocess

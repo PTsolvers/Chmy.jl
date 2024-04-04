@@ -86,6 +86,7 @@ end
 end
 
 @views function main(backend=CPU(); nxyz_l=(126, 126, 126))
+    # arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0); device_id=1)
     arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0))
     topo = topology(arch)
     me   = global_rank(topo)
@@ -207,7 +208,7 @@ end
             nIO = 2*10 + 17
             Teff_min = nIO * sizeof(Float64) * prod(nxyz_l) / wtime_max
             Teff_max = nIO * sizeof(Float64) * prod(nxyz_l) / wtime_min
-            printstyled("Performance: T_eff [min max] = $(round(Teff_min, sigdigits=8)) $(round(Teff_max, sigdigits=6)) \n"; bold=true, color=:green)
+            printstyled("Performance: T_eff [min max] = $(round(Teff_min, sigdigits=8)) $(round(Teff_max, sigdigits=8)) \n"; bold=true, color=:green)
         end
         # A_eff = (2*10 + 17) / 1e9 * prod(nxyz_l) * sizeof(Float64)
         # T_eff = A_eff ./ wtime_it
