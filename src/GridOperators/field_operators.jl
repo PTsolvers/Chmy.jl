@@ -57,7 +57,10 @@ end
 
 # covariant derivatives
 @propagate_inbounds @generated function divg(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}
-    return :(Base.Cartesian.@ncall $N (+) D -> ∂(V[D], grid, Dim(D), I...))
+    quote
+        @inline
+        Base.Cartesian.@ncall $N (+) D -> ∂(V[D], grid, Dim(D), I...)
+    end
 end
 
 @propagate_inbounds function divg(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::CartesianIndex{N}) where {names,N}
