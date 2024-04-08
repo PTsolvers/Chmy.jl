@@ -27,6 +27,11 @@ struct SingleDeviceArchitecture{B,D} <: Architecture
     end
 end
 
+"""
+    SingleDeviceArchitecture(arch::Architecture)
+
+Create a `SingleDeviceArchitecture` object retrieving backend and device from `arch`.
+"""
 SingleDeviceArchitecture(arch::Architecture) = SingleDeviceArchitecture(get_backend(arch), get_device(arch))
 
 """
