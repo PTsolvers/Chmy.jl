@@ -12,6 +12,11 @@ for backend in backends
             @test arch.backend == backend
             @test arch.device == device
         end
+        @testset "SingleDeviceArchitecture methods" begin
+            arch2 = SingleDeviceArchitecture(arch)
+            @test arch2.backend == arch.backend
+            @test arch2.device == arch.device
+        end
         # Test for functionality of methods
         @testset "Method functionalities" begin
             @test Architectures.get_backend(arch) == backend
