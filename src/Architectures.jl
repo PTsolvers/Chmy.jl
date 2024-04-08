@@ -27,6 +27,8 @@ struct SingleDeviceArchitecture{B,D} <: Architecture
     end
 end
 
+SingleDeviceArchitecture(arch::Architecture) = SingleDeviceArchitecture(get_backend(arch), get_device(arch))
+
 """
     Arch(backend::Backend; device_id::Integer=1)
 
