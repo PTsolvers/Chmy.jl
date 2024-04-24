@@ -7,9 +7,12 @@ export itp, lerp, hlerp
 
 export divg
 
+export AbstractMask, FieldMask, FieldMask1D, FieldMask2D, FieldMask3D, at
+
 using Chmy
 using Chmy.Grids
 using Chmy.Fields
+using Chmy.Architectures
 
 import Chmy.@add_cartesian
 
@@ -33,5 +36,11 @@ m(::Dim{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] - oneu
 include("partial_derivatives.jl")
 include("interpolation.jl")
 include("field_operators.jl")
+include("cartesian_field_operators.jl")
+
+include("masked_operators.jl")
+include("field_mask.jl")
+include("masked_field_operators.jl")
+include("masked_cartesian_field_operators.jl")
 
 end
