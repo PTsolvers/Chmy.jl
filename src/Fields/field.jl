@@ -9,7 +9,7 @@ struct Field{T,N,L,H,A} <: AbstractField{T,N,L}
     Field{L,H}(data::AbstractArray{T,N}, dims::NTuple{N,Integer}) where {L,H,T,N} = new{T,N,L,H,typeof(data)}(data, dims)
 end
 
-Base.@assume_effects :foldable halo(::Field{T,N,A,H}) where {T,N,A,H} = H
+halo(::Field{T,N,A,H}) where {T,N,A,H} = H
 
 # AbstractArray interface
 Base.size(f::Field) = f.dims
