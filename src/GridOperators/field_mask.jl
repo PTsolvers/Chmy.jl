@@ -76,7 +76,7 @@ function FieldMask3D(arch::Architecture, grid::StructuredGrid{3}, type=eltype(gr
     vvc = Field(arch, grid, (Vertex(), Vertex(), Center()), type; kwargs...)
     vcv = Field(arch, grid, (Vertex(), Center(), Vertex()), type; kwargs...)
     cvv = Field(arch, grid, (Center(), Vertex(), Vertex()), type; kwargs...)
-    return FieldMask2D{type}(ccc, vvv, vcc, cvc, ccv, vvc, vcv, cvv)
+    return FieldMask3D{type}(ccc, vvv, vcc, cvc, ccv, vvc, vcv, cvv)
 end
 
 @propagate_inbounds at(ω::FieldMask3D, ::Tuple{Center,Center,Center}, ix, iy, iz) = ω.ccc[ix, iy, iz]
