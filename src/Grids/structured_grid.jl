@@ -226,3 +226,27 @@ direction(::SG, ::Val{:z}) = Dim(3)
 axes_names(::SG{1}) = (:x,)
 axes_names(::SG{2}) = (:x, :y)
 axes_names(::SG{3}) = (:x, :y, :z)
+
+# cell volumes
+for (vol, sp, desc) in ((:volume, :spacing, "control volume"), (:inv_volume, :inv_spacing, "inverse of control volume"))
+    @eval begin
+        """
+            $($vol)(grid, loc, I...)
+
+        Return the $($desc) at location `loc` and indices `I`.
+        """
+        @add_cartesian function $vol(grid::StructuredGrid{N}, locs::NTuple{N,Location}, I::Vararg{Integer,N}) where {N}
+            return ntuple(Val(N)) do D
+                Base.@_inline_meta
+                $sp(grid.axes[D], locs[D], I[D])
+            end |> prod
+        end
+
+        @add_cartesian function $vol(grid::StructuredGrid{N}, loc::Location, I::Vararg{Integer,N}) where {N}
+            return ntuple(Val(N)) do D
+                Base.@_inline_meta
+                $sp(grid.axes[D], loc, I[D])
+            end |> prod
+        end
+    end
+end
