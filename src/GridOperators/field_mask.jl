@@ -91,3 +91,23 @@ end
 FieldMask(arch::Architecture, grid::StructuredGrid{1}, args...; kwargs...) = FieldMask1D(arch, grid, args...; kwargs...)
 FieldMask(arch::Architecture, grid::StructuredGrid{2}, args...; kwargs...) = FieldMask2D(arch, grid, args...; kwargs...)
 FieldMask(arch::Architecture, grid::StructuredGrid{3}, args...; kwargs...) = FieldMask3D(arch, grid, args...; kwargs...)
+
+# Adapt rules
+
+Adapt.adapt_structure(to, f::FieldMask1D{T}) where {T} = FieldMask1D{T}(Adapt.adapt(to, f.c), Adapt.adapt(to, f.v))
+
+function Adapt.adapt_structure(to, f::FieldMask2D{T}) where {T}
+    FieldMask2D{T}(Adapt.adapt(to, f.cc), Adapt.adapt(to, f.vv),
+                   Adapt.adapt(to, f.vc), Adapt.adapt(to, f.cv))
+end
+
+function Adapt.adapt_structure(to, f::FieldMask3D{T}) where {T}
+    FieldMask3D{T}(Adapt.adapt(to, f.ccc),
+                   Adapt.adapt(to, f.vvv),
+                   Adapt.adapt(to, f.vcc),
+                   Adapt.adapt(to, f.cvc),
+                   Adapt.adapt(to, f.ccv),
+                   Adapt.adapt(to, f.vvc),
+                   Adapt.adapt(to, f.vcv),
+                   Adapt.adapt(to, f.cvv))
+end
