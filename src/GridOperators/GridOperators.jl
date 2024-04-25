@@ -16,6 +16,8 @@ using Chmy.Architectures
 
 import Chmy.@add_cartesian
 
+using Adapt
+
 import Base: @propagate_inbounds, front
 
 p(::Dim{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] + oneunit(I[i]) : I[i], Val(N))
