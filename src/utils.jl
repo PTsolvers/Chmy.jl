@@ -57,3 +57,16 @@ Takes a tuple `A` and inserts a new element `i` at position specified by `dim`.
 Takes a CartesianIndex `I` and inserts a new element `i` at position specified by `dim`.
 """
 @inline insert_dim(dim, I::CartesianIndex, i) = insert_dim(dim, Tuple(I), i) |> CartesianIndex
+
+struct Offset{O} end
+
+Offset(o::Vararg{Integer}) = Offset{o}()
+Offset(o::Tuple{Vararg{Integer}}) = Offset{o}()
+Offset(o::CartesianIndex) = Offset{o.I}()
+Offset() = Offset{0}()
+
+Base.:+(::Offset{O1}, ::Offset{O2}) where {O1,O2} = Offset((O1 .+ O2)...)
+Base.:+(::Offset{O}, tp::Tuple{Vararg{Integer}}) where {O} = O .+ tp
+Base.:+(::Offset{O}, tp::CartesianIndex) where {O} = CartesianIndex(O .+ Tuple(tp))
+
+Base.:+(tp, off::Offset) = off + tp

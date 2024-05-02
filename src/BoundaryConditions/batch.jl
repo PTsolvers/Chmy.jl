@@ -172,7 +172,7 @@ bc!(arch::Architecture, grid::SG, f_bc::Vararg{FieldAndBC}; kwargs...) = bc!(arc
 end
 
 function bc!(side::Side, dim::Dim, arch::Architecture, grid::SG, batch::FieldBatch)
-    worksize = remove_dim(dim, size(grid, Center()) .+ 2)
+    worksize = remove_dim(dim, size(grid, Vertex()) .+ 2)
     bc_kernel!(Architectures.get_backend(arch), 256, worksize)(side, dim, grid, batch.fields, batch.conditions)
     return
 end

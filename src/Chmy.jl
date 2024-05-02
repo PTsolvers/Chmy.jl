@@ -6,6 +6,8 @@ using KernelAbstractions
 export Dim, Side, Left, Right
 export remove_dim, insert_dim
 
+export Offset
+
 include("macros.jl")
 include("utils.jl")
 

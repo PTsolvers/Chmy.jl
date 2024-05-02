@@ -5,7 +5,7 @@ export Connectivity, Bounded, Connected, Periodic, Flat
 export AbstractAxis, UniformAxis, FunctionAxis
 export StructuredGrid, UniformGrid
 
-export nvertices, ncenters, spacing, inv_spacing, Δ, iΔ, coord, coords, center, vertex, centers, vertices
+export nvertices, ncenters, spacing, inv_spacing, Δ, iΔ, volume, inv_volume, coord, coords, center, vertex, centers, vertices
 export origin, extent, bounds, axis
 export direction, axes_names
 export expand_loc
