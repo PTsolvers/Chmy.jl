@@ -1,14 +1,14 @@
 abstract type AbstractMask{T,N} end
 
-@add_cartesian at(ω::AbstractMask{T,N}, loc::Location, I::Vararg{Integer,N}) where {T,N} = at(ω, expand_loc(Val(N), loc), I...)
+@propagate_inbounds at(ω::AbstractMask{T,N}, loc::NTuple{N,Location}, I::CartesianIndex{N}) where {T,N} = at(ω, loc, Tuple(I)...)
 
-@add_cartesian function left(f, loc, from, ω::AbstractMask, dim, I::Vararg{Integer,N}) where {N}
-    Il = il(loc, from, dim, I...)
+@add_cartesian function left(f, loc::NTuple{N,Location}, from::NTuple{N,Location}, ω::AbstractMask, dim::Dim{D}, I::Vararg{Integer,N}) where {N,D}
+    Il = il(loc[D], from[D], dim, I...)
     return f[Il...] * at(ω, loc, Il...)
 end
 
-@add_cartesian function right(f, loc, from, ω::AbstractMask, dim, I::Vararg{Integer,N}) where {N}
-    Ir = ir(loc, from, dim, I...)
+@add_cartesian function right(f, loc::NTuple{N,Location}, from::NTuple{N,Location}, ω::AbstractMask, dim::Dim{D}, I::Vararg{Integer,N}) where {N,D}
+    Ir = ir(loc[D], from[D], dim, I...)
     return f[Ir...] * at(ω, loc, Ir...)
 end
 

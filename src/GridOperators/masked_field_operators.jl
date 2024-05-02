@@ -1,12 +1,26 @@
 # staggered grid operators
-@add_cartesian left(f::AbstractField, ω::AbstractMask, dim, I::Vararg{Integer,N}) where {N} = left(f, location(f, dim), flip(location(f, dim)), ω, dim, I...)
+@add_cartesian function left(f::AbstractField, ω::AbstractMask, dim, I::Vararg{Integer,N}) where {N}
+    loc  = location(f)
+    from = flipped(loc, dim)
+    return left(f, loc, from, ω, dim, I...)
+end
 
-@add_cartesian right(f::AbstractField, ω::AbstractMask, dim, I::Vararg{Integer,N}) where {N} = right(f, location(f, dim), flip(location(f, dim)), ω, dim, I...)
+@add_cartesian function right(f::AbstractField, ω::AbstractMask, dim, I::Vararg{Integer,N}) where {N}
+    loc  = location(f)
+    from = flipped(loc, dim)
+    return right(f, loc, from, ω, dim, I...)
+end
 
-@add_cartesian δ(f::AbstractField, ω::AbstractMask, dim, I::Vararg{Integer,N}) where {N} = δ(f, location(f, dim), flip(location(f, dim)), ω, dim, I...)
+@add_cartesian function δ(f::AbstractField, ω::AbstractMask, dim, I::Vararg{Integer,N}) where {N}
+    loc  = location(f)
+    from = flipped(loc, dim)
+    δ(f, loc, from, ω, dim, I...)
+end
 
 @add_cartesian function ∂(f::AbstractField, ω::AbstractMask, grid, dim, I::Vararg{Integer,N}) where {N}
-    return ∂(f, location(f, dim), flip(location(f, dim)), ω, grid, dim, I...)
+    loc  = location(f)
+    from = flipped(loc, dim)
+    return ∂(f, loc, from, ω, grid, dim, I...)
 end
 
 # covariant derivatives

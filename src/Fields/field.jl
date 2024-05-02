@@ -58,9 +58,20 @@ Field(arch::Architecture, args...; kwargs...) = Field(Architectures.get_backend(
 
 # set fields
 
-set!(f::Field, other::Field) = (copyto!(interior(f), interior(other)); nothing)
 set!(f::Field, val::Number) = (fill!(interior(f), val); nothing)
 set!(f::Field, A::AbstractArray) = (copyto!(interior(f), A); nothing)
+
+function set!(f::Field, other::AbstractField)
+    dst = interior(f)
+    src = interior(other)
+    backend = KernelAbstractions.get_backend(dst)
+    _set_field!(backend, 256, size(dst))(dst, src)
+end
+
+@kernel inbounds = true function _set_field!(dst, src)
+    I = @index(Global, NTuple)
+    dst[I...] = src[I...]
+end
 
 @kernel inbounds = true function _set_continuous!(dst, grid, loc, fun::F, args...) where {F}
     I = @index(Global, NTuple)

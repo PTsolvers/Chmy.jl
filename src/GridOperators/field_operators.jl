@@ -1,11 +1,27 @@
 # staggered grid operators
-@add_cartesian left(f::AbstractField, dim, I::Vararg{Integer,N}) where {N} = left(f, location(f, dim), flip(location(f, dim)), dim, I...)
+@add_cartesian function left(f::AbstractField, dim, I::Vararg{Integer,N}) where {N}
+    loc  = location(f)
+    from = flipped(loc, dim)
+    left(f, loc, from, dim, I...)
+end
 
-@add_cartesian right(f::AbstractField, dim, I::Vararg{Integer,N}) where {N} = right(f, location(f, dim), flip(location(f, dim)), dim, I...)
+@add_cartesian function right(f::AbstractField, dim, I::Vararg{Integer,N}) where {N}
+    loc  = location(f)
+    from = flipped(loc, dim)
+    right(f, loc, from, dim, I...)
+end
 
-@add_cartesian δ(f::AbstractField, dim, I::Vararg{Integer,N}) where {N} = δ(f, location(f, dim), flip(location(f, dim)), dim, I...)
+@add_cartesian function δ(f::AbstractField, dim, I::Vararg{Integer,N}) where {N}
+    loc  = location(f)
+    from = flipped(loc, dim)
+    return δ(f, loc, from, dim, I...)
+end
 
-@add_cartesian ∂(f::AbstractField, grid, dim, I::Vararg{Integer,N}) where {N} = ∂(f, location(f, dim), flip(location(f, dim)), grid, dim, I...)
+@add_cartesian function ∂(f::AbstractField, grid, dim, I::Vararg{Integer,N}) where {N}
+    loc  = location(f)
+    from = flipped(loc, dim)
+    ∂(f, loc, from, grid, dim, I...)
+end
 
 # covariant derivatives
 @propagate_inbounds @generated function divg(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}

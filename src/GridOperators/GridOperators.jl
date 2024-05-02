@@ -32,8 +32,10 @@ m(::Dim{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] - oneu
 @add_cartesian il(loc::L, from::L, dim, I::Vararg{Integer,N}) where {N,L<:Location} = m(dim, I...)
 @add_cartesian ir(loc::L, from::L, dim, I::Vararg{Integer,N}) where {N,L<:Location} = p(dim, I...)
 
-@add_cartesian left(f, loc, from, dim, I::Vararg{Integer,N}) where {N} = f[il(loc, from, dim, I...)...]
-@add_cartesian right(f, loc, from, dim, I::Vararg{Integer,N}) where {N} = f[ir(loc, from, dim, I...)...]
+@add_cartesian left(f, loc::NTuple{N,Location}, from::NTuple{N,Location}, dim::Dim{D}, I::Vararg{Integer,N}) where {N,D} = f[il(loc[D], from[D], dim, I...)...]
+@add_cartesian right(f, loc::NTuple{N,Location}, from::NTuple{N,Location}, dim::Dim{D}, I::Vararg{Integer,N}) where {N,D} = f[ir(loc[D], from[D], dim, I...)...]
+
+flipped(loc::NTuple{N,Location}, ::Dim{D}) where {N,D} = ntuple(dim -> dim == D ? flip(loc[dim]) : loc[dim], Val(N))
 
 include("partial_derivatives.jl")
 include("interpolation.jl")
