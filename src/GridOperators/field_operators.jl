@@ -34,3 +34,14 @@ end
 @propagate_inbounds function divg(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::CartesianIndex{N}) where {names,N}
     return divg(V, grid, Tuple(I)...)
 end
+
+@propagate_inbounds @generated function vmag(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}
+    quote
+        @inline
+        sqrt(Base.Cartesian.@ncall $N (+) D -> lerp(V[D], Center(), grid, I...)^2)
+    end
+end
+
+@propagate_inbounds function vmag(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::CartesianIndex{N}) where {names,N}
+    return vmag(V, grid, Tuple(I)...)
+end
