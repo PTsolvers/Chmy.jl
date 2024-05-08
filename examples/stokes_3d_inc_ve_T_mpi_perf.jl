@@ -1,7 +1,8 @@
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
 using KernelAbstractions
-# using CairoMakie
 using Printf
+using JSON
+# using CairoMakie
 
 using AMDGPU
 AMDGPU.allowscalar(false)
@@ -235,9 +236,12 @@ end
     return
 end
 
-res = 640
+# input = open(JSON.parse, joinpath(@__DIR__, "params.json"))
+# params = NamedTuple(Symbol.(keys(input)) .=> values(input))
+# res = params.res
+res = 608
+
 main(ROCBackend(); nxyz_l=(res, res, res) .- 2)
-# main(CUDABackend(); nxyz_l=(254, 254, 254))
 # main(; nxyz_l=(254, 254, 254))
 
 MPI.Finalize()

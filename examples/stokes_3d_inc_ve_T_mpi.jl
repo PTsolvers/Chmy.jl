@@ -86,7 +86,7 @@ end
     T[I...] = T_old[I...] - dt * divg(qT, g, I...)
 end
 
-@views function main(backend=CPU(); nxyz_l=(126, 126, 126), params=(nt=1e2, re_m=2.3π, r=0.5))
+@views function main(backend=CPU(); nxyz_l=(126, 126, 126), params=(nt=5, re_m=2.6π, r=0.6))
     arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0))
     topo = topology(arch)
     me   = global_rank(topo)
@@ -234,10 +234,11 @@ end
 input = open(JSON.parse, joinpath(@__DIR__, "params.json"))
 params = NamedTuple(Symbol.(keys(input)) .=> values(input))
 res = params.res
-
 main(ROCBackend(); nxyz_l=(res, res, res) .- 2, params)
+
 # main(ROCBackend(); nxyz_l=(res, res, res) .- 2)
-# main(CUDABackend(); nxyz_l=(254, 254, 254))
+# main(ROCBackend(); nxyz_l=(640, 640, 640) .- 2)
+
 # main(; nxyz_l=(254, 254, 254))
 
 MPI.Finalize()

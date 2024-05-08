@@ -2,11 +2,11 @@ using Dates, Random, JSON
 
 my_uuid     = randstring(4)
 username    = "lurass"
-# setenv_name = "/scratch/project_465000557/lurass/setenv_lumi.sh"
+setenv_name = "/scratch/project_465000557/lurass/setenv_lumi.sh"
 
 sbatch_params = Dict(
     "account"     => "project_465000557",
-    "partition"   => "ju-standard-g",
+    "partition"   => "standard-g",
     # "partition"   => "bench",
     # "reservation" => "stream_fmr",
     # "dependency"  => "afterany:FI_2jjU:FI_0GjD:FI_9cHB",
@@ -16,26 +16,26 @@ sbatch_params = Dict(
 exename = "stokes_3d_inc_ve_T_mpi_perf.jl"
 
 # input params
-res  = 640
-nt   = 1e3
-re_m = 2.5π
-r    = 0.5
+res  = 608 #640
+nt   = 5 #1e3
+re_m = 2.6π
+r    = 0.6
 
 # run params
 submit   = true
-time     = "00:20:00"
-num_gpus = 512 * 8
+time     = "00:25:00"
+num_gpus = 1000 * 8 # 1, 8, 64, 512, 1000, 1331, 1728, 2197
 
 gpus_per_node = 8
 MPICH_GPU_SUPPORT_ENABLED = 1
 
 # gen run ID and create run folder
-run_id   = "run_" * Dates.format(now(),"ud") * "_ngpu" * string(num_gpus) * "_" * my_uuid
+run_id   = "runP_" * Dates.format(now(),"ud") * "_ngpu" * string(num_gpus) * "_" * my_uuid
 job_name = "FI_" * my_uuid
 
 !isinteger(cbrt(num_gpus)) && (@warn "problem size is not cubic")
 num_nodes = ceil(Int, num_gpus / gpus_per_node)
-@assert num_gpus % gpus_per_node == 0
+@assert (num_gpus % gpus_per_node == 0) || (num_gpus == 1)
 
 @info "executable name: $(exename)"
 @info "number of GPUs: $(num_gpus)"
@@ -63,10 +63,14 @@ open(runme_name, "w") do io
             """
             #!/bin/bash
 
-            module use /appl/local/csc/modulefiles
-            module load julia
-            module load julia-mpi
-            module load julia-amdgpu
+            source $setenv_name
+
+            # module use /appl/local/csc/modulefiles
+            # module load julia
+            # module load julia-mpi
+            # module load julia-amdgpu
+            # module load julia-hdf5
+            # module load cray-hdf5-parallel
 
             export MPICH_GPU_SUPPORT_ENABLED=$(MPICH_GPU_SUPPORT_ENABLED)
 
