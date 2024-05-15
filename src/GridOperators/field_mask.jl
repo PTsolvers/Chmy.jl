@@ -92,6 +92,10 @@ FieldMask(arch::Architecture, grid::StructuredGrid{1}, args...; kwargs...) = Fie
 FieldMask(arch::Architecture, grid::StructuredGrid{2}, args...; kwargs...) = FieldMask2D(arch, grid, args...; kwargs...)
 FieldMask(arch::Architecture, grid::StructuredGrid{3}, args...; kwargs...) = FieldMask3D(arch, grid, args...; kwargs...)
 
+Tuple(f::FieldMask1D) = (f.c, f.v)
+Tuple(f::FieldMask2D) = (f.cc, f.vv, f.vc, f.cv)
+Tuple(f::FieldMask3D) = (f.ccc, f.ccc, f.vvv, f.vcc, f.cvc, f.ccv, f.vvc, f.vcv, f.cvv)
+
 # Adapt rules
 
 Adapt.adapt_structure(to, f::FieldMask1D{T}) where {T} = FieldMask1D{T}(Adapt.adapt(to, f.c), Adapt.adapt(to, f.v))
