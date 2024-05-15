@@ -38,7 +38,7 @@ end
 @views function main(backend=CPU(); nxy_l=(126, 126))
     arch = Arch(backend, MPI.COMM_WORLD, (0, 0))
     topo = topology(arch)
-    me = global_rank(topo)
+    me   = global_rank(topo)
     # geometry
     dims_l = nxy_l
     dims_g = dims_l .* dims(topo)
@@ -94,7 +94,7 @@ end
     return
 end
 
-res = 1024 * 16
+res = 1024 * 32
 main(ROCBackend(); nxy_l=(res, res) .- 2)
 # main(CUDABackend(); nxy_l=(res, res) .- 2)
 # main(; nxy_l=(res, res) .- 2)

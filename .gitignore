@@ -8,3 +8,7 @@ LocalPreferences.toml
 .vscode
 
 run_*
+runP_*
+runPGC_*
+out_*
+prof*

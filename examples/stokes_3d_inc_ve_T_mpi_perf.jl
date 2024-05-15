@@ -110,7 +110,7 @@ end
     grid   = UniformGrid(arch; origin=(-lx/2, -ly/2, -lz/2), extent=(lx, ly, lz), dims=dims_g)
     launch = Launcher(arch, grid; outer_width=(128, 8, 4))
     nx, ny, nz = dims_g
-    dx, dy, dz = spacing(grid, Center(), 1, 1, 1)
+    dx, dy, dz = spacing(grid)
     nt     = 8
     # niter  = 50nx
     niter, warmup = 110, 10
@@ -135,7 +135,7 @@ end
     τ_old = TensorField(backend, grid)
     T     = Field(backend, grid, Center())
     T_old = Field(backend, grid, Center())
-    qT    = VectorField(backend, grid)
+    # qT    = VectorField(backend, grid)
     # Pr_v  = (me==0) ? KernelAbstractions.zeros(CPU(), Float64, size(interior(Pr)) .* dims(topo)) : nothing
     # initial conditions
     init_incl(x, y, z, x0, y0, z0, r, in, out) = ifelse((x - x0)^2 + (y - y0)^2 + (z - z0)^2 < r^2, in, out)
@@ -167,6 +167,7 @@ end
     KernelAbstractions.synchronize(backend)
     # action
     tic, wtime = 0.0, 0.0
+    # GC.gc(); GC.gc(false)
     for it in 1:nt
         (me==0) && (sleep(2); @printf("it = %d/%d \n", it, nt))
         MPI.Barrier(cart_comm(topo))
@@ -216,6 +217,7 @@ end
         # @printf("  Executed %d steps in = %1.3e sec (@ T_eff = %1.2f GB/s - device %s) \n", (niter - warmup), wtime,
         #         round(T_eff, sigdigits=6), AMDGPU.device_id())
     end
+    # GC.gc(true)
     KernelAbstractions.synchronize(backend)
     # local postprocess
     # plt.Pr[3] = interior(Pr)[:, ysl, :] |> Array
@@ -236,10 +238,10 @@ end
     return
 end
 
-# input = open(JSON.parse, joinpath(@__DIR__, "params.json"))
-# params = NamedTuple(Symbol.(keys(input)) .=> values(input))
-# res = params.res
-res = 608
+input = open(JSON.parse, joinpath(@__DIR__, "params.json"))
+params = NamedTuple(Symbol.(keys(input)) .=> values(input))
+res = params.res
+# res = 640
 
 main(ROCBackend(); nxyz_l=(res, res, res) .- 2)
 # main(; nxyz_l=(254, 254, 254))

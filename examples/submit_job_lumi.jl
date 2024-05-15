@@ -16,21 +16,22 @@ sbatch_params = Dict(
 exename = "stokes_3d_inc_ve_T_mpi_perf.jl"
 
 # input params
-res  = 608 #640
-nt   = 5 #1e3
+res  = 640
+nt   = 100 #1e3
 re_m = 2.6π
 r    = 0.6
 
 # run params
 submit   = true
-time     = "00:25:00"
+run_name = "runP"
+time     = "00:15:00"
 num_gpus = 1000 * 8 # 1, 8, 64, 512, 1000, 1331, 1728, 2197
 
 gpus_per_node = 8
 MPICH_GPU_SUPPORT_ENABLED = 1
 
 # gen run ID and create run folder
-run_id   = "runP_" * Dates.format(now(),"ud") * "_ngpu" * string(num_gpus) * "_" * my_uuid
+run_id   = run_name * "_" * Dates.format(now(),"ud") * "_ngpu" * string(num_gpus) * "_" * my_uuid
 job_name = "FI_" * my_uuid
 
 !isinteger(cbrt(num_gpus)) && (@warn "problem size is not cubic")
