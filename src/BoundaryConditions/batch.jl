@@ -78,8 +78,11 @@ end
 # exchange-only interface
 
 function batch(grid; exchange=nothing)
-    exchange = regularise_exchange(grid, exchange)
-    return batch_set(grid, (), (), exchange)
+    exch = regularise_exchange(grid, exchange)
+    ntuple(Val(ndims(grid))) do D
+        batch(Side(1), Dim(D), grid, (), (); exchange=exch[D]),
+        batch(Side(2), Dim(D), grid, (), (); exchange=exch[D])
+    end
 end
 
 # custom batcher interface
