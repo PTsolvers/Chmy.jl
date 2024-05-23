@@ -135,7 +135,7 @@ end
     τ_old = TensorField(backend, grid)
     T     = Field(backend, grid, Center())
     T_old = Field(backend, grid, Center())
-    # qT    = VectorField(backend, grid)
+    qT    = VectorField(backend, grid)
     # Pr_v  = (me==0) ? KernelAbstractions.zeros(CPU(), Float64, size(interior(Pr)) .* dims(topo)) : nothing
     # initial conditions
     init_incl(x, y, z, x0, y0, z0, r, in, out) = ifelse((x - x0)^2 + (y - y0)^2 + (z - z0)^2 < r^2, in, out)
