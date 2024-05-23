@@ -1,7 +1,7 @@
 name = "Chmy"
 uuid = "33a72cf0-4690-46d7-b987-06506c2248b9"
 authors = ["Ivan Utkin <iutkin@ethz.ch>, Ludovic Raess <ludovic.rass@gmail.com>, and contributors"]
-version = "0.1.14"
+version = "0.1.15"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -20,7 +20,7 @@ ChmyCUDAExt = "CUDA"
 
 [compat]
 Adapt = "4"
-AMDGPU = "0.8"
+AMDGPU = "0.8, 0.9"
 CUDA = "5"
 KernelAbstractions = "0.9"
 MacroTools = "0.5"
