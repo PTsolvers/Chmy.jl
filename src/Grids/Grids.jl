@@ -18,6 +18,11 @@ import Chmy: @add_cartesian
 
 import Base.@propagate_inbounds
 
+"""
+    abstract type Location
+
+Abstract type representing a location in a grid cell.
+"""
 abstract type Location end
 
 struct Center <: Location end
@@ -28,6 +33,11 @@ Base.@assume_effects :total flip(::Vertex) = Center()
 
 Base.broadcastable(o::Location) = Ref(o)
 
+"""
+    abstract type Connectivity
+
+Abstract type representing the connectivity of grid elements.
+"""
 abstract type Connectivity end
 
 struct Bounded <: Connectivity end
