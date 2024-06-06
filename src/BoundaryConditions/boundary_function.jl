@@ -1,3 +1,8 @@
+"""
+    abstract type BoundaryFunction{F}
+    
+Abstract type for boundary condition functions with function type `F`.
+"""
 abstract type BoundaryFunction{F} end
 
 struct ReducedDimensions end
