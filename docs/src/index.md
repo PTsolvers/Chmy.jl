@@ -6,5 +6,7 @@ Information about the GPU4GEO project can be found on the [GPU4GEO website](http
 
 ## Doc content
 
+- [Concepts](concepts/overview.md)
+- [Tutorials](tutorials/overview.md)
 - [Usage information](usage/runtests.md)
 - [API reference](lib/modules.md)
