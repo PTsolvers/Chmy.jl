@@ -1,14 +1,10 @@
 # Fields
 
-
-
-With a given grid representing a known location spanning `N` dimensional space, we abstract the data structure on the grid under the concept `AbstractField`. Following is the typetree of the abstract field and its derived data types.
+With a given grid that allows us to define each point uniquely in a high-dimensional space, we abstract the data values to be defined on the grid under the concept `AbstractField`. Following is the type tree of the abstract field and its derived data types.
 
 ```@raw html
 <img src="../assets/field_type_tree.svg" width="70%"/>
 ```
-
-
 
 ## Defining a multi-dimensional `Field`
 
@@ -18,45 +14,67 @@ When defining a scalar field `Field` on the grid, we need to specify the arrange
 
 ```julia
 # Define geometry, architecture..., a 2D grid
-grid   = UniformGrid(arch; origin=(-lx/2, -ly/2), extent=(lx, ly), dims=(nx, ny))
+grid = UniformGrid(arch; origin=(-lx/2, -ly/2), extent=(lx, ly), dims=(nx, ny))
 
 # Define pressure as a scalar field
-Pr    = Field(backend, grid, Center())
-```
-
-
-
-
-```julia
-# Define velocity as a vector field on the 2D grid
-V     = VectorField(backend, grid)
-
-# Define stress as a tensor field on the 2D grid
-τ     = TensorField(backend, grid)
+Pr   = Field(backend, grid, Center())
 ```
 
 With the methods `VectorField` and `TensorField`, we can conveniently construct 2-dimensional and 3-dimensional fields, with predefined locations for each field dimension on a staggered grid.
+
+```julia
+# Define velocity as a vector field on the 2D grid
+V = VectorField(backend, grid)
+
+# Define stress as a tensor field on the 2D grid
+τ = TensorField(backend, grid)
+```
+
 
 ## Defining a parameterized `FunctionField`
 
 A field could also be represented in a parameterized way, having a function that associates a single number to every point in the space.
 
-`Discrete`
-`Continuous`
+An object of the concrete type `FunctionField` can be initialized with its constructor. The constructor takes in 
 
 
+1. A function `func`
+2. A `grid`
+3. A location tuple `loc` for specifying the distribution of variables
 
-```bash
-julia> Chmy.Fields.
-                          
-LocOrLocs                                      
-                        _expand               _loc_string           _params
-_set_continuous!      _set_discrete!        _set_field!           call_func             cpu__set_continuous!
-cpu__set_discrete!    cpu__set_field!       divg                  eval                  func_type
-gpu__set_continuous!  gpu__set_discrete!    gpu__set_field!       halo                  include
-interior              location              set!                  vector_location
+Optionally, one can also use the boolean variable `discrete` to indicate if the function field is typed `Discrete` or `Continuous`. Any additional parameters to be used in the function `func` can be passed to the optional parameter `parameters`.
+
+### Example: Creation of a parameterized function field
+Followingly, we create a `gravity` variable that is two-dimensional and comprises of two parameterized `FunctionField` objects on a predefined uniform grid `grid`.
+
+**1. Define Functions that Parameterize the Field**
+
+In this step, we specify how the gravity field should be parameterized in x-direction and y-direction, with `η` as the additional parameter used in the parameterization.
+
+```julia
+# forcing terms
+ρgx(x, y, η) = -0.5 * η * π^2 * sin(0.5π * x) * cos(0.5π * y)
+ρgy(x, y, η) = 0.5 * η * π^2 * cos(0.5π * x) * sin(0.5π * y)
 ```
 
+**2. Define Locations for Variable Positioning**
+
+We specify the location on the fully-staggered grid as introduced in the _Location on a Grid Cell_ section of the concept [Grids](./grids.md).
+
+```julia
+vx_node = (Vertex(), Center())
+vy_node = (Center(), Vertex())
+```
+
+**3. Define the 2D Gravity Field**
+
+By specifying the locations on which the parameterized field should be calculated, as well as concretizing the value `η = η0` by passing it as the optional parameter `parameters` to the constructor, we can define the 2D gravity field:
+
+```julia
+η0 = 1.0
+gravity = ( x=FunctionField(ρgx, grid, vx_node; parameters=η0),
+            y=FunctionField(ρgy, grid, vy_node; parameters=η0))
+```
 
 ## Defining Constant Fields
 
@@ -80,18 +98,3 @@ Notably, these two fields shall equal to each other as expected.
 julia> field == onefield
 true
 ```
-
-## TODO:
-
-
-location, halo, interior, set!
-divg
-
-
-
-### Boundary Conditions on Distributed Fields
-
-On a distributed architecture, we could offload the workload to be performed on a grid into distributed workload on subgrids.
-
-TODO: 
-TODO: add `exchange_halo!`
