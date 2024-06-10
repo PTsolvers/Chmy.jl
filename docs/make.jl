@@ -17,6 +17,7 @@ makedocs(
         "Concepts" => Any["concepts/overview.md",
                         "concepts/architectures.md",
                         "concepts/grids.md",
+                        "concepts/grid_operators.md",
                         "concepts/fields.md",
                         "concepts/bc.md",
                         "concepts/kernels.md" 
