@@ -30,6 +30,47 @@ V = VectorField(backend, grid)
 τ = TensorField(backend, grid)
 ```
 
+!!! tip "Acquiring Locations on the Grid Cell"
+    One could use a convenient getter for obtaining locations of variable on the staggered-grid. Such as `Chmy.location(Pr)` for scalar-valued pressure field and `Chmy.location(τ.xx)` for a tensor field.
+
+### Setup Initial Conditions on `Field`
+
+We could also modify field values in order to set up initial conditions on the values. We first have an empty field variable `C` defined, by using `interior(C)` we can inspect its values being empty equal to zero.
+
+```julia
+C = Field(backend, grid, Center())
+```
+
+```julia
+# Set initial values of the field randomly
+set!(C, grid, (_, _) -> rand())
+
+# Set initial values to 2D Gaussian
+set!(C, grid, (x, y) -> exp(-x^2 - y^2))
+```
+
+```@raw html
+<img src="../assets/field_set_ic_random.png" width="50%"/>
+```
+
+```@raw html
+<img src="../assets/field_set_ic_gaussian.png" width="50%"/>
+```
+
+
+
+A slightly more complex usage involves passing extra parameters to be used for initial conditions setup.
+
+```julia
+# Define a temperature field with values on cell centers
+T = Field(backend, grid, Center())
+
+# Function for setting up the initial conditions on T
+init_incl(x, y, x0, y0, r, in, out) = ifelse((x - x0)^2 + (y - y0)^2 < r^2, in, out)
+
+# Set up the initial conditions with parameters specified
+set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=T0, out=Ta))
+```
 
 ## Defining a parameterized `FunctionField`
 
