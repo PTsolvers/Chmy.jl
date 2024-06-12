@@ -9,7 +9,7 @@ sbatch_params = Dict(
     "partition"   => "standard-g",
     # "partition"   => "bench",
     # "reservation" => "stream_fmr",
-    # "dependency"  => "afterany:FI_2jjU:FI_0GjD:FI_9cHB",
+    # "dependency"  => "afterany:7214976:7214975:",
 )
 
 # exename = "stokes_3d_inc_ve_T_mpi.jl"
@@ -23,9 +23,9 @@ r    = 0.6
 
 # run params
 submit   = true
-run_name = "runP"
-time     = "00:15:00"
-num_gpus = 1000 * 8 # 1, 8, 64, 512, 1000, 1331, 1728, 2197
+run_name = "run_P"
+time     = "00:10:00"
+num_gpus = 8 * 64 # 1, 8, 64, 512, 1000, 1331, 1728, 2197, 2744
 
 gpus_per_node = 8
 MPICH_GPU_SUPPORT_ENABLED = 1
@@ -97,6 +97,8 @@ open(sbatch_name, "w") do io
             #SBATCH --nodes=$num_nodes
             #SBATCH --ntasks=$num_gpus
             #SBATCH --gpus-per-node=$gpus_per_node
+            #SBATCH --exclusive
+            #SBATCH --mem=0
             """)
 
     for (k, v) in sbatch_params
