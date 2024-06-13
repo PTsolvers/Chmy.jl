@@ -7,6 +7,8 @@
 
 Hey, that's Chmy.jl 🚀
 
+Chmy.jl provides a backend-agnostic toolkit for finite difference computations on multi-dimensional computational staggered grids. Chmy.jl features task-based distributed memory parallelisation capabilities.
+
 ## Documentation
 Checkout the [documentation](https://PTsolvers.github.io/Chmy.jl/dev) for API reference and usage.
 
