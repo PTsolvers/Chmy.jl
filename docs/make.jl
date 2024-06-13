@@ -18,9 +18,10 @@ makedocs(
                         "concepts/architectures.md",
                         "concepts/grids.md",
                         "concepts/fields.md",
+                        "concepts/workers.md", 
+                        "concepts/kernels.md", 
                         "concepts/grid_operators.md",
-                        "concepts/bc.md",
-                        "concepts/kernels.md" 
+                        "concepts/bc.md"
         ],
         "Tutorials" => Any["tutorials/overview.md",
                           "tutorials/diffusion_2d.md",

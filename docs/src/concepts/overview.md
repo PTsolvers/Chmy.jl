@@ -8,8 +8,9 @@ Pages = [
     "architectures.md",
     "grids.md",
     "fields.md",
+    "workers.md",
+    "kernels.md",
     "grid_operators.md",
-    "bc.md",
-    "kernels.md"
+    "bc.md"
 ]
 ```
