@@ -86,7 +86,7 @@ take!(ch)
 
 ## Workers
 
-Task-based parallelism provides a highly abstract view for the program execution scheduling, but currently in Julia it comes with a performance overhead at creation and destruction of every task. Therefore, it is sometimes desirable to have long-running tasks that do not get terminated immediately, but only when all queued subtasks (i.e. work units) are executed.
+Task-based parallelism provides a highly abstract view for the program execution scheduling, although it may come with a performance overhead related to task creation and destruction. The overhead is currently significant when tasks are used to perform asynchronous operations on GPUs, where TLS context creation and destruction may be in the order of kernel execution time. Therefore, it may be desirable to have long-running tasks that do not get terminated immediately, but only when all queued subtasks (i.e. work units) are executed.
 
 In [Chmy.jl](https://github.com/PTsolvers/Chmy.jl), we introduced the concept `Worker` for this purpose. A `Worker` is a special construct to extend the lifespan of a task created by `Threads.@spawn`. It possesses a `Channel` of subtasks to be executed on the current thread, where subtasks are submitted at construction time to the worker using `put!`.
 
