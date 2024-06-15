@@ -26,8 +26,6 @@ makedocs(
         "Examples" => Any["examples/overview.md",
                           "examples/diffusion_2d.md",
                           "examples/diffusion_2d_mpi.md",
-                          "examples/stokes_2d_inc_ve_T.md",
-                          "examples/stokes_3d_inc_ve_T.md",
                           "examples/diffusion_2d_perf.md",
                           "examples/batcher.md"
         ],
