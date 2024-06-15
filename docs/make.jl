@@ -18,18 +18,18 @@ makedocs(
                         "concepts/architectures.md",
                         "concepts/grids.md",
                         "concepts/fields.md",
+                        "concepts/bc.md",
                         "concepts/workers.md", 
                         "concepts/kernels.md", 
-                        "concepts/grid_operators.md",
-                        "concepts/bc.md"
+                        "concepts/grid_operators.md"
         ],
-        "Tutorials" => Any["tutorials/overview.md",
-                          "tutorials/diffusion_2d.md",
-                          "tutorials/diffusion_2d_mpi.md",
-                          "tutorials/stokes_2d_inc_ve_T.md",
-                          "tutorials/stokes_3d_inc_ve_T.md",
-                          "tutorials/diffusion_2d_perf.md",
-                          "tutorials/batcher.md"
+        "Examples" => Any["examples/overview.md",
+                          "examples/diffusion_2d.md",
+                          "examples/diffusion_2d_mpi.md",
+                          "examples/stokes_2d_inc_ve_T.md",
+                          "examples/stokes_3d_inc_ve_T.md",
+                          "examples/diffusion_2d_perf.md",
+                          "examples/batcher.md"
         ],
         "Usage" => Any["usage/runtests.md"],
         "Library" => Any["lib/modules.md"]

@@ -4,7 +4,7 @@
 
 Our understanding of task-based parallelism builds upon the thread programming model, where each thread represents sequences of instructions to be executed. If tasks are performed on a single thread in a sequential manner, then the task execution is **blocking**.
 
-On the other hand, asynchronous tasks comprise a split-up of workload such that the core can switch between the tasks to execute, resulting in the **non-blocking** execution of tasks.
+On the other hand, **asynchronous** tasks comprise a split-up of workload such that the core can switch between the tasks to execute, resulting in the **non-blocking** execution of tasks.
 
 ## Single-threaded Concurrency
 
@@ -29,7 +29,7 @@ Having a single thread executing the function sequentially, the total time of ex
 end
 ```
 
-Using the asynchronous approach, we can start each `proc_sleep` as a separate unit of task, allowing CPU to switch between tasks during execution.
+Using the **asynchronous** approach, we can start each `proc_sleep` as a separate unit of task, allowing CPU to switch between tasks during execution.
 
 ```julia
 # takes only about 3 seconds to execute

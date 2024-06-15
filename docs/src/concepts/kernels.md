@@ -1,91 +1,83 @@
 # Kernels
 
-
-## `KernelAbstractions.jl`
-
 The [KernelAbstactions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) package provides a macro-based dialect that hides the intricacies of vendor-specific GPU programming. It allows one to write hardware-agnostic kernels that can be instantiated and launched for different device backends without modifying the high-level code nor sacrificing performance.
 
-```bash
-julia> Chmy.KernelLaunch.
-Launcher
-outer_width
-inner_offset
-inner_worksize
-outer_offset  
-outer_worksize     
-worksize
-```
+Followingly, we show how to write and launch kernels on various backends. We also explain the concept of a `Launcher` in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl), that complements the default kernel launching, allowing us to perform more fine-grained operations on different `Field` objects.
 
+## Writing Kernels
 
-
-The launcher internally handles two different scenarios differently, depending with the boundary conditions are considered or not, inline functions `launch_with_bc` or `launch_without_bc` are called.
-
-Launching a kernel function without having to consider about the boundary conditions is relatively straightforward.
-
-```julia
-@inline function launch_without_bc(backend, launcher, offset, kernel, args...)
-    groupsize = heuristic_groupsize(backend, Val(ndims(launcher)))
-    fun = kernel(backend, groupsize, worksize(launcher))
-    fun(args..., offset)
-    return
-end
-```
-
+This section highlights some important features of [KernelAbstactions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) that are essential for understanding the high-level abstraction of the kernel concept that is used throughout our package. As it barely serves for illustrative purposes, for more specific examples, please refer to their [documentation](https://juliagpu.github.io/KernelAbstractions.jl/stable/).
 
 
 ```julia
-@inline function launch_with_bc(arch, grid, launcher, offset, kernel, bc, args...)
-    backend   = Architectures.get_backend(arch)
-    groupsize = StaticSize(heuristic_groupsize(backend, Val(ndims(launcher))))
+using KernelAbstactions
 
-    if isnothing(outer_width(launcher))
-        fun = kernel(backend, groupsize, StaticSize(worksize(launcher)))
-        fun(args..., offset)
-        bc!(arch, grid, bc)
-    else
-        inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
-        inner_fun(args..., offset + Offset(inner_offset(launcher)...))
-
-        N = ndims(grid)
-        ntuple(Val(N)) do J
-            Base.@_inline_meta
-            D = N - J + 1
-            outer_fun = kernel(backend, groupsize, StaticSize(outer_worksize(launcher, Dim(D))))
-            ntuple(Val(2)) do S
-                put!(launcher.workers[D][S]) do
-                    outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(S))...))
-                    bc!(Side(S), Dim(D), arch, grid, bc[D][S])
-                    KernelAbstractions.synchronize(backend)
-                end
-            end
-            wait(launcher.workers[D][1])
-            wait(launcher.workers[D][2])
-        end
-    end
-    return
+# Define a kernel that performs element-wise operations on A
+@kernel function mul2(A)
+    I = @index(Global, Cartesian)
+    A[I] *= 2
 end
 ```
 
+With the kernel `mul2` as defined above, we can launch the kernel to perform the element-wise operations on host.
+
+```julia
+# Define array and work group size
+workgroup_size = 64
+A              = ones(1024, 1024)
+backend        = get_backend(A) # CPU
+
+# Launch kernel and explicitly synchronize
+mul2(backend, workgroup_size)(A, ndrange=size(A))
+synchronize(backend)
+
+# Result assertion
+@assert(all(A .== 2.0) == true)
+```
+
+To launch the kernel on GPU devices, one could simply define `A` as `CuArray`, `ROCArray` or `oneArray` as detailed in the section ["launching kernel on the backend"](https://juliagpu.github.io/KernelAbstractions.jl/stable/quickstart/#Launching-kernel-on-the-backend). More fine-grained memory access is available using the `@index` macro as described [here](https://juliagpu.github.io/KernelAbstractions.jl/stable/api/#KernelAbstractions.@index).
 
 
+!!! info "Kernel Synchronization"
+    In previous section about [task-based parallelism](workers.md), we have mentioned and showed the advantages of asynchronous execution. When it comes to using both CPU and GPU, it appears natural that by default kernel launches are asynchronous. Therefore, in [KernelAbstactions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl), one also needs to explicitly use `synchronize(backend)` function to wait on a series of kernel launches.
 
 
-## Writing & Launching Kernels
+## Kernel Launcher
 
-In the following section, we illustrate how to write and launch a kernel  in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl).
+In [Chmy.jl](https://github.com/PTsolvers/Chmy.jl), the `KernelLaunch` module is designed to provide handy utilities for performing different grid operations on selected data entries of `Field`s that are involved at each kernel launch, in which the grid geometry underneath is also taken into account.
+
+Followingly, we define a kernel launcher associated with an `UniformGrid` object, supporting CUDA backend.
 
 ```julia
 # Define backend and geometry
-arch = Arch(CPU())
-grid = UniformGrid(arch; origin=(-1, -1), extent=(2, 2), dims=(126, 126))
+arch   = Arch(CUDABackend())
+grid   = UniformGrid(arch; origin=(-1, -1), extent=(2, 2), dims=(126, 126))
+
 # Define launcher
 launch = Launcher(arch, grid; outer_width=(16, 8))
 ```
 
-
+We also have two kernel functions `compute_q!` and `update_C!` defined, which shall update the fields `q` and `C` using grid operators `∂x`, `∂y`, `divg` that are anchored on some grid `g` accordingly.
 
 ```julia
-# nt = ...
+@kernel inbounds = true function compute_q!(q, C, χ, g::StructuredGrid, O)
+    I = @index(Global, NTuple)
+    I = I + O
+    q.x[I...] = -χ * ∂x(C, g, I...)
+    q.y[I...] = -χ * ∂y(C, g, I...)
+end
+
+@kernel inbounds = true function update_C!(C, q, Δt, g::StructuredGrid, O)
+    I = @index(Global, NTuple)
+    I = I + O
+    C[I...] -= Δt * divg(q, g, I...)
+end
+```
+
+To spawn the kernel, we invoke the launcher using the `launch` function to perform the field update at each physical timestep, and specify desired boundary conditions for involved fields in the kernel.
+
+```julia
+# Define physics, numerics, geometry ...
 for it in 1:nt
     # without boundary conditions
     launch(arch, grid, compute_q! => (q, C, χ, grid))
@@ -96,4 +88,21 @@ end
 
 # Explicit synchronization request
 KernelAbstractions.synchronize(backend)
+```
+
+The launcher internally handles two different scenarios differently, depending on if there are boundary conditions (see section [Boundary Conditions](./bc.md)) to be imposed on some fields involved in the kernel or not, inline functions `launch_without_bc` or  `launch_with_bc` are called respectively.
+
+## Specifying Memory Layout
+
+TODO:
+
+```bash
+julia> Chmy.KernelLaunch.
+Launcher
+outer_width
+inner_offset
+inner_worksize
+outer_offset  
+outer_worksize     
+worksize
 ```
