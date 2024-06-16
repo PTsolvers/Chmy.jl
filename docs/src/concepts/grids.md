@@ -74,6 +74,16 @@ In the following example, we zoom into a specific cell on a **fully-staggered gr
 
 If all variables are defined on basic nodes, specified by `(V,V)` locations, we have the simplest non-staggered **collocated grid**.
 
+## Dimensions of Fields on Structured Grids
+
+With a structured grid defined that consists of `nx = N` cells horizontally and `ny = M` cells vertically, we have the following dimensions for fields associated with the grid.
+
+| Node Type | Field Dimension | Location |
+|:-------|:------------|:------------|
+| Basic Node | $(N + 1) \times (M + 1)$ |  `(V, V)` |
+| Vx-Node | $(N + 1) \times M$ | `(V, C)` |
+| Vy-Node | $ N \times (M + 1)$ | `(C, V)` |
+| Pressure Node | $N \times M$ | `(C, C)` |
 
 ## Connectivity of a `StructuredGrid`
 

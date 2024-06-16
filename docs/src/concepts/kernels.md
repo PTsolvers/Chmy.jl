@@ -57,7 +57,7 @@ grid   = UniformGrid(arch; origin=(-1, -1), extent=(2, 2), dims=(126, 126))
 launch = Launcher(arch, grid; outer_width=(16, 8))
 ```
 
-We also have two kernel functions `compute_q!` and `update_C!` defined, which shall update the fields `q` and `C` using grid operators `∂x`, `∂y`, `divg` that are anchored on some grid `g` accordingly.
+We also have two kernel functions `compute_q!` and `update_C!` defined, which shall update the fields `q` and `C` using grid operators (see section [Grid Operators](./grid_operators.md)) `∂x`, `∂y`, `divg` that are anchored on some grid `g` accordingly.
 
 ```julia
 @kernel inbounds = true function compute_q!(q, C, χ, g::StructuredGrid, O)
