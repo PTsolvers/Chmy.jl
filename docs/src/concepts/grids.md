@@ -81,8 +81,8 @@ With a structured grid defined that consists of `nx = N` cells horizontally and 
 | Node Type | Field Dimension | Location |
 |:-------|:------------|:------------|
 | Basic Node | $(N + 1) \times (M + 1)$ |  `(V, V)` |
-| Vx-Node | $(N + 1) \times M$ | `(V, C)` |
-| Vy-Node | $ N \times (M + 1)$ | `(C, V)` |
+| Vx Node | $(N + 1) \times M$ | `(V, C)` |
+| Vy Node | $ N \times (M + 1)$ | `(C, V)` |
 | Pressure Node | $N \times M$ | `(C, C)` |
 
 ## Connectivity of a `StructuredGrid`
