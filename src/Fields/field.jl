@@ -23,6 +23,13 @@ end
 
 _expand(rng::AbstractUnitRange, h) = (first(rng)-h):(last(rng)+h)
 
+"""
+    interior(f::Field; with_halo=false)
+
+Displays the field on the interior of the grid on which it is defined on.
+One could optionally specify to display the halo regions on the grid with
+`with_halo=true`.
+"""
 function interior(f::Field; with_halo=false)
     ax      = with_halo ? _expand.(axes(f), halo(f)) : axes(f)
     indices = broadcast(.+, 2 .* halo(f), ax)

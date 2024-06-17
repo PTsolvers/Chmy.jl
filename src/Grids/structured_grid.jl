@@ -223,8 +223,25 @@ direction(::SG, ::Val{:x}) = Dim(1)
 direction(::SG, ::Val{:y}) = Dim(2)
 direction(::SG, ::Val{:z}) = Dim(3)
 
+"""
+    axes_names(::SG{1})
+
+Returns the names of the axes for a 1-dimensional structured grid.
+"""
 axes_names(::SG{1}) = (:x,)
+
+"""
+    axes_names(::SG{2})
+
+Returns the names of the axes for a 2-dimensional structured grid.
+"""
 axes_names(::SG{2}) = (:x, :y)
+
+"""
+    axes_names(::SG{3})
+
+Returns the names of the axes for a 3-dimensional structured grid.
+"""
 axes_names(::SG{3}) = (:x, :y, :z)
 
 # cell volumes
