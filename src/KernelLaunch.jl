@@ -11,12 +11,30 @@ using Chmy.Workers
 
 using KernelAbstractions
 
+"""
+    struct Launcher{Worksize,OuterWidth,Workers}
+
+A struct representing a launcher for asynchronous kernel execution.
+"""
 struct Launcher{Worksize,OuterWidth,Workers}
     workers::Workers
 end
 
-# worksize for the last dimension N takes into account only last outer width W[N], N-1 uses W[N] and W[N-1], N-2 uses W[N], W[N-1], and W[N-2]
+"""
+    Launcher(arch, grid; outer_width=nothing)
 
+Constructs a `Launcher` object configured based on the input parameters.
+
+## Arguments:
+- `arch`: The associated architecture.
+- `grid`: The grid defining the computational domain.
+- `outer_width`: Optional parameter specifying outer width.
+
+!!! warning
+
+    worksize for the last dimension N takes into account only last outer width 
+    W[N], N-1 uses W[N] and W[N-1], N-2 uses W[N], W[N-1], and W[N-2].
+"""
 function Launcher(arch, grid; outer_width=nothing)
     worksize = size(grid, Center()) .+ 2
 
@@ -66,6 +84,23 @@ Base.@assume_effects :foldable function outer_offset(launcher::Launcher, ::Dim{D
     end
 end
 
+"""
+    (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,Args}; bc=nothing, async=false) where {F,Args}
+
+Launches a computational kernel using the specified `arch`, `grid`, `kernel_and_args`, and optional boundary conditions (`bc`).
+
+## Parameters:
+- `arch::Architecture`: The architecture on which to execute the computation.
+- `grid`: The grid defining the computational domain.
+- `kernel_and_args::Pair{F,Args}`: A pair consisting of the computational kernel `F` and its arguments `Args`.
+- `bc=nothing`: Optional boundary conditions for the computation.
+- `async=false`: If `true`, launches the kernel asynchronously.
+
+!!! warning
+    - `arch` should be compatible with the `Launcher`'s architecture.
+    - If `bc` is `nothing`, the kernel is launched without boundary conditions.
+    - If `async` is `false` (default), the function waits for the computation to complete before returning.
+"""
 function (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,Args}; bc=nothing, async=false) where {F,Args}
     kernel, args = kernel_and_args
 
