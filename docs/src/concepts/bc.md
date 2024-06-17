@@ -1,91 +1,46 @@
 # Boundary Conditions
 
+Using [Chmy.jl](https://github.com/PTsolvers/Chmy.jl), we aim to study partial differential equations (PDEs) arising from physical or engineering problems. Generally, PDEs possess infinitely many solutions. Therefore, to obtain a unique solution, additional initial or boundary conditions are necessary for the model problem to be well-posed, ensuring the existence and uniqueness of a stable solution.
+
+We provide a small overview for boundary conditions that one often encounter. Followingly, we consider the unknown function $u : \Omega \mapsto \mathbb{R}$ defined on some  bounded computational domain $\Omega \subset \mathbb{R}^d$ in a $d$-dimensional space. With the domain boundary denoted by $\partial \Omega$, we have some function $g : \partial \Omega \mapsto \mathbb{R}$ prescribed on the boundary.
 
 
-## Boundary Functions
+| Type    | Form | Example |
+|:------------|:------------|:---------|
+| Dirichlet | $u = g$ on $\partial \Omega$ | In fluid dynamics, the no-slip condition for viscous fluids states that at a solid boundary the fluid has zero velocity relative to the boundary. |
+| Neumann | $\partial_\nu u = g$ on $\partial \Omega$, where $\nu$ is the outer normal vector to $\Omega$ | It specifies the values in which the derivative of a solution is applied within the boundary of the domain. An application in thermodynamics is a prescribed heat flux from a surface, which serves as boundary condition |
+| Robin  |  $u + \alpha \partial_\nu u = g$ on $\partial \Omega$, where $\alpha \in \mathbb{R}$.  | Also called impedance boundary conditions from their application in electromagnetic problems |
 
-```bash
-BoundaryFunction           
-CBF                         
-CDBF
-ContinuousBoundaryFunction  
-DBF                     
-DiscreteBoundaryFunction
 
+
+
+## Applying Boundary Conditions
+
+Followingly, we describe the syntax in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) for launching kernels that impose boundary conditions on some `field` that is well-defined on a `grid` with backend specified through `arch`. For Dirichlet and Neumann boundary conditions, they are referred to as homogeneous if $g = 0$, otherwise they are non-homogeneous if $g = v$ holds, for some $v\in \mathbb{R}$.
+
+|     | Homogeneous | Non-homogeneous |
+|:------------|:------------|:------------|
+| Dirichlet | `bc!(arch, grid, field => Dirichlet())` | `bc!(arch, grid, field => Dirichlet(v))` |
+| Neumann | `bc!(arch, grid, field => Neumann())` | `bc!(arch, grid, field => Neumann(v))` |
+
+### Mixed Boundary Conditions
+
+In the code example above, by specifying boundary conditions using syntax such as `field => Neumann()`, we essentially launch a kernel that impose the Neumann boundary condition on the entire domain boundary $\partial \Omega$. More often, one may be interested in prescribing different boundary conditions on different parts of $\partial \Omega$.
+
+
+The following figure showcases a 2D square domain $\Omega$ with different boundary conditions applied on each side:
+
+- The top boundary (red) is a Dirichlet boundary condition where $u = a$.
+- The bottom boundary (blue) is also a Dirichlet boundary condition where $u = b$.
+- The left and right boundaries (green) are Neumann boundary conditions where $\frac{\partial u}{\partial y} = 0$.
+
+
+```@raw html
+<img src="../assets/mixed_bc_example.png" width="60%"/>
 ```
 
+To launch a kernel that satisfies these boundary conditions in Chmy.jl, you can use the following code:
 
-## Dirichlet Boundary Conditions
-
-
-```bash
-
-Dirichlet                   
-DirichletKind       
+```julia
+bc!(arch, grid, field => (x = (Dirichlet(a), Dirichlet(b)), y = Neumann()))
 ```
-
-```bash
-julia> Chmy.BoundaryConditions.
-AbstractBatch               
-BCOrTuple                   
-BatchSet
-    
-DimSide
-        
-
-EmptyBatch                  
-ExchangeBatch               
-FBC
-FBCOrNothing                
-FieldAndBC                  
-FieldBatch
-FieldBoundaryCondition      
-FirstOrderBC                
-FullDimensions
-        
-PerFieldBC
-ReducedDimensions           
-SDA                         
-SG
-SidesBCs                    
-TupleBC                     
-_params
-_reduce                     
-batch                       
-batch_impl
-batch_set                   
-bc!                         
-bc_kernel!
-cpu_bc_kernel!              
-default_bcs                 
-default_exchange
-delta_index                 
-eval                        
-expand
-flux_sign                   
-gpu_bc_kernel!              
-halo_index
-itp_halo_index              
-neighbor_index
-prune                       
-regularise                  
-regularise_exchange
-regularise_impl             
-reorder                     
-value
-```
-
-## Neumann Boundary Conditions
-
-```bash
-Neumann                     
-NeumannKind         
-```
-
-
-## Boundary Conditions on Distributed Fields
-
-On a distributed architecture, we could offload the workload to be performed on a grid into distributed workload on subgrids.
-
-TODO: 
-TODO: add `exchange_halo!`

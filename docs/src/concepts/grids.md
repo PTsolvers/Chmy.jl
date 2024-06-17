@@ -49,12 +49,17 @@ grid   = UniformGrid(arch;
                     )
 ```
 
-The following scripts can be used to visualize the grid:
+!!! info "Interactive Grid Visualization" 
+    - [grids_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/grids_2d.jl):  Visualization of a 2D `StructuredGrid`
+    -  [grids_3d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/grids_3d.jl):  Visualization of a 3D `StructuredGrid`
 
-| Script | Description |
-|:-------|:------------|
-| [grids_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/grids_2d.jl) | Visualization of a 2D `StructuredGrid` |
-| [grids_3d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/grids_3d.jl) | Visualization of a 3D `StructuredGrid` |
+```@raw html
+<img src="../assets/grid_2d.png" width="50%"/>
+```
+
+```@raw html
+<img src="../assets/grid_3d.png" width="50%"/>
+```
 
 ## Location on a Grid Cell
 
