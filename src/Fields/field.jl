@@ -46,7 +46,7 @@ Adapt.adapt_structure(to, f::Field{T,N,L,H}) where {T,N,L,H} = Field{L,H}(Adapt.
 
 Constructs a field on a structured grid at the specified location.
 
-Arguments:
+## Arguments:
 - `backend`: The backend to use for memory allocation.
 - `grid`: The structured grid on which the field is constructed.
 - `loc`: The location or locations on the grid where the field is constructed.
@@ -61,13 +61,51 @@ function Field(backend::Backend, grid::StructuredGrid{N}, loc::LocOrLocs{N}, typ
     return Field{typeof(loc),halo}(data, dims)
 end
 
+"""
+    Field(arch::Architecture, args...; kwargs...)
+
+Create a `Field` object on the specified architecture.
+
+## Arguments:
+- `arch::Architecture`: The architecture for which to create the `Field`.
+- `args...`: Additional positional arguments to pass to the `Field` constructor.
+- `kwargs...`: Additional keyword arguments to pass to the `Field` constructor.
+"""
 Field(arch::Architecture, args...; kwargs...) = Field(Architectures.get_backend(arch), args...; kwargs...)
 
 # set fields
 
+"""
+    set!(f::Field, val::Number)
+
+Set all elements of the `Field` `f` to the specified numeric value `val`.
+
+## Arguments:
+- `f::Field`: The `Field` object to be modified.
+- `val::Number`: The numeric value to set in the `Field`.
+"""
 set!(f::Field, val::Number) = (fill!(interior(f), val); nothing)
+
+"""
+    set!(f::Field, A::AbstractArray)
+
+Set the elements of the `Field` `f` using the values from the `AbstractArray` `A`.
+
+## Arguments:
+- `f::Field`: The `Field` object to be modified.
+- `A::AbstractArray`: The array whose values are to be copied to the `Field`.
+"""
 set!(f::Field, A::AbstractArray) = (copyto!(interior(f), A); nothing)
 
+"""
+    set!(f::Field, other::AbstractField)
+
+Set the elements of the `Field` `f` using the values from another `AbstractField` `other`.
+
+## Arguments:
+- `f::Field`: The destination `Field` object to be modified.
+- `other::AbstractField`: The source `AbstractField` whose values are to be copied to `f`.
+"""
 function set!(f::Field, other::AbstractField)
     dst = interior(f)
     src = interior(other)
@@ -109,6 +147,17 @@ set!(fs::NamedTuple{names,<:NTuple{N,Field}}, args...) where {names,N} = foreach
 # vector fields
 vector_location(::Val{dim}, ::Val{N}) where {dim,N} = ntuple(i -> i == dim ? Vertex() : Center(), Val(N))
 
+"""
+    VectorField(backend::Backend, grid::StructuredGrid{N}, args...; kwargs...) where {N}
+
+Create a vector field in the form of a `NamedTuple` on the given `grid` using the specified `backend`. With each component being a `Field`.
+
+## Arguments:
+- `backend::Backend`: The backend to be used for computation.
+- `grid::StructuredGrid{N}`: The structured grid defining the computational domain.
+- `args...`: Additional positional arguments to pass to the `Field` constructor.
+- `kwargs...`: Additional keyword arguments to pass to the `Field` constructor.
+"""
 function VectorField(backend::Backend, grid::StructuredGrid{N}, args...; kwargs...) where {N}
     coord_names = axes_names(grid)
     names = ntuple(i -> coord_names[i], Val(N))
@@ -119,13 +168,34 @@ function VectorField(backend::Backend, grid::StructuredGrid{N}, args...; kwargs.
     return NamedTuple{names}(values)
 end
 
-# tensor fields
+"""
+    TensorField(backend::Backend, grid::StructuredGrid{2}, args...; kwargs...)
+
+Create a 2D tensor field in the form of a named tuple on the given `grid` using the specified `backend`, with components `xx`, `yy`, and `xy` each being a `Field`.
+
+## Arguments:
+- `backend::Backend`: The backend to be used for computation.
+- `grid::StructuredGrid{2}`: The 2D structured grid defining the computational domain.
+- `args...`: Additional positional arguments to pass to the `Field` constructor.
+- `kwargs...`: Additional keyword arguments to pass to the `Field` constructor.
+"""
 function TensorField(backend::Backend, grid::StructuredGrid{2}, args...; kwargs...)
     (xx = Field(backend, grid, Center(), args...; kwargs...),
      yy = Field(backend, grid, Center(), args...; kwargs...),
      xy = Field(backend, grid, Vertex(), args...; kwargs...))
 end
 
+"""
+    TensorField(backend::Backend, grid::StructuredGrid{3}, args...; kwargs...)
+
+Create a 3D tensor field in the form of a named tuple on the given `grid` using the specified `backend`, with components `xx`, `yy`, `zz`, `xy`, `xz`, and `yz` each being a `Field`.
+
+## Arguments:
+- `backend::Backend`: The backend to be used for computation.
+- `grid::StructuredGrid{3}`: The 3D structured grid defining the computational domain.
+- `args...`: Additional positional arguments to pass to the `Field` constructor.
+- `kwargs...`: Additional keyword arguments to pass to the `Field` constructor.
+"""
 function TensorField(backend::Backend, grid::StructuredGrid{3}, args...; kwargs...)
     (xx = Field(backend, grid, Center(), args...; kwargs...),
      yy = Field(backend, grid, Center(), args...; kwargs...),

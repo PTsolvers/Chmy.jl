@@ -89,7 +89,7 @@ end
 
 Launches a computational kernel using the specified `arch`, `grid`, `kernel_and_args`, and optional boundary conditions (`bc`).
 
-## Parameters:
+## Arguments:
 - `arch::Architecture`: The architecture on which to execute the computation.
 - `grid`: The grid defining the computational domain.
 - `kernel_and_args::Pair{F,Args}`: A pair consisting of the computational kernel `F` and its arguments `Args`.
