@@ -14,7 +14,7 @@ The gist of the finite difference relies on replacing derivatives by difference 
 To illustrate the usage of grid operators, we compute the divergence of an vector field $V$ using the `divg` function. We first allocate memory for required fields.
 
 ```julia
-V     = VectorField(backend, grid)
+V  = VectorField(backend, grid)
 ∇V    = Field(backend, grid, Center())
 # use set! to set up the initial vector field...
 ```
