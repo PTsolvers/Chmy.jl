@@ -15,7 +15,7 @@ To illustrate the usage of grid operators, we compute the divergence of an vecto
 
 ```julia
 V  = VectorField(backend, grid)
-∇V    = Field(backend, grid, Center())
+∇V = Field(backend, grid, Center())
 # use set! to set up the initial vector field...
 ```
 
