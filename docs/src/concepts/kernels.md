@@ -14,12 +14,13 @@ using KernelAbstactions
 
 # Define a kernel that performs element-wise operations on A
 @kernel function mul2(A)
+    # use @index macro to obtain the global Cartesian index of the current work item.
     I = @index(Global, Cartesian)
     A[I] *= 2
 end
 ```
 
-With the kernel `mul2` as defined above, we can launch the kernel to perform the element-wise operations on host.
+With the kernel `mul2` as defined using `@kernel` macro, we can launch it on the desired backend to perform the element-wise operations on host.
 
 ```julia
 # Define array and work group size
@@ -41,6 +42,44 @@ To launch the kernel on GPU devices, one could simply define `A` as `CuArray`, `
 !!! info "Kernel Synchronization"
     In previous section about [task-based parallelism](workers.md), we have mentioned and showed the advantages of asynchronous execution. When it comes to using both CPU and GPU, it appears natural that by default kernel launches are asynchronous. Therefore, in [KernelAbstactions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl), one also needs to explicitly use `synchronize(backend)` function to wait on a series of kernel launches.
 
+### Thread Indexing
+
+Thread indexing is essential for memory usage on GPU devices; however, it can quickly become cumbersome to figure out the thread index, especially when working with multi-dimensional grids of multi-dimensional blocks of threads. The performance of kernels can also depend significantly on access patterns.
+
+In the example above, we saw the usage of `I = @index(Global, Cartesian)`, which retrieves the global index of threads for the two-dimensional array `A`. Such powerful macros are provided by [KernelAbstactions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) for conveniently retrieving the desired index of threads.
+
+The following table is non-exhaustive and provides a reference of commonly used terminology. Here, [`KernelAbstractions.@index`](https://juliagpu.github.io/KernelAbstractions.jl/stable/api/#KernelAbstractions.@index) is used for index retrieval, and [`KernelAbstractions.@groupsize`](https://juliagpu.github.io/KernelAbstractions.jl/stable/api/#KernelAbstractions.@groupsize) is used for obtaining the dimensions of blocks of threads.
+
+| KernelAbstractions                | CPU                     | CUDA                            |
+|-----------------------------------|-------------------------|---------------------------------|
+| `@index(Local, Linear)`           | `mod(i, g)`             | `threadIdx().x`                 |
+| `@index(Local, Cartesian)[2]`     |                         | `threadIdx().y`                 |
+| `@index(Group, Linear)`           | `i ÷ g`                 | `blockIdx().x`                  |
+| `@index(Group, Cartesian)[2]`     |                         | `blockIdx().y`                  |
+| `@groupsize()[3]`                 |                         | `blockDim().z`                  |
+| `prod(@groupsize())`              | `g`                     | `.x * .y * .z`                  |
+| `@index(Global, Linear)`          | `i`                     | global index computation needed |
+| `@index(Global, Cartesian)[2]`    |                         | global index computation needed |
+| `@index(Global, NTuple)`          |                         | `(threadIdx().x, ... )`         |
+
+
+The `@index(Global, NTuple)` returns a `NTuple` object, allowing more fine-grained memory control over the allocated arrays.
+
+```julia
+@kernel function memcpy!(a, b)
+    i, j = @index(Global, NTuple)
+    @inbounds a[i, j] = b[i, j]
+end
+```
+
+A tuple can be splatted with [`...`](https://docs.julialang.org/en/v1/manual/faq/#What-does-the-...-operator-do?) Julia operator when used to avoid explicitly using `i`, `j` indices.
+
+```julia
+@kernel function splatting_memcpy!(a, b)
+    I = @index(Global, NTuple)
+    @inbounds a[I...] = b[I...]
+end
+```
 
 ## Kernel Launcher
 
