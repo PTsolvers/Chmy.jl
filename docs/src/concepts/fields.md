@@ -114,7 +114,7 @@ By specifying the locations on which the parameterized field should be calculate
 ```julia
 η0 = 1.0
 gravity = (x=FunctionField(ρgx, grid, vx_node; parameters=η0),
-            y=FunctionField(ρgy, grid, vy_node; parameters=η0))
+           y=FunctionField(ρgy, grid, vy_node; parameters=η0))
 ```
 
 ## Defining Constant Fields
