@@ -12,8 +12,6 @@ We provide a small overview for boundary conditions that one often encounter. Fo
 | Robin  |  $u + \alpha \partial_\nu u = g$ on $\partial \Omega$, where $\alpha \in \mathbb{R}$.  | Also called impedance boundary conditions from their application in electromagnetic problems |
 
 
-
-
 ## Applying Boundary Conditions
 
 Followingly, we describe the syntax in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) for launching kernels that impose boundary conditions on some `field` that is well-defined on a `grid` with backend specified through `arch`. For Dirichlet and Neumann boundary conditions, they are referred to as homogeneous if $g = 0$, otherwise they are non-homogeneous if $g = v$ holds, for some $v\in \mathbb{R}$.
@@ -22,6 +20,27 @@ Followingly, we describe the syntax in [Chmy.jl](https://github.com/PTsolvers/Ch
 |:------------|:------------|:------------|
 | Dirichlet | `bc!(arch, grid, field => Dirichlet())` | `bc!(arch, grid, field => Dirichlet(v))` |
 | Neumann | `bc!(arch, grid, field => Neumann())` | `bc!(arch, grid, field => Neumann(v))` |
+
+
+### Batched Boundary Conditions
+
+For better performance considerations, one could also combine the application of boundary conditions with kernels dedicated to field updates by using batched boundary conditions.
+
+Given a 2D vector field `V`, we specify boundary conditions imposed on `V.x` and `V.y` as a tuple `bc_V`.
+
+```julia
+# specify for both V.x and V.y fields
+bc_V = (V.x => (x=Dirichlet(), y=Neumann()),
+        V.y => (x=Neumann(), y=Dirichlet()))
+```
+
+When using `launch` to specify the execution of a kernel, one can pass the specified boundary conditions as an optional parameter using `batch`, provided the grid information of the discretized space.
+
+```julia
+launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgy, η_ve, νdτ, grid); bc=batch(grid, bc_V...))
+```
+
+Using this syntax, we avoid redundant kernel launches and gain efficiency from making good use of already cached values used in field updates.
 
 ### Mixed Boundary Conditions
 
@@ -42,5 +61,5 @@ The following figure showcases a 2D square domain $\Omega$ with different bounda
 To launch a kernel that satisfies these boundary conditions in Chmy.jl, you can use the following code:
 
 ```julia
-bc!(arch, grid, field => (x = (Dirichlet(a), Dirichlet(b)), y = Neumann()))
+bc!(arch, grid, field => (y = (Dirichlet(a), Dirichlet(b)), x = Neumann()))
 ```
