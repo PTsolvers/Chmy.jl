@@ -31,7 +31,7 @@ At the beginning of program, one may specify the backend and initialize the arch
 
 For advanced users, we provide a convenient wrapper `activate!(arch::SingleDeviceArchitecture; priority=:normal)` for specifying the stream priority owned by the task one is executing. The stream priority will be set to `:normal` by default, where `:low` and `:high` are also possible options given that the target backend has priority control over streams implemented.
 
-This internally uses the backend-agnostic `priority!(::Backend, prio::Symbol)` function exposed by `KernelAbstractions.jl`. The exact implementation depends on the target backend used. As an example, see [`AMDGPU.priority!`](https://amdgpu.juliagpu.org/stable/streams/#AMDGPU.priority!).
+This internally uses the backend-agnostic `priority!(::Backend, prio::Symbol)` function exposed by `KernelAbstractions.jl`. The underlying implementation depends on the target backend used. As an example, see [`AMDGPU.priority!`](https://amdgpu.juliagpu.org/stable/streams/#AMDGPU.priority!).
 
 
 ## Distributed Architecture
