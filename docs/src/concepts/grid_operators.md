@@ -104,7 +104,7 @@ The kernel `interpolate_ρ!` performs the actual interpolation of nodal values a
     I = @index(Global,  NTuple)
     I = I + O
     # Interpolate from pressure nodes to Vx, Vy nodes
-    lerp(ρvx, location(ρ), g, I...)
-    lerp(ρvy, location(ρ), g, I...)
+    ρvx = lerp(ρ, location(ρvx), g, I...)
+    ρvy = lerp(ρ, location(ρvy), g, I...)
 end
 ```
