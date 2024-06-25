@@ -59,5 +59,5 @@ The following figure showcases a 2D square domain $\Omega$ with different bounda
 To launch a kernel that satisfies these boundary conditions in Chmy.jl, you can use the following code:
 
 ```julia
-bc!(arch, grid, field => (y = (Dirichlet(a), Dirichlet(b)), x = Neumann()))
+bc!(arch, grid, field => (x = Neumann(), y = (Dirichlet(b), Dirichlet(a))))
 ```
