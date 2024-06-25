@@ -34,13 +34,11 @@ bc_V = (V.x => (x=Dirichlet(), y=Neumann()),
         V.y => (x=Neumann(), y=Dirichlet()))
 ```
 
-When using `launch` to specify the execution of a kernel, one can pass the specified boundary conditions as an optional parameter using `batch`, provided the grid information of the discretized space.
-
+When using `launch` to specify the execution of a kernel, one can pass the specified boundary conditions as an optional parameter using `batch`, provided the grid information of the discretized space. Using this syntax, we gain efficiency from making good use of already cached values used in field updates.
 ```julia
 launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgy, η_ve, νdτ, grid); bc=batch(grid, bc_V...))
 ```
 
-Using this syntax, we avoid redundant kernel launches and gain efficiency from making good use of already cached values used in field updates.
 
 ### Mixed Boundary Conditions
 
