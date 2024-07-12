@@ -14,6 +14,7 @@ makedocs(
     warnonly = [:missing_docs],
     pages = Any[
         "Home" => "index.md",
+        "Getting Started with Chmy.jl" => "getting_started.md",
         "Concepts" => Any["concepts/overview.md",
                         "concepts/architectures.md",
                         "concepts/grids.md",
@@ -23,13 +24,8 @@ makedocs(
                         "concepts/workers.md", 
                         "concepts/kernels.md"
         ],
-        "Examples" => Any["examples/overview.md",
-                          "examples/diffusion_2d.md",
-                          "examples/diffusion_2d_mpi.md",
-                          "examples/diffusion_2d_perf.md",
-                          "examples/batcher.md"
+        "Examples" => Any["examples/overview.md"
         ],
-        "Usage" => Any["usage/runtests.md"],
         "Library" => Any["lib/modules.md"]
     ]
 )

@@ -1,13 +1,16 @@
 # Examples Overview
 
-This page provides an overview of [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) examples. These examples demonstrate how [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) can be used to solve various numerical problems using architecture-agnostic kernels both on a single-device and in a distributed way.
+This page provides an overview of [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) examples. These selected examples demonstrate how [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) can be used to solve various numerical problems using architecture-agnostic kernels both on a single-device and in a distributed way.
 
 ## Table of Contents
 
 
-| Example    | Description | Keywords |
-|:------------|:------------|:---------|
-| [Basic Diffusion](diffusion_2d.md) | Solving the 2D diffusion equation on an uniform grid. It covers setting up the problem, managing degrees of freedom, the assembly process, boundary conditions, solving the linear system, and visualizing the results. | scalar-valued solution, Dirichlet boundary conditions |
-| [Diffusion with MPI](diffusion_2d_mpi.md) | Solving the 2D diffusion equation on an uniform grid distributedly using MPI. | parallel computing, MPI, scalar-valued solution |
-| [Performance Optimization](diffusion_2d_perf.md) | Revisiting the 2D diffusion problem with focus on performance optimization techniques. It includes tips on efficient code practices and tools for profiling and improving code performance. | performance optimization, profiling, scalar-valued solution |
-| [Batch Processing](batcher.md) | Introduction of batch processing techniques for running multiple simulations efficiently. It demonstrates how to set up batch jobs, manage outputs, and utilize computational resources effectively. | batch processing, job management, automation |
+| Example    | Description | 
+|:------------|:------------|
+| [Diffusion 2D](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d.jl) | Solving the 2D diffusion equation on an uniform grid. |
+| [Diffusion 2D with MPI](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d_mpi.jl) | Solving the 2D diffusion equation on an uniform grid distributedly using MPI. |
+| [Single-Device Performance Optimization](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d_perf.jl) | Revisiting the 2D diffusion problem with focus on performance optimization techniques on a single-device architecture | 
+| [Stokes 2D with MPI](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/stokes_2d_inc_ve_T_mpi.jl) | Solving the 2D Stokes equation with thermal coupling on an uniform grid. | 
+| [Stokes 3D with MPI](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/stokes_3d_inc_ve_T_mpi.jl) | Solving the 3D Stokes equation with thermal coupling on an uniform grid distributedly using MPI. | 
+| [2D Grid Visualization](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/grids_2d.jl) | Visualization of a 2D `StructuredGrid`. | 
+| [3D Grid Visualization](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/grids_3d.jl) | Visualization of a 3D `StructuredGrid` | 
