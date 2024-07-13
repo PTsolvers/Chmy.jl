@@ -65,4 +65,4 @@ Pkg.test("Chmy"; test_args=["--backend=AMDGPU"])
 
 ## Funding
 
-The development of this package was supported by the [GPU4GEO PASC project](https://pasc-ch.org/projects/2021-2024/gpu4geo/index.html). More information about the GPU4GEO project can be found on the [GPU4GEO website](https://ptsolvers.github.io/GPU4GEO/).
+The development of this package is supported by the [GPU4GEO PASC project](https://pasc-ch.org/projects/2021-2024/gpu4geo/index.html). More information about the GPU4GEO project can be found on the [GPU4GEO website](https://ptsolvers.github.io/GPU4GEO/).
