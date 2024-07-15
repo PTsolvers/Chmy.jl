@@ -17,6 +17,12 @@ After the package is installed, one can load the package by using:
 using Chmy
 ```
 
+!!! info "Install from a Specific Branch" 
+    For developers and advanced users, one might want to use the implementation of Chmy.jl from a specific branch by specifying the url. In the following code snippet, we do this by explicitly specifying to use the current implementation that is available under the `main` branch:
+
+    ```julia
+    using Pkg; Pkg.add(url="https://github.com/PTsolvers/Chmy.jl#main")
+    ```
 
 ## Feature Summary
 
