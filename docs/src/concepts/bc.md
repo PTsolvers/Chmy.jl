@@ -12,33 +12,42 @@ We provide a small overview for boundary conditions that one often encounter. Fo
 | Robin  |  $u + \alpha \partial_\nu u = g$ on $\partial \Omega$, where $\alpha \in \mathbb{R}$.  | Also called impedance boundary conditions from their application in electromagnetic problems |
 
 
-## Applying Boundary Conditions
+## Applying Boundary Conditions with `bc!()`
 
-Followingly, we describe the syntax in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) for launching kernels that impose boundary conditions on some `field` that is well-defined on a `grid` with backend specified through `arch`. For Dirichlet and Neumann boundary conditions, they are referred to as homogeneous if $g = 0$, otherwise they are non-homogeneous if $g = v$ holds, for some $v\in \mathbb{R}$.
+Followingly, we describe the syntax in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) for launching kernels that impose boundary conditions on some `field` that is well-defined on a `grid` with backend specified through `arch`. 
+
+For Dirichlet and Neumann boundary conditions, they are referred to as homogeneous if $g = 0$, otherwise they are non-homogeneous if $g = v$ holds, for some $v\in \mathbb{R}$.
+
 
 |     | Homogeneous | Non-homogeneous |
 |:------------|:------------|:------------|
-| Dirichlet | `bc!(arch, grid, field => Dirichlet())` | `bc!(arch, grid, field => Dirichlet(v))` |
-| Neumann | `bc!(arch, grid, field => Neumann())` | `bc!(arch, grid, field => Neumann(v))` |
+| Dirichlet on $\partial \Omega$ | `bc!(arch, grid, field => Dirichlet())` | `bc!(arch, grid, field => Dirichlet(v))` |
+| Neumann on $\partial \Omega$ | `bc!(arch, grid, field => Neumann())` | `bc!(arch, grid, field => Neumann(v))` |
 
+Note that the syntax shown in the table above is a **fused expression** of both _specifying_ and _applying_ the boundary conditions.
 
-### Batched Boundary Conditions
+!!! warning "$\partial \Omega$ Refers to the Whole Domain Boundary!" 
+    By specifying `field` to a single boundary condition, we impose the boundary condition on the whole domain boundary by default. See the section for "Mixed Boundary Conditions" below for specifying different BC on different parts of the domain boundary.
 
-For better performance considerations, one could also combine the application of boundary conditions with kernels dedicated to field updates by using batched boundary conditions.
-
-Given a 2D vector field `V`, we specify boundary conditions imposed on `V.x` and `V.y` as a tuple `bc_V`.
+Alternatively, one could also define the boundary conditions beforehand using `batch()` provided the `grid` information as well as the `field` variable. This way the boundary condition to be prescibed is **precomputed**.
 
 ```julia
-# specify for both V.x and V.y fields
-bc_V = (V.x => (x=Dirichlet(), y=Neumann()),
-        V.y => (x=Neumann(), y=Dirichlet()))
+# pre-compute batch
+bt = batch(grid, field => Neumann()) # specify Neumann BC for the variable `field`
+bc!(arch, grid, bt)                  # apply the boundary condition
 ```
 
-When using `launch` to specify the execution of a kernel, one can pass the specified boundary conditions as an optional parameter using `batch`, provided the grid information of the discretized space. Using this syntax, we gain efficiency from making good use of already cached values used in field updates.
+In the script [batcher.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/batcher.jl), we provide a MWE using both **fused** and **precomputed** expressions for BC update.
+
+## Specifying BC within a `launch`
+
+When using `launch` to specify the execution of a kernel (more see section [Kernels](./kernels.md)), one can pass the specified boundary condition(s) as an optional parameter using `batch`, provided the grid information of the discretized space. This way we can gain efficiency from making good use of already cached values.
+
+In the 2D diffusion example as introduced in the tutorial ["Getting Started with Chmy.jl"](../getting_started.md), we need to update the temperature field `C` at k-th iteration using the values of heat flux `q` and physical time step size `Δt` from (k-1)-th iteration. When launching the kernel `update_C!` with `launch`, we simultaneously launch the kernel for the BC update using:
+
 ```julia
-launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgy, η_ve, νdτ, grid); bc=batch(grid, bc_V...))
+launch(arch, grid, update_C! => (C, q, Δt, grid); bc=batch(grid, C => Neumann(); exchange=C))
 ```
-
 
 ### Mixed Boundary Conditions
 
