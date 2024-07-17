@@ -128,5 +128,3 @@ end
 # Explicit synchronization request
 KernelAbstractions.synchronize(backend)
 ```
-
-The launcher internally handles two different scenarios differently, depending on if there are boundary conditions (see section [Boundary Conditions](./bc.md)) to be imposed on some fields involved in the kernel or not, inline functions `launch_without_bc` or  `launch_with_bc` are called respectively.
