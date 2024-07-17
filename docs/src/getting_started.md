@@ -107,7 +107,7 @@ C = Field(backend, grid, Center())
 q = VectorField(backend, grid)
 ```
 
-We randomly initialized the entries of `C` field and finished the initial model setup.
+We randomly initialized the entries of `C` field and finished the initial model setup. One can refer to the section [Fields](./concepts/fields.md) for setting up more complex initial conditions.
 
 ```julia
 # initial conditions
@@ -137,7 +137,7 @@ end
 KernelAbstractions.synchronize(backend)
 ```
 
-If you follow up the tutorial with the correct implementation, we should see something like this, where we plotted the final result at `it = 100` for the temperature field `C`.
+If you follow up the tutorial with the correct implementation, you should see something like this, here the final result at `it = 100` for the temperature field `C` is plotted.
 
 ```@raw html
 <div style="text-align: center;">
