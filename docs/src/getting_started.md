@@ -1,6 +1,6 @@
 # Getting Started with Chmy.jl
 
-[Chmy.jl](https://github.com/PTsolvers/Chmy.jl) is powered by [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) and it is a backend-agnostic toolkit for finite difference computations on multi-dimensional computational staggered grids. In this introductory tutorial, we will show the essence of Chmy.jl in which we resolved a simple 2D diffusion problem. The full code of the tutorial material is available under [diffusion_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d.jl).
+[Chmy.jl](https://github.com/PTsolvers/Chmy.jl) is powered by [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) and it is a backend-agnostic toolkit for finite difference computations on multi-dimensional computational staggered grids. In this introductory tutorial, we will showcase the essence of Chmy.jl in which we resolve a simple explicit 2D diffusion problem. The full code of the tutorial material is available under [diffusion_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d.jl).
 
 ## Basic Diffusion
 
@@ -39,7 +39,7 @@ where $\frac{\partial C}{\partial n}$ is the derivative of `C` normal to the bou
 
 ## Using Chmy.jl for Backend Portable Implementation
 
-As the first step, we need to load the main module and any necessary submodules of [Chmy.jl](https://github.com/PTsolvers/Chmy.jl). Moreover, we use [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) for writting backend-agnostic kernels that are compatible with Chmy.jl. One may also load additional modules for results analysis or plotting etc..
+As the first step, we need to load the main module and any necessary submodules of [Chmy.jl](https://github.com/PTsolvers/Chmy.jl). Moreover, we use [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) for writting backend-agnostic kernels that are compatible with Chmy.jl. One may also load additional modules for results analysis or plotting, etc...
 
 ```julia
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
