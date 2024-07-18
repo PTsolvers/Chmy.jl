@@ -40,7 +40,7 @@ Generally, partial differential equations (PDEs) require initial or [boundary co
 where $\frac{\partial C}{\partial n}$ is the derivative of `C` normal to the boundary, and $g(x, t)$ is a given function. In this tutorial example, we consider a homogeneous Neumann boundary condition, $g(x, t) = 0$, which implies that there is no flux across the boundary.
 
 
-## Using Chmy.jl for Backend Portable xPU Implementation
+## Using Chmy.jl for Backend Portable Implementation
 
 As the first step, we need to load the main module and any necessary submodules of [Chmy.jl](https://github.com/PTsolvers/Chmy.jl). Moreover, we use [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) for writting backend-agnostic kernels that are compatible with Chmy.jl. One may also load additional modules for results analysis or plotting etc..
 
