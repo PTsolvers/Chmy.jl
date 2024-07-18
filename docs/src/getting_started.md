@@ -2,14 +2,13 @@
 
 [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) is powered by [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) and it is a backend-agnostic toolkit for finite difference computations on multi-dimensional computational staggered grids. In this introductory tutorial, we will show the essence of Chmy.jl in which we resolved a simple 2D diffusion problem. The full code of the tutorial material is available under [diffusion_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d.jl).
 
-
 ## Basic Diffusion
 
-The diffusion equation is a second order parabolic PDE, here for a multivariable function $C(x,t)$ that represents the temperature field showing derivatives in both temporal $\partial t$ and spatial $\partial x$ dimensions, where $D$ is the diffusion coefficient. In 2D we have the following formulation for the diffusion process:
+The diffusion equation is a second order parabolic PDE, here for a multivariable function $C(x,t)$ that represents the temperature field showing derivatives in both temporal $\partial t$ and spatial $\partial x$ dimensions, where $\chi$ is the diffusion coefficient. In 2D we have the following formulation for the diffusion process:
 
 ```math
 \begin{equation}
-\frac{\partial C}{\partial t} = D \left( \frac{\partial^2 C}{\partial x^2} + \frac{\partial^2 C}{\partial y^2} \right).
+\frac{\partial C}{\partial t} = \chi \left( \frac{\partial^2 C}{\partial x^2} + \frac{\partial^2 C}{\partial y^2} \right).
 \end{equation}
 ```
 
@@ -17,7 +16,7 @@ Using the Fourier's law of heat conduction, which relates the heat flux $q$, $(W
 
 ```math
 \begin{equation}
-q := -D \nabla C,
+q := -\chi \nabla C,
 \end{equation}
 ```
 ```math
@@ -30,13 +29,11 @@ q := -D \nabla C,
 
 Generally, partial differential equations (PDEs) require initial or [boundary conditions](./concepts/bc.md) to ensure a unique and stable solution. For the temperature field `C`, a Neumann boundary condition is given by:
 
-
 ```math
 \begin{equation}
 \frac{\partial C}{\partial n} = g(x, t)
 \end{equation}
 ```
-
 where $\frac{\partial C}{\partial n}$ is the derivative of `C` normal to the boundary, and $g(x, t)$ is a given function. In this tutorial example, we consider a homogeneous Neumann boundary condition, $g(x, t) = 0$, which implies that there is no flux across the boundary.
 
 
@@ -59,7 +56,6 @@ arch = Arch(CPU())
 
 if a different backend is desired, one needs to load the relevant package accordingly. For example, if AMD GPUs are available, one can comment out `using AMDGPU` and make sure to use `arch = Arch(ROCBackend())` when selecting architecture. For more about specifying if executing on a single-device or multi-device architecture, see the dedicated documentation section for [Architectures](./concepts/architectures.md)
 
-
 ## Writing & Launch Compute Kernels
 
 We want to resolve the system of equations `(2)` & `(3)` numerically, for this we will use the explicit forward [Euler method](https://en.wikipedia.org/wiki/Euler_method) for temporal discretization and [finite-differences](https://en.wikipedia.org/wiki/Finite_difference) for spatial discretization. Accordingly, the kernels for performing the arithmetic operations for each time step can be defined as follows:
@@ -81,13 +77,9 @@ end
 end
 ```
 
-
 ## Model Setup
 
-
-
 The diffusion model that we resolve for should contain the following model setup
-
 
 ```julia
 # geometry
@@ -114,7 +106,6 @@ We randomly initialized the entries of `C` field and finished the initial model 
 set!(C, grid, (_, _) -> rand())
 bc!(arch, grid, C => Neumann(); exchange=C)
 ```
-
 
 ```@raw html
 <div style="text-align: center;">
