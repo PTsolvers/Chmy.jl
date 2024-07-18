@@ -92,7 +92,7 @@ launch = Launcher(arch, grid; outer_width=(16, 8))
 Δt = minimum(spacing(grid))^2 / χ / ndims(grid) / 2.1
 ```
 
-In the problem only two physical fields, the temperature field `C` and the heat flux `q` are evolving with time. For better accuracy of the solution, we opted for defining physical properties on different nodes on the staggered grid (more see [Grids](./concepts/grids.md)).
+In the 2D problem only three physical fields, the temperature field `C` and the heat flux `q` in `x` and `y` dimension are evolving with time. For better accuracy of the solution, we opt for defining physical properties on different locations on the staggered grid (more see [Grids](./concepts/grids.md)).
 
 ```julia
 # allocate fields
