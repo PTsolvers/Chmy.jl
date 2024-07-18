@@ -118,12 +118,12 @@ end
     dst[I...] = src[I...]
 end
 
-@kernel inbounds = true function _set_continuous!(dst, grid, loc, fun::F, args...) where {F}
+@kernel inbounds = true function _set_continuous!(dst, grid, loc, fun::F, args::Vararg{Any, N}) where {F, N}
     I = @index(Global, NTuple)
     dst[I...] = fun(coord(grid, loc, I...)..., args...)
 end
 
-@kernel inbounds = true function _set_discrete!(dst, grid, loc, fun::F, args...) where {F}
+@kernel inbounds = true function _set_discrete!(dst, grid, loc, fun::F, args::Vararg{Any, N}) where {F, N}
     I = @index(Global, NTuple)
     dst[I...] = fun(grid, loc, I..., args...)
 end

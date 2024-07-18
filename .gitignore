@@ -9,6 +9,7 @@ LocalPreferences.toml
 
 run_*
 runP_*
+runT_*
 runPGC_*
 out_*
 prof*
