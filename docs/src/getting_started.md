@@ -116,7 +116,7 @@ bc!(arch, grid, C => Neumann(); exchange=C)
 
 ## Solving Time-dependent Problem
 
-We are resolving a time-dependent problem, so we advance our solutions using a time loop, specifying the number of iterations we desire to perform. The true action that takes place within the time loop is the variable update that is performed by the compute kernels `compute_q!` and `update_C!`, accompanied by the imposing the Neumann boundary condition on the `C` field.
+We are resolving a time-dependent problem, so we explicitly advance our solution within a time loop, specifying the number of iterations (or time steps) we desire to perform. The action that takes place within the time loop is the variable update that is performed by the compute kernels `compute_q!` and `update_C!`, accompanied by the imposing the Neumann boundary condition on the `C` field.
 
 ```julia
 # action
