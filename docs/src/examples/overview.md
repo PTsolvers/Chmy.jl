@@ -4,7 +4,6 @@ This page provides an overview of [Chmy.jl](https://github.com/PTsolvers/Chmy.jl
 
 ## Table of Contents
 
-
 | Example    | Description | 
 |:------------|:------------|
 | [Diffusion 2D](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d.jl) | Solving the 2D diffusion equation on an uniform grid. |

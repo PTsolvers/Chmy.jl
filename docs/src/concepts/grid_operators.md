@@ -35,8 +35,6 @@ The kernel can then be launched when required as we detailed in section [Kernels
 launch(arch, grid, update_∇! => (V, ∇V, grid))
 ```
 
-
-
 ## Masking
 
 Masking is particularly important when performing finite differences on GPUs, as it allows for efficient and accurate computations by selectively applying operations only where needed, allowing more flexible control over the grid operators and improving performance. Thus, by providing masked grid operators, we enable more flexible control over the domain on which the grid operators should be applied for advanced users.
@@ -79,7 +77,6 @@ V = VectorField(backend, grid)
 # launch kernel
 launch(arch, grid, update_strain_rate! => (ε̇, V, ω, grid))
 ```
-
 
 ## Interpolation
 

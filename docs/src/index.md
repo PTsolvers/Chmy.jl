@@ -36,10 +36,7 @@ A general list of the features is:
 - Various grid operators (finite difference, grid masking, value interpolation) for fields defined in Cartesian coordinates
 - Extensibility. The whole package is written in pure Julia, so adding new functions, simplification rules, and model transformations has no barrier.
 
-
-
 ## Running Tests
-
 
 ### CPU tests
 
@@ -66,8 +63,6 @@ Pkg.test("Chmy"; test_args=["--backend=CUDA"])
 using Pkg
 Pkg.test("Chmy"; test_args=["--backend=AMDGPU"])
 ```
-
-
 
 ## Funding
 

@@ -33,7 +33,6 @@ For advanced users, we provide a convenient wrapper `activate!(arch::SingleDevic
 
 This internally uses the backend-agnostic `priority!(::Backend, prio::Symbol)` function exposed by `KernelAbstractions.jl`. The underlying implementation depends on the target backend used. As an example, see [`AMDGPU.priority!`](https://amdgpu.juliagpu.org/stable/streams/#AMDGPU.priority!).
 
-
 ## Distributed Architecture
 
 Our distributed architecture builds upon the abstraction of having GPU clusters that build on the same GPU architecture. Note that in general, GPU clusters may be equipped with hardware from different vendors, incorporating different types of GPUs to exploit their unique capabilities for specific tasks.

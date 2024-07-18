@@ -8,7 +8,6 @@ Followingly, we show how to write and launch kernels on various backends. We als
 
 This section highlights some important features of [KernelAbstactions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) that are essential for understanding the high-level abstraction of the kernel concept that is used throughout our package. As it barely serves for illustrative purposes, for more specific examples, please refer to their [documentation](https://juliagpu.github.io/KernelAbstractions.jl/stable/).
 
-
 ```julia
 using KernelAbstactions
 
@@ -37,7 +36,6 @@ synchronize(backend)
 ```
 
 To launch the kernel on GPU devices, one could simply define `A` as `CuArray`, `ROCArray` or `oneArray` as detailed in the section ["launching kernel on the backend"](https://juliagpu.github.io/KernelAbstractions.jl/stable/quickstart/#Launching-kernel-on-the-backend). More fine-grained memory access is available using the `@index` macro as described [here](https://juliagpu.github.io/KernelAbstractions.jl/stable/api/#KernelAbstractions.@index).
-
 
 !!! info "Kernel Synchronization"
     In previous section about [task-based parallelism](workers.md), we have mentioned and showed the advantages of asynchronous execution. When it comes to using both CPU and GPU, it appears natural that by default kernel launches are asynchronous. Therefore, in [KernelAbstactions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl), one also needs to explicitly use `synchronize(backend)` function to wait on a series of kernel launches.

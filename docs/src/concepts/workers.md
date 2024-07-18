@@ -41,7 +41,6 @@ Using the **asynchronous** approach, we can start each `proc_sleep` as a separat
 end
 ```
 
-
 ## Multi-threaded Parallelism
 
 In the previous section, we have been executing tasks concurrently on a single thread. To exploit the true power of multicore architectures, one can use `Threads.@spawn` macro to create a `Task` and schedule it to run on any available thread.
@@ -55,8 +54,6 @@ In the previous section, we have been executing tasks concurrently on a single t
     (fetch(t1), fetch(t2), fetch(t3))
 end
 ```
-
-
 
 ## Channels
 
