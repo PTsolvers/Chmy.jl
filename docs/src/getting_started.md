@@ -45,6 +45,7 @@ As the first step, we need to load the main module and any necessary submodules 
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
 using KernelAbstractions # for CPU or various GPU backend
 using Printf, CairoMakie # for I/O and plotting
+# using CUDA
 # using AMDGPU
 ```
 
