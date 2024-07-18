@@ -59,7 +59,7 @@ If a different backend is desired, one needs to load the relevant package accord
 
 ## Writing & Launch Compute Kernels
 
-We want to resolve the system of equations `(2)` & `(3)` numerically, for this we will use the explicit forward [Euler method](https://en.wikipedia.org/wiki/Euler_method) for temporal discretization and [finite-differences](https://en.wikipedia.org/wiki/Finite_difference) for spatial discretization. Accordingly, the kernels for performing the arithmetic operations for each time step can be defined as follows:
+We want to solve the system of equations `(2)` & `(3)` numerically. We will use the explicit forward [Euler method](https://en.wikipedia.org/wiki/Euler_method) for temporal discretization and [finite-differences](https://en.wikipedia.org/wiki/Finite_difference) for spatial discretization. Accordingly, the kernels for performing the arithmetic operations for each time step can be defined as follows:
 
 ```julia
 @kernel inbounds = true function compute_q!(q, C, χ, g::StructuredGrid, O)
