@@ -55,7 +55,7 @@ In this introductory tutorial, we will use the CPU backend for simplicity:
 arch = Arch(CPU())
 ```
 
-if a different backend is desired, one needs to load the relevant package accordingly. For example, if AMD GPUs are available, one can comment out `using AMDGPU` and make sure to use `arch = Arch(ROCBackend())` when selecting architecture. For more about specifying if executing on a single-device or multi-device architecture, see the dedicated documentation section for [Architectures](./concepts/architectures.md)
+If a different backend is desired, one needs to load the relevant package accordingly. For example, if NVIDIA or AMD GPUs are available, one can comment out `using CUDA` or `using AMDGPU` and make sure to use `arch = Arch(CUDABackend())` or `arch = Arch(ROCBackend())`, respectively, when selecting the architecture. For further information about executing on a single-device or multi-device architecture, see the dedicated documentation section for [Architectures](./concepts/architectures.md)
 
 ## Writing & Launch Compute Kernels
 
