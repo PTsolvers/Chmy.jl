@@ -84,7 +84,7 @@ The diffusion model that we solve should contain the following model setup
 
 ```julia
 # geometry
-grid   = UniformGrid(arch; origin=(-1, -1), extent=(2, 2), dims=(128, 128))
+grid   = UniformGrid(arch; origin=(-1, -1), extent=(2, 2), dims=(126, 126))
 launch = Launcher(arch, grid; outer_width=(16, 8))
 # physics
 χ = 1.0
