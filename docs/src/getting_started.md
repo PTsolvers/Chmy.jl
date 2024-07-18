@@ -80,7 +80,7 @@ end
 
 ## Model Setup
 
-The diffusion model that we resolve for should contain the following model setup
+The diffusion model that we solve should contain the following model setup
 
 ```julia
 # geometry
