@@ -8,7 +8,7 @@ With a given grid that allows us to define each point uniquely in a high-dimensi
 
 ## Defining a multi-dimensional `Field`
 
-Consider the following example, where we predefined a variable `grid` of type `Chmy.UniformGrid`, similar as in the previous section [Grids](./grids.md). We can now define physical properties on the grid.
+Consider the following example, where we defined a variable `grid` of type `Chmy.UniformGrid`, similar as in the previous section [Grids](./grids.md). We can now define physical properties on the grid.
 
 When defining a scalar field `Field` on the grid, we need to specify the arrangement of the field values. These values can either be stored at the cell centers of each control volume `Center()` or on the cell vertices/faces `Vertex()`.
 
@@ -17,10 +17,10 @@ When defining a scalar field `Field` on the grid, we need to specify the arrange
 grid = UniformGrid(arch; origin=(-lx/2, -ly/2), extent=(lx, ly), dims=(nx, ny))
 
 # Define pressure as a scalar field
-Pr   = Field(backend, grid, Center())
+Pr = Field(backend, grid, Center())
 ```
 
-With the methods `VectorField` and `TensorField`, we can conveniently construct 2-dimensional and 3-dimensional fields, with predefined locations for each field dimension on a staggered grid.
+With the methods `VectorField` and `TensorField`, we can construct 2-dimensional and 3-dimensional fields, with predefined locations for each field dimension on a staggered grid.
 
 ```julia
 # Define velocity as a vector field on the 2D grid
@@ -30,18 +30,18 @@ V = VectorField(backend, grid)
 τ = TensorField(backend, grid)
 ```
 
+Use the function `location` to get the location of the field as a tuple. Vector and tensor fields are currently defined as `NamedTuple`'s (likely to change in the future), so one could query the locations of individual components, e.g. `location(V.x)` or `location(τ.xy)`
+
 !!! tip "Acquiring Locations on the Grid Cell"
     One could use a convenient getter for obtaining locations of variable on the staggered-grid. Such as `Chmy.location(Pr)` for scalar-valued pressure field and `Chmy.location(τ.xx)` for a tensor field.
 
-### Setup Initial Conditions on `Field`
+### Initialising `Field`
 
-We could also modify field values in order to set up initial conditions on the values. We first have an empty field variable `C` defined, by using `interior(C)` we can inspect its values being empty equal to zero.
+Chmy.jl provides functionality to set the values of the fields as a function of spatial coordinates:
 
 ```julia
 C = Field(backend, grid, Center())
-```
 
-```julia
 # Set initial values of the field randomly
 set!(C, grid, (_, _) -> rand())
 
@@ -116,17 +116,17 @@ gravity = (x=FunctionField(ρgx, grid, vx_node; parameters=η0),
 
 ## Defining Constant Fields
 
-For completeness, we also provide an abstract type `ConstantField`, which comprises of a generic `ValueField` type, and two special types `ZeroField`, `OneField` for conveninent usage. With such a construct, we can easily define value fields properties and other parameters using constant values in a straightforward and readable manner. Moreover, explicit information about the grid on which the field should be defined can be abbreviated. For example:
+For completeness, we also provide an abstract type `ConstantField`, which comprises of a generic `ValueField` type, and two special types `ZeroField`, `OneField` allowing dispatch for special casess. With such a construct, we can easily define value fields properties and other parameters using constant values in a straightforward and readable manner. Moreover, explicit information about the grid on which the field should be defined can be abbreviated. For example:
 
 ```julia
 # Defines a field with constant values 1.0
 field = Chmy.ValueField(1.0)
 ```
 
-Alternatively, we could also use the conveninent and lightweight contructor.
+Alternatively, we could also use the `OneField` type, providing type information about the contents of the field.
 
 ```julia
-# Defines a field with constant value 1.0 using the convenient constructor
+# Defines a field with constant value 1.0
 onefield = Chmy.OneField{Float64}()
 ```
 
