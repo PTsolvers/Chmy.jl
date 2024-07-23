@@ -1,10 +1,10 @@
 # Getting Started with Chmy.jl
 
-[Chmy.jl](https://github.com/PTsolvers/Chmy.jl) is powered by [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) and it is a backend-agnostic toolkit for finite difference computations on multi-dimensional computational staggered grids. In this introductory tutorial, we will showcase the essence of Chmy.jl in which we resolve a simple explicit 2D diffusion problem. The full code of the tutorial material is available under [diffusion_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d.jl).
+[Chmy.jl](https://github.com/PTsolvers/Chmy.jl) is a backend-agnostic toolkit for finite difference computations on multi-dimensional computational staggered grids. In this introductory tutorial, we will showcase the essence of Chmy.jl by solving a simple 2D diffusion problem. The full code of the tutorial material is available under [diffusion_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d.jl).
 
 ## Basic Diffusion
 
-The diffusion equation is a second order parabolic PDE, here for a multivariable function $C(x,t)$ that represents the temperature field showing derivatives in both temporal $\partial t$ and spatial $\partial x$ dimensions, where $\chi$ is the diffusion coefficient. In 2D we have the following formulation for the diffusion process:
+The diffusion equation is a second order parabolic PDE, here for a multivariable function $C(x,y,t)$ that represents the field being diffused (such as temperature or concentration of a chemical component in a solution) showing derivatives in both temporal $\partial t$ and spatial $\partial x$ dimensions, where $\chi$ is the diffusion coefficient. In 2D we have the following formulation for the diffusion process:
 
 ```math
 \begin{equation}
@@ -12,38 +12,33 @@ The diffusion equation is a second order parabolic PDE, here for a multivariable
 \end{equation}
 ```
 
-Using the Fourier's law of heat conduction, which relates the heat flux $q$, $(W/m^2)$ to the temperature gradient $\frac{\partial C}{\partial x_i}$ $(K/m)$, we can rewrite equation `(1)` as a system of two PDEs, consisting of equations `(2)` and `(3)`.
+Introducing the diffusion flux $q$, we can rewrite equation `(1)` as a system of two PDEs, consisting of equations `(2)` and `(3)`.
+
+```math
+\begin{align}
+\boldsymbol{q}                &= -\chi \nabla C~, \\
+\frac{\partial C}{\partial t} &= - \nabla \cdot \boldsymbol{q}~.
+\end{align}
+```
+
+### Boundary Conditions
+
+Generally, partial differential equations (PDEs) require initial or [boundary conditions](./concepts/bc.md) to ensure a unique and stable solution. For the field `C`, a Neumann boundary condition is given by:
 
 ```math
 \begin{equation}
-q := -\chi \nabla C,
+\frac{\partial C}{\partial \boldsymbol{n}} = g(x, y, t)
 \end{equation}
 ```
-```math
-\begin{equation}
-\frac{\partial C}{\partial t} = - \nabla \cdot q.
-\end{equation}
-```
-
-### Boundary Condition
-
-Generally, partial differential equations (PDEs) require initial or [boundary conditions](./concepts/bc.md) to ensure a unique and stable solution. For the temperature field `C`, a Neumann boundary condition is given by:
-
-```math
-\begin{equation}
-\frac{\partial C}{\partial n} = g(x, t)
-\end{equation}
-```
-where $\frac{\partial C}{\partial n}$ is the derivative of `C` normal to the boundary, and $g(x, t)$ is a given function. In this tutorial example, we consider a homogeneous Neumann boundary condition, $g(x, t) = 0$, which implies that there is no flux across the boundary.
-
+where $\frac{\partial C}{\partial \boldsymbol{n}}$ is the derivative of `C` normal to the boundary, and $g(x, t)$ is a given function. In this tutorial example, we consider a homogeneous Neumann boundary condition, $g(x, y, t) = 0$, which implies that there is no flux across the boundary.
 
 ## Using Chmy.jl for Backend Portable Implementation
 
-As the first step, we need to load the main module and any necessary submodules of [Chmy.jl](https://github.com/PTsolvers/Chmy.jl). Moreover, we use [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) for writting backend-agnostic kernels that are compatible with Chmy.jl. One may also load additional modules for results analysis or plotting, etc...
+As the first step, we need to load the main module and any necessary submodules of [Chmy.jl](https://github.com/PTsolvers/Chmy.jl). Moreover, we use [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) for writing backend-agnostic kernels that are compatible with Chmy.jl.
 
 ```julia
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
-using KernelAbstractions # for CPU or various GPU backend
+using KernelAbstractions # for backend-agnostic kernels
 using Printf, CairoMakie # for I/O and plotting
 # using CUDA
 # using AMDGPU
@@ -55,7 +50,7 @@ In this introductory tutorial, we will use the CPU backend for simplicity:
 arch = Arch(CPU())
 ```
 
-If a different backend is desired, one needs to load the relevant package accordingly. For example, if NVIDIA or AMD GPUs are available, one can comment out `using CUDA` or `using AMDGPU` and make sure to use `arch = Arch(CUDABackend())` or `arch = Arch(ROCBackend())`, respectively, when selecting the architecture. For further information about executing on a single-device or multi-device architecture, see the dedicated documentation section for [Architectures](./concepts/architectures.md)
+If a different backend is desired, one needs to load the relevant package accordingly. For example, if NVIDIA or AMD GPUs are available, one can comment out `using CUDA` or `using AMDGPU` and make sure to use `arch = Arch(CUDABackend())` or `arch = Arch(ROCBackend())`, respectively, when selecting the architecture. For further information about executing on a single-device or multi-device architecture, see the documentation section for [Architectures](./concepts/architectures.md)
 
 ## Writing & Launch Compute Kernels
 
@@ -63,20 +58,30 @@ We want to solve the system of equations `(2)` & `(3)` numerically. We will use 
 
 ```julia
 @kernel inbounds = true function compute_q!(q, C, χ, g::StructuredGrid, O)
-    I = @index(Global, NTuple)
+    I = @index(Global, Cartesian)
     I = I + O
-    q.x[I...] = -χ * ∂x(C, g, I...)
-    q.y[I...] = -χ * ∂y(C, g, I...)
+    q.x[I] = -χ * ∂x(C, g, I)
+    q.y[I] = -χ * ∂y(C, g, I)
 end
 ```
 
 ```julia
 @kernel inbounds = true function update_C!(C, q, Δt, g::StructuredGrid, O)
-    I = @index(Global, NTuple)
+    I = @index(Global, Cartesian)
     I = I + O
-    C[I...] -= Δt * divg(q, g, I...)
+    C[I] -= Δt * divg(q, g, I)
 end
 ```
+
+!!! note "Non-Cartesian indices"
+    You can use not only `Cartesian` indices, but more usual "subscript" indices as well. For example, `update_C!` will become:
+    ```julia
+    @kernel inbounds = true function update_C!(C, q, Δt, g::StructuredGrid, O)
+        ix, iy = @index(Global, NTuple)
+        (ix, iy) = (ix, iy) + O
+        C[ix, iy] -= Δt * divg(q, g, ix, iy)
+    end
+    ```
 
 ## Model Setup
 
@@ -92,7 +97,7 @@ launch = Launcher(arch, grid)
 Δt = minimum(spacing(grid))^2 / χ / ndims(grid) / 2.1
 ```
 
-In the 2D problem only three physical fields, the temperature field `C` and the heat flux `q` in `x` and `y` dimension are evolving with time. For better accuracy of the solution, we opt for defining physical properties on different locations on the staggered grid (more see [Grids](./concepts/grids.md)).
+In the 2D problem only three physical fields, the field `C` and the diffusion flux `q` in `x` and `y` dimension are evolving with time. We define these fields on different locations on the staggered grid (more see [Grids](./concepts/grids.md)).
 
 ```julia
 # allocate fields
@@ -126,10 +131,9 @@ for it in 1:nt
     launch(arch, grid, compute_q! => (q, C, χ, grid))
     launch(arch, grid, update_C! => (C, q, Δt, grid); bc=batch(grid, C => Neumann(); exchange=C))
 end
-KernelAbstractions.synchronize(backend)
 ```
 
-If you follow up the tutorial with the correct implementation, you should see something like this, here the final result at `it = 100` for the temperature field `C` is plotted.
+After running the simulation, you should see something like this, here the final result at `it = 100` for the temperature field `C` is plotted.
 
 ```@raw html
 <div style="text-align: center;">

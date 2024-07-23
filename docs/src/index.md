@@ -30,10 +30,10 @@ Chmy.jl provides a comprehensive framework for handling complex computational ta
 
 A general list of the features is:
 
-- Single device & distributed (MPI) computing support
-- Multi-dimensional, parameterizable field definition on structured grids
-- Specification of boundary conditions for numerical fields
-- Various grid operators (finite difference, grid masking, value interpolation) for fields defined in Cartesian coordinates
+- Distributed computing support with MPi.jl
+- Multi-dimensional, parameterizable discrete and continuous fields on structured grids
+- High-level interface for specifying boundary conditions with automatic batching for performance
+- Finite difference and interpolation operators on discrete fields
 - Extensibility. The whole package is written in pure Julia, so adding new functions, simplification rules, and model transformations has no barrier.
 
 ## Funding
