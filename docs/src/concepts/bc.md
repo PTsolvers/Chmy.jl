@@ -1,13 +1,13 @@
 # Boundary Conditions
 
-Using [Chmy.jl](https://github.com/PTsolvers/Chmy.jl), we aim to study partial differential equations (PDEs) arising from physical or engineering problems. Generally, PDEs possess infinitely many solutions. Therefore, to obtain a unique solution, additional initial or boundary conditions are necessary for the model problem to be well-posed, ensuring the existence and uniqueness of a stable solution.
+Using [Chmy.jl](https://github.com/PTsolvers/Chmy.jl), we aim to study partial differential equations (PDEs) arising from physical or engineering problems. Additional initial and/or boundary conditions are necessary for the model problem to be well-posed, ensuring the existence and uniqueness of a stable solution.
 
-We provide a small overview for boundary conditions that one often encounter. Followingly, we consider the unknown function $u : \Omega \mapsto \mathbb{R}$ defined on some  bounded computational domain $\Omega \subset \mathbb{R}^d$ in a $d$-dimensional space. With the domain boundary denoted by $\partial \Omega$, we have some function $g : \partial \Omega \mapsto \mathbb{R}$ prescribed on the boundary.
+We provide a small overview for boundary conditions that one often encounters. In the following, we consider the unknown function $u : \Omega \mapsto \mathbb{R}$ defined on some  bounded computational domain $\Omega \subset \mathbb{R}^d$ in a $d$-dimensional space. With the domain boundary denoted by $\partial \Omega$, we have some function $g : \partial \Omega \mapsto \mathbb{R}$ prescribed on the boundary.
 
 | Type    | Form | Example |
 |:------------|:------------|:---------|
 | Dirichlet | $u = g$ on $\partial \Omega$ | In fluid dynamics, the no-slip condition for viscous fluids states that at a solid boundary the fluid has zero velocity relative to the boundary. |
-| Neumann | $\partial_\nu u = g$ on $\partial \Omega$, where $\nu$ is the outer normal vector to $\Omega$ | It specifies the values in which the derivative of a solution is applied within the boundary of the domain. An application in thermodynamics is a prescribed heat flux from a surface, which serves as boundary condition |
+| Neumann | $\partial_\boldsymbol{n} u = g$ on $\partial \Omega$, where $\boldsymbol{n}$ is the outer normal vector to $\Omega$ | It specifies the values in which the derivative of a solution is applied within the boundary of the domain. An application in thermodynamics is a prescribed heat flux through the boundary |
 | Robin  |  $u + \alpha \partial_\nu u = g$ on $\partial \Omega$, where $\alpha \in \mathbb{R}$.  | Also called impedance boundary conditions from their application in electromagnetic problems |
 
 ## Applying Boundary Conditions with `bc!()`
