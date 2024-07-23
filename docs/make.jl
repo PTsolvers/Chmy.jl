@@ -26,7 +26,8 @@ makedocs(
         ],
         "Examples" => Any["examples/overview.md"
         ],
-        "Library" => Any["lib/modules.md"]
+        "Library" => Any["lib/modules.md"],
+        "Developer documentation" => Any["developer_documentation/running_tests.md"],
     ]
 )
 

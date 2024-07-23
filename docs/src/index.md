@@ -7,8 +7,8 @@
 To install Chmy.jl, one can simply add it using the Julia package manager:
 
 ```julia
-using Pkg
-Pkg.add("Chmy")
+julia> using Pkg
+julia> Pkg.add("Chmy")
 ```
 
 After the package is installed, one can load the package by using:
@@ -35,34 +35,6 @@ A general list of the features is:
 - Specification of boundary conditions for numerical fields
 - Various grid operators (finite difference, grid masking, value interpolation) for fields defined in Cartesian coordinates
 - Extensibility. The whole package is written in pure Julia, so adding new functions, simplification rules, and model transformations has no barrier.
-
-## Running Tests
-
-### CPU tests
-
-To run the Chmy test suite on the CPU, simple run `test` from within the package mode or using `Pkg`:
-```julia-repl
-using Pkg
-Pkg.test("Chmy")
-```
-
-### GPU tests
-
-To run the Chmy test suite on CUDA or ROC backend (Nvidia or AMD GPUs), respectively, run the tests using `Pkg` adding following `test_args`:
-
-#### For CUDA backend (Nvidia GPUs):
-
-```julia-repl
-using Pkg
-Pkg.test("Chmy"; test_args=["--backend=CUDA"])
-```
-
-#### For ROC backend (AMD GPUs):
-
-```julia-repl
-using Pkg
-Pkg.test("Chmy"; test_args=["--backend=AMDGPU"])
-```
 
 ## Funding
 
