@@ -7,7 +7,7 @@ We provide a small overview for boundary conditions that one often encounters. I
 | Type    | Form | Example |
 |:------------|:------------|:---------|
 | Dirichlet | $u = g$ on $\partial \Omega$ | In fluid dynamics, the no-slip condition for viscous fluids states that at a solid boundary the fluid has zero velocity relative to the boundary. |
-| Neumann | $\partial_\boldsymbol{n} u = g$ on $\partial \Omega$, where $\boldsymbol{n}$ is the outer normal vector to $\Omega$ | It specifies the values in which the derivative of a solution is applied within the boundary of the domain. An application in thermodynamics is a prescribed heat flux through the boundary |
+| Neumann | $\partial_{\boldsymbol{n}} u = g$ on $\partial \Omega$, where $\boldsymbol{n}$ is the outer normal vector to $\Omega$ | It specifies the values in which the derivative of a solution is applied within the boundary of the domain. An application in thermodynamics is a prescribed heat flux through the boundary |
 | Robin  |  $u + \alpha \partial_\nu u = g$ on $\partial \Omega$, where $\alpha \in \mathbb{R}$.  | Also called impedance boundary conditions from their application in electromagnetic problems |
 
 ## Applying Boundary Conditions with `bc!()`
