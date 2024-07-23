@@ -12,7 +12,7 @@ We provide a small overview for boundary conditions that one often encounters. I
 
 ## Applying Boundary Conditions with `bc!()`
 
-Followingly, we describe the syntax in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) for launching kernels that impose boundary conditions on some `field` that is well-defined on a `grid` with backend specified through `arch`. 
+In the following, we describe the syntax in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) for launching kernels that impose boundary conditions on some `field` that is well-defined on a `grid` with backend specified through `arch`.
 
 For Dirichlet and Neumann boundary conditions, they are referred to as homogeneous if $g = 0$, otherwise they are non-homogeneous if $g = v$ holds, for some $v\in \mathbb{R}$.
 
@@ -23,8 +23,8 @@ For Dirichlet and Neumann boundary conditions, they are referred to as homogeneo
 
 Note that the syntax shown in the table above is a **fused expression** of both _specifying_ and _applying_ the boundary conditions.
 
-!!! warning "$\partial \Omega$ Refers to the Whole Domain Boundary!" 
-    By specifying `field` to a single boundary condition, we impose the boundary condition on the whole domain boundary by default. See the section for "Mixed Boundary Conditions" below for specifying different BC on different parts of the domain boundary.
+!!! warning "$\partial \Omega$ Refers to the Entire Domain Boundary!"
+    By specifying `field` to a single boundary condition, we impose the boundary condition on the entire domain boundary by default. See the section for "Mixed Boundary Conditions" below for specifying different BC on different parts of the domain boundary.
 
 Alternatively, one could also define the boundary conditions beforehand using `batch()` provided the `grid` information as well as the `field` variable. This way the boundary condition to be prescibed is **precomputed**.
 

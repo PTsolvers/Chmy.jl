@@ -16,7 +16,7 @@ Introducing the diffusion flux $q$, we can rewrite equation `(1)` as a system of
 
 ```math
 \begin{align}
-\boldsymbol{q}                &= -\chi \nabla C~, \\
+\boldsymbol{q}                &= -\chi \nabla C~, \\[5pt]
 \frac{\partial C}{\partial t} &= - \nabla \cdot \boldsymbol{q}~.
 \end{align}
 ```
