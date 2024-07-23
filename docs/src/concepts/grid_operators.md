@@ -1,6 +1,6 @@
 # Grid Operators
 
-The gist of the finite difference relies on replacing derivatives by difference quotients anchored on structured grids. We currently support various finite difference operators for fields defined in Cartesian coordinates. The table below summarizes the most common usage of grid operators, with the grid `g::StructuredGrid` and index `I = @index(Global, Cartesian)` defined and `P = Field(backend, grid, location)` is some field defined on the grid `g`.
+Chmy.jl currently supports various finite difference operators for fields defined in Cartesian coordinates. The table below summarizes the most common usage of grid operators, with the grid `g::StructuredGrid` and index `I = @index(Global, Cartesian)` defined and `P = Field(backend, grid, location)` is some field defined on the grid `g`.
 
 | Mathematical Formulation | Code |
 |:-------|:------------|
@@ -23,9 +23,9 @@ The kernel that computes the divergence needs to have the grid information passe
 
 ```julia
 @kernel inbounds = true function update_∇!(V, ∇V, g::StructuredGrid, O)
-    I = @index(Global, NTuple)
+    I = @index(Global, Cartesian)
     I = I + O
-    ∇V[I...] = divg(V, g, I...)
+    ∇V[I] = divg(V, g, I)
 end
 ```
 
@@ -37,7 +37,7 @@ launch(arch, grid, update_∇! => (V, ∇V, grid))
 
 ## Masking
 
-Masking is particularly important when performing finite differences on GPUs, as it allows for efficient and accurate computations by selectively applying operations only where needed, allowing more flexible control over the grid operators and improving performance. Thus, by providing masked grid operators, we enable more flexible control over the domain on which the grid operators should be applied for advanced users.
+Masking allows selectively applying operations only where needed, allowing more flexible control over the grid operators and improving performance. Thus, by providing masked grid operators, we enable more flexible control over the domain on which the grid operators should be applied.
 
 In the following example, we first define a mask `ω` on the 2D `StructuredGrid`. Then we specify to **not** mask the center area of all Vx, Vy nodes (accessible through `ω.vc`, `ω.cv`) on the staggered grid.
 
@@ -58,12 +58,12 @@ We can then pass the mask to other grid operators when applying them within the 
 
 ```julia
 @kernel function update_strain_rate!(ε̇, V, ω::AbstractMask, g::StructuredGrid, O)
-    I = @index(Global, NTuple)
+    I = @index(Global, Cartesian)
     I = I + O
     # with masks ω
-    ε̇.xx[I...] = ∂x(V.x, ω, g, I...)
-    ε̇.yy[I...] = ∂y(V.y, ω, g, I...)
-    ε̇.xy[I...] = 0.5 * (∂y(V.x, ω, g, I...) + ∂x(V.y, ω, g, I...))
+    ε̇.xx[I] = ∂x(V.x, ω, g, I)
+    ε̇.yy[I] = ∂y(V.y, ω, g, I)
+    ε̇.xy[I] = 0.5 * (∂y(V.x, ω, g, I) + ∂x(V.y, ω, g, I))
 end
 ```
 
@@ -80,7 +80,7 @@ launch(arch, grid, update_strain_rate! => (ε̇, V, ω, grid))
 
 ## Interpolation
 
-Interpolating physical parameters such as permeability and density between various types of nodes is frequently necessary on a staggered grid. Chmy.jl provides conveninent functions for performing interpolations of field values between different types of nodes.
+Interpolating physical parameters such as permeability and density between various grid locations is frequently necessary on a staggered grid. Chmy.jl provides functions for performing interpolations of field values between different locations.
 
 In the following example, we specify to use the linear interpolation rule `lerp` when interpolating nodal values of the density field `ρ`, defined on pressure nodes (with location `(Center(), Center())`) to `ρvx` and `ρvy`, defined on Vx and Vy nodes respectively.
 
@@ -98,10 +98,10 @@ The kernel `interpolate_ρ!` performs the actual interpolation of nodal values a
 
 ```julia
 @kernel function interpolate_ρ!(ρ, ρvx, ρvy, g::StructuredGrid, O)
-    I = @index(Global,  NTuple)
+    I = @index(Global, Cartesian)
     I = I + O
     # Interpolate from pressure nodes to Vx, Vy nodes
-    ρvx = lerp(ρ, location(ρvx), g, I...)
-    ρvy = lerp(ρ, location(ρvy), g, I...)
+    ρvx = lerp(ρ, location(ρvx), g, I)
+    ρvy = lerp(ρ, location(ρvy), g, I)
 end
 ```
