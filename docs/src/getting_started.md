@@ -115,7 +115,7 @@ bc!(arch, grid, C => Neumann(); exchange=C)
 
 ```@raw html
 <div style="text-align: center;">
-    <img src="../assets/field_set_ic_random.png" width="50%"/>
+    <img src="assets/field_set_ic_random.png" width="50%"/>
 </div>
 ```
 
@@ -137,6 +137,6 @@ After running the simulation, you should see something like this, here the final
 
 ```@raw html
 <div style="text-align: center;">
-    <img src="../assets/diffusion_2d_it_100.png" width="50%"/>
+    <img src="assets/diffusion_2d_it_100.png" width="50%"/>
 </div>
 ```
