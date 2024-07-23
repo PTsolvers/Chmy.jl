@@ -38,15 +38,14 @@ parameterized_axis = FunctionAxis(f, length)
 
 A common mesh structure that is used for the spatial discretization in the finite difference approach is a structured grid (concrete type `StructuredGrid` or its alias `SG`).
 
-We provide a convenient function `UniformGrid` for creating an equidistant `StructuredGrid`, that essentially boils down to having axes of type `UniformAxis` in each spatial dimension.
+We provide a function `UniformGrid` for creating an equidistant `StructuredGrid`, that essentially boils down to having axes of type `UniformAxis` in each spatial dimension.
 
 ```julia
 # with architecture as well as numerics lx/y/z and nx/y/z defined
 grid   = UniformGrid(arch; 
                     origin=(-lx/2, -ly/2, -lz/2), 
                     extent=(lx, ly, lz), 
-                    dims=(nx, ny, nz)
-                    )
+                    dims=(nx, ny, nz))
 ```
 
 !!! info "Interactive Grid Visualization" 
@@ -84,11 +83,11 @@ If all variables are defined on basic nodes, specified by `(V,V)` locations, we 
 With a structured grid defined that consists of `nx = N` cells horizontally and `ny = M` cells vertically, we have the following dimensions for fields associated with the grid.
 
 | Node Type | Field Dimension | Location |
-|:-------|:------------|:------------|
-| Basic Node | $(N + 1) \times (M + 1)$ |  `(V, V)` |
-| Vx Node | $(N + 1) \times M$ | `(V, C)` |
-| Vy Node | $ N \times (M + 1)$ | `(C, V)` |
-| Pressure Node | $N \times M$ | `(C, C)` |
+|:----------|:----------------|:---------|
+| Cell vertex | $(N + 1) \times (M + 1)$ | `(V, V)` |
+| X interface | $(N + 1) \times M$       | `(V, C)` |
+| Y interface | $ N \times (M + 1)$      | `(C, V)` |
+| Cell Center | $N \times M$             | `(C, C)` |
 
 ## Connectivity of a `StructuredGrid`
 
