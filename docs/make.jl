@@ -15,8 +15,7 @@ makedocs(
     pages = Any[
         "Home" => "index.md",
         "Getting Started with Chmy.jl" => "getting_started.md",
-        "Concepts" => Any["concepts/overview.md",
-                        "concepts/architectures.md",
+        "Concepts" => Any["concepts/architectures.md",
                         "concepts/grids.md",
                         "concepts/fields.md",
                         "concepts/bc.md",
