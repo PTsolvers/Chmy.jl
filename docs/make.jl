@@ -8,7 +8,8 @@ makedocs(
     authors="Ivan Utkin, Ludovic Räss and contributors",
     format = Documenter.HTML(
         prettyurls=get(ENV, "CI", nothing) == "true", # easier local build
-        ansicolor=true
+        ansicolor=true,
+        assets = ["assets/favicon.ico"],
         ),
     modules = [Chmy],
     warnonly = [:missing_docs],
