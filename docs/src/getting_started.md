@@ -4,7 +4,7 @@
 
 ## Basic Diffusion
 
-The diffusion equation is a second order parabolic PDE, here for a multivariable function $C(x,y,t)$ that represents the field being diffused (such as temperature or concentration of a chemical component in a solution) showing derivatives in both temporal $\partial t$ and spatial $\partial x$ dimensions, where $\chi$ is the diffusion coefficient. In 2D we have the following formulation for the diffusion process:
+The diffusion equation is a second order parabolic PDE, here for a multivariable function $C(x,y,t)$ that represents the field being diffused (such as the temperature or the concentration of a chemical component in a solution) showing derivatives in both temporal $\partial t$ and spatial $\partial x$ dimensions, where $\chi$ is the diffusion coefficient. In 2D we have the following formulation for the diffusion process:
 
 ```math
 \begin{equation}
