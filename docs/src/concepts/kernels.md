@@ -2,7 +2,7 @@
 
 The [KernelAbstactions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) package provides a macro-based dialect that hides the intricacies of vendor-specific GPU programming. It allows one to write hardware-agnostic kernels that can be instantiated and launched for different device backends without modifying the high-level code nor sacrificing performance.
 
-Followingly, we show how to write and launch kernels on various backends. We also explain the concept of a `Launcher` in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl), that complements the default kernel launching, allowing us to perform more fine-grained operations on different `Field` objects.
+In the following, we show how to write and launch kernels on various backends. We also explain the concept of a `Launcher` in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl), that complements the default kernel launching, allowing us to hide the latency between the bulk of the computations and boundary conditions or MPI communications.
 
 ## Writing Kernels
 
@@ -36,9 +36,6 @@ synchronize(backend)
 ```
 
 To launch the kernel on GPU devices, one could simply define `A` as `CuArray`, `ROCArray` or `oneArray` as detailed in the section ["launching kernel on the backend"](https://juliagpu.github.io/KernelAbstractions.jl/stable/quickstart/#Launching-kernel-on-the-backend). More fine-grained memory access is available using the `@index` macro as described [here](https://juliagpu.github.io/KernelAbstractions.jl/stable/api/#KernelAbstractions.@index).
-
-!!! info "Kernel Synchronization"
-    In previous section about [task-based parallelism](workers.md), we have mentioned and showed the advantages of asynchronous execution. When it comes to using both CPU and GPU, it appears natural that by default kernel launches are asynchronous. Therefore, in [KernelAbstactions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl), one also needs to explicitly use `synchronize(backend)` function to wait on a series of kernel launches.
 
 ### Thread Indexing
 
@@ -98,16 +95,16 @@ We also have two kernel functions `compute_q!` and `update_C!` defined, which sh
 
 ```julia
 @kernel inbounds = true function compute_q!(q, C, χ, g::StructuredGrid, O)
-    I = @index(Global, NTuple)
+    I = @index(Global, Cartesian)
     I = I + O
-    q.x[I...] = -χ * ∂x(C, g, I...)
-    q.y[I...] = -χ * ∂y(C, g, I...)
+    q.x[I] = -χ * ∂x(C, g, I)
+    q.y[I] = -χ * ∂y(C, g, I)
 end
 
 @kernel inbounds = true function update_C!(C, q, Δt, g::StructuredGrid, O)
-    I = @index(Global, NTuple)
+    I = @index(Global, Cartesian)
     I = I + O
-    C[I...] -= Δt * divg(q, g, I...)
+    C[I] -= Δt * divg(q, g, I)
 end
 ```
 
@@ -119,10 +116,7 @@ for it in 1:nt
     # without boundary conditions
     launch(arch, grid, compute_q! => (q, C, χ, grid))
 
-    # with Neumann boundary conditions
+    # with Neumann boundary conditions and MPI exchange
     launch(arch, grid, update_C! => (C, q, Δt, grid); bc=batch(grid, C => Neumann(); exchange=C))
 end
-
-# Explicit synchronization request
-KernelAbstractions.synchronize(backend)
 ```
