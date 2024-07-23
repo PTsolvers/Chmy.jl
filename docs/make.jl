@@ -20,13 +20,13 @@ makedocs(
                         "concepts/fields.md",
                         "concepts/bc.md",
                         "concepts/grid_operators.md",
-                        "concepts/workers.md", 
                         "concepts/kernels.md"
         ],
         "Examples" => Any["examples/overview.md"
         ],
         "Library" => Any["lib/modules.md"],
-        "Developer documentation" => Any["developer_documentation/running_tests.md"],
+        "Developer documentation" => Any["developer_documentation/running_tests.md",
+                                         "developer_documentation/workers.md"],
     ]
 )
 
