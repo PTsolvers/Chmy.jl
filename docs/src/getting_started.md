@@ -35,7 +35,7 @@ Generally, partial differential equations (PDEs) require initial or [boundary co
 \frac{\partial C}{\partial \boldsymbol{n}} = g(x, y, t)
 \end{equation}
 ```
-where $\frac{\partial C}{\partial \boldsymbol{n}}$ is the derivative of `C` normal to the boundary, and $g(x, t)$ is a given function. In this tutorial example, we consider a homogeneous Neumann boundary condition, $g(x, y, t) = 0$, which implies that there is no flux across the boundary.
+where $\frac{\partial C}{\partial \boldsymbol{n}}$ is the derivative of `C` normal to the boundary, and $g(x, y, t)$ is a given function. In this tutorial example, we consider a homogeneous Neumann boundary condition, $g(x, y, t) = 0$, which implies that there is no flux across the boundary.
 
 ## Using Chmy.jl for Backend Portable Implementation
 
@@ -102,7 +102,7 @@ launch = Launcher(arch, grid)
 Δt = minimum(spacing(grid))^2 / χ / ndims(grid) / 2.1
 ```
 
-In the 2D problem only three physical fields, the field `C` and the diffusion flux `q` in `x` and `y` dimension are evolving with time. We define these fields on different locations on the staggered grid (more see [Grids](./concepts/grids.md)).
+In the 2D problem only three physical fields, the field `C` and the diffusion flux `q` in `x`- and `y`-dimension are evolving with time. We define these fields on different locations on the staggered grid (more see [Grids](./concepts/grids.md)).
 
 ```julia
 # allocate fields
