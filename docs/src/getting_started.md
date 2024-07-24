@@ -15,10 +15,15 @@ The diffusion equation is a second order parabolic PDE, here for a multivariable
 Introducing the diffusion flux $q$, we can rewrite equation `(1)` as a system of two PDEs, consisting of equations `(2)` and `(3)`.
 
 ```math
-\begin{align}
-\boldsymbol{q}                &= -\chi \nabla C~, \\[5pt]
-\frac{\partial C}{\partial t} &= - \nabla \cdot \boldsymbol{q}~.
-\end{align}
+\begin{equation}
+\boldsymbol{q} = -\chi \nabla C~,
+\end{equation}
+```
+
+```math
+\begin{equation}
+\frac{\partial C}{\partial t} = - \nabla \cdot \boldsymbol{q}~.
+\end{equation}
 ```
 
 ### Boundary Conditions
