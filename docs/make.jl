@@ -8,14 +8,26 @@ makedocs(
     authors="Ivan Utkin, Ludovic Räss and contributors",
     format = Documenter.HTML(
         prettyurls=get(ENV, "CI", nothing) == "true", # easier local build
-        ansicolor=true
+        ansicolor=true,
+        assets = ["assets/favicon.ico"],
         ),
     modules = [Chmy],
     warnonly = [:missing_docs],
     pages = Any[
         "Home" => "index.md",
-        "Usage" => Any["usage/runtests.md"],
-        "Library" => Any["lib/modules.md"]
+        "Getting Started with Chmy.jl" => "getting_started.md",
+        "Concepts" => Any["concepts/architectures.md",
+                        "concepts/grids.md",
+                        "concepts/fields.md",
+                        "concepts/bc.md",
+                        "concepts/grid_operators.md",
+                        "concepts/kernels.md"
+        ],
+        "Examples" => Any["examples/overview.md"
+        ],
+        "Library" => Any["lib/modules.md"],
+        "Developer documentation" => Any["developer_documentation/running_tests.md",
+                                         "developer_documentation/workers.md"],
     ]
 )
 

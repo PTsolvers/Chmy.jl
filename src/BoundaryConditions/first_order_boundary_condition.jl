@@ -1,15 +1,31 @@
 struct DirichletKind end
 struct NeumannKind end
 
+"""
+    struct FirstOrderBC{T,Kind} <: FieldBoundaryCondition
+
+A struct representing a boundary condition of first-order accuracy.
+"""
 struct FirstOrderBC{T,Kind} <: FieldBoundaryCondition
     value::T
     FirstOrderBC{Kind}(value::T) where {Kind,T} = new{T,Kind}(value)
 end
 
 const Dirichlet{T} = FirstOrderBC{T,DirichletKind}
-const Neumann{T}   = FirstOrderBC{T,NeumannKind}
+const Neumann{T} = FirstOrderBC{T,NeumannKind}
 
+"""
+    Dirichlet(value=nothing)
+
+Create a `Dirichlet` object representing the Dirichlet boundary condition with the specified value.
+"""
 Dirichlet(value=nothing) = FirstOrderBC{DirichletKind}(value)
+
+"""
+    Neumann(value=nothing)
+
+Create a `Neumann` object representing the Neumann boundary condition with the specified value.
+"""
 Neumann(value=nothing)   = FirstOrderBC{NeumannKind}(value)
 
 Base.show(io::IO, ::Dirichlet{Nothing}) = print(io, "Dirichlet(0)")

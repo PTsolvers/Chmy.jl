@@ -1,4 +1,4 @@
-# Running tests
+# Running Tests
 
 ## CPU tests
 

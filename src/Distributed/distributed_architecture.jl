@@ -30,9 +30,33 @@ function Architectures.Arch(backend::Backend, comm::MPI.Comm, dims; device_id=no
     return DistributedArchitecture(child_arch, topology)
 end
 
+"""
+    topology(arch::DistributedArchitecture)
+
+Get the virtual MPI topology of a distributed architecture
+"""
 topology(arch::DistributedArchitecture) = arch.topology
 
 # Implement Architecture API
+"""
+    get_backend(arch::DistributedArchitecture)
+
+Get the backend associated with a DistributedArchitecture by delegating to the child architecture.
+"""
 Architectures.get_backend(arch::DistributedArchitecture) = Architectures.get_backend(arch.child_arch)
+
+"""
+    get_device(arch::DistributedArchitecture)
+
+Get the device associated with a DistributedArchitecture by delegating to the child architecture.
+"""
 Architectures.get_device(arch::DistributedArchitecture) = get_device(arch.child_arch)
+
+"""
+    activate!(arch::DistributedArchitecture; kwargs...)
+
+Activate the given DistributedArchitecture by delegating to the child architecture, 
+and pass through any keyword arguments. For example, the priority can be set with 
+accepted values being `:normal`, `:low`, and `:high`.
+"""
 Architectures.activate!(arch::DistributedArchitecture; kwargs...) = activate!(arch.child_arch; kwargs...)

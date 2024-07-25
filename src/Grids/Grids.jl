@@ -18,9 +18,25 @@ import Chmy: @add_cartesian
 
 import Base.@propagate_inbounds
 
+"""
+    abstract type Location
+
+Abstract type representing a location in a grid cell.
+"""
 abstract type Location end
 
+"""
+    struct Center <: Location
+
+The `Center` struct represents a location at the center along a dimension of a grid cell.
+"""
 struct Center <: Location end
+
+"""
+    struct Vertex <: Location
+
+The `Vertex` struct represents a location at the vertex along a dimension of a grid cell.
+"""
 struct Vertex <: Location end
 
 Base.@assume_effects :total flip(::Center) = Vertex()
@@ -28,6 +44,11 @@ Base.@assume_effects :total flip(::Vertex) = Center()
 
 Base.broadcastable(o::Location) = Ref(o)
 
+"""
+    abstract type Connectivity
+
+Abstract type representing the connectivity of grid elements.
+"""
 abstract type Connectivity end
 
 struct Bounded <: Connectivity end
@@ -43,7 +64,18 @@ include("uniform_axis.jl")
 include("function_axis.jl")
 include("structured_grid.jl")
 
+"""
+    Δ
+
+Alias for the `spacing` method that returns the spacing between grid points.
+"""
 const Δ  = spacing
+
+"""
+    iΔ
+
+Alias for the `inv_spacing` method that returns the reciprocal of the spacing between grid points.
+"""
 const iΔ = inv_spacing
 
 end # module Grids
