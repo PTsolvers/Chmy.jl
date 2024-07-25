@@ -57,7 +57,7 @@ The following figure showcases a 2D square domain $\Omega$ with different bounda
 - The left and right boundaries (green) are Neumann boundary conditions where $\frac{\partial u}{\partial y} = 0$.
 
 ```@raw html
-<img src="../assets/mixed_bc_example.png" width="60%"/>
+<img src="https://raw.githubusercontent.com/PTsolvers/Chmy.jl/main/docs/src/assets/mixed_bc_example.png" width="60%"/>
 ```
 
 To launch a kernel that satisfies these boundary conditions in Chmy.jl, you can use the following code:

@@ -3,7 +3,7 @@
 With a given grid that allows us to define each point uniquely in a high-dimensional space, we abstract the data values to be defined on the grid under the concept `AbstractField`. Following is the type tree of the abstract field and its derived data types.
 
 ```@raw html
-<img src="../assets/field_type_tree.svg" width="70%"/>
+<img src="https://raw.githubusercontent.com/PTsolvers/Chmy.jl/main/docs/src/assets/field_type_tree.svg" width="70%"/>
 ```
 
 ## Defining a multi-dimensional `Field`
@@ -50,11 +50,11 @@ set!(C, grid, (x, y) -> exp(-x^2 - y^2))
 ```
 
 ```@raw html
-<img src="../assets/field_set_ic_random.png" width="50%"/>
+<img src="https://raw.githubusercontent.com/PTsolvers/Chmy.jl/main/docs/src/assets/field_set_ic_random.png" width="50%"/>
 ```
 
 ```@raw html
-<img src="../assets/field_set_ic_gaussian.png" width="50%"/>
+<img src="https://raw.githubusercontent.com/PTsolvers/Chmy.jl/main/docs/src/assets/field_set_ic_gaussian.png" width="50%"/>
 ```
 
 A slightly more complex usage involves passing extra parameters to be used for initial conditions setup.

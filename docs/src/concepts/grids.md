@@ -53,11 +53,11 @@ grid   = UniformGrid(arch;
     -  [grids_3d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/grids_3d.jl):  Visualization of a 3D `StructuredGrid`
 
 ```@raw html
-<img src="../assets/grid_2d.png" width="50%"/>
+<img src="https://raw.githubusercontent.com/PTsolvers/Chmy.jl/main/docs/src/assets/grid_2d.png" width="50%"/>
 ```
 
 ```@raw html
-<img src="../assets/grid_3d.png" width="50%"/>
+<img src="https://raw.githubusercontent.com/PTsolvers/Chmy.jl/main/docs/src/assets/grid_3d.png" width="50%"/>
 ```
 
 ## Location on a Grid Cell
@@ -67,13 +67,13 @@ In order to allow full control over the distribution of different variables on t
 We illustrate how to specify the location within a grid cell on a fully staggered uniform grid. The following 2D example also has ghost nodes illustrated that are located immediately outside the domain boundary.
 
 ```@raw html
-<img src="../assets/staggered_grid.png" width="80%"/>
+<img src="https://raw.githubusercontent.com/PTsolvers/Chmy.jl/main/docs/src/assets/staggered_grid.png" width="80%"/>
 ```
 
 In the following example, we zoom into a specific cell on a **fully-staggered grid**. By specifying for both x- and y-dimensions whether the node locates at the `Center` (C) or `Vertex` (V) along the respective axis, we can arrive in 4 categories of nodes on a 2D quadrilateral cell, which we refer to as "basic", "pressure", "Vx" and "Vy" nodes, following common practices.
 
 ```@raw html
-<img src="../assets/staggered_grid_cell.png" width="50%"/>
+<img src="https://raw.githubusercontent.com/PTsolvers/Chmy.jl/main/docs/src/assets/staggered_grid_cell.png" width="50%"/>
 ```
 
 If all variables are defined on basic nodes, specified by `(V,V)` locations, we have the simplest non-staggered **collocated grid**.
