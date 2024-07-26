@@ -31,7 +31,7 @@ For advanced users, we provide a function `activate!(arch; priority)` for specif
 
 Our distributed architecture builds upon the abstraction of having GPU clusters that build on the same GPU architecture. Note that in general, GPU clusters may be equipped with hardware from different vendors, incorporating different types of GPUs to exploit their unique capabilities for specific tasks.
 
-!!! warning "GPU-Aware MPI Required for Distributed Module"
+!!! warning "GPU-Aware MPI Required for Distributed Module on GPU backend"
     The `Distributed` module currently only supports [GPU-aware MPI](https://www.open-mpi.org/faq/?category=runcuda) when a GPU backend is selected for multi-GPU computations. For the `Distributed` module to function properly, any GPU-aware MPI library installation shall be used. Otherwise, a segmentation fault will occur.
 
 
