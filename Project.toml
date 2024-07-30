@@ -19,6 +19,7 @@ ChmyAMDGPUExt = "AMDGPU"
 ChmyCUDAExt = "CUDA"
 
 [compat]
+julia = "1.9"
 AMDGPU = "0.8, 0.9"
 Adapt = "4"
 CUDA = "5"
