@@ -4,7 +4,7 @@ using Chmy
 push!(LOAD_PATH,"../src/")
 
 makedocs(
-    sitename = "Chmy",
+    sitename = "Chmy.jl",
     authors="Ivan Utkin, Ludovic Räss and contributors",
     format = Documenter.HTML(
         prettyurls=get(ENV, "CI", nothing) == "true", # easier local build
