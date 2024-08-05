@@ -30,7 +30,7 @@ Chmy.jl provides a comprehensive framework for handling complex computational ta
 
 A general list of the features is:
 
-- Distributed computing support with MPi.jl
+- Distributed computing support with [MPI.jl](https://github.com/JuliaParallel/MPI.jl)
 - Multi-dimensional, parameterizable discrete and continuous fields on structured grids
 - High-level interface for specifying boundary conditions with automatic batching for performance
 - Finite difference and interpolation operators on discrete fields
