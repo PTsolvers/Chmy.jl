@@ -138,7 +138,7 @@ for it in 1:nt
 end
 ```
 
-After running the simulation, you should see something like this, here the final result at `it = 100` for the field `C` is plotted.
+After running the simulation, you should see something like this, here the final result at `it = 100` for the field `C` is plotted:
 
 ```@raw html
 <div style="text-align: center;">

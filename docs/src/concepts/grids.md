@@ -42,13 +42,13 @@ We provide a function `UniformGrid` for creating an equidistant `StructuredGrid`
 
 ```julia
 # with architecture as well as numerics lx/y/z and nx/y/z defined
-grid   = UniformGrid(arch; 
-                    origin=(-lx/2, -ly/2, -lz/2), 
-                    extent=(lx, ly, lz), 
+grid   = UniformGrid(arch;
+                    origin=(-lx/2, -ly/2, -lz/2),
+                    extent=(lx, ly, lz),
                     dims=(nx, ny, nz))
 ```
 
-!!! info "Interactive Grid Visualization" 
+!!! info "Interactive Grid Visualization"
     - [grids_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/grids_2d.jl):  Visualization of a 2D `StructuredGrid`
     -  [grids_3d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/grids_3d.jl):  Visualization of a 3D `StructuredGrid`
 
@@ -93,7 +93,7 @@ With a structured grid defined that consists of `nx = N` cells horizontally and 
 
 Using the method `connectivity(::SG{N,T,C}, ::Dim{D}, ::Side{S})`, one can obtain the connectivity underlying a structured grid. If no special grid topology is provided, a default `Bounded` grid topology is used for the `UniformGrid`. Therefore, on a default `UniformGrid`, the following assertions hold:
 
-```julia
+```julia-repl
 julia> @assert connectivity(grid, Dim(1), Side(1)) isa Bounded "Left boundary is bounded"
 julia> @assert connectivity(grid, Dim(1), Side(2)) isa Bounded "Right boundary is bounded"
 julia> @assert connectivity(grid, Dim(2), Side(1)) isa Bounded "Upper boundary is bounded"

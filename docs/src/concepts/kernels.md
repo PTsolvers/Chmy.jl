@@ -45,17 +45,18 @@ In the example above, we saw the usage of `I = @index(Global, Cartesian)`, which
 
 The following table is non-exhaustive and provides a reference of commonly used terminology. Here, [`KernelAbstractions.@index`](https://juliagpu.github.io/KernelAbstractions.jl/stable/api/#KernelAbstractions.@index) is used for index retrieval, and [`KernelAbstractions.@groupsize`](https://juliagpu.github.io/KernelAbstractions.jl/stable/api/#KernelAbstractions.@groupsize) is used for obtaining the dimensions of blocks of threads.
 
-| KernelAbstractions                | CPU                     | CUDA                            |
-|-----------------------------------|-------------------------|---------------------------------|
-| `@index(Local, Linear)`           | `mod(i, g)`             | `threadIdx().x`                 |
-| `@index(Local, Cartesian)[2]`     |                         | `threadIdx().y`                 |
-| `@index(Group, Linear)`           | `i ÷ g`                 | `blockIdx().x`                  |
-| `@index(Group, Cartesian)[2]`     |                         | `blockIdx().y`                  |
-| `@groupsize()[3]`                 |                         | `blockDim().z`                  |
-| `prod(@groupsize())`              | `g`                     | `.x * .y * .z`                  |
-| `@index(Global, Linear)`          | `i`                     | global index computation needed |
-| `@index(Global, Cartesian)[2]`    |                         | global index computation needed |
-| `@index(Global, NTuple)`          |                         | `(threadIdx().x, ... )`         |
+| KernelAbstractions                | CPU                     | CUDA                            | AMDGPU                          |
+|-----------------------------------|-------------------------|---------------------------------|---------------------------------|
+| `@index(Local, Linear)`           | `mod(i, g)`             | `threadIdx().x`                 | `workitemIdx().x`               |
+| `@index(Local, Cartesian)[2]`     |                         | `threadIdx().y`                 | `workitemIdx().y`               |
+| `@index(Local, Cartesian)[3]`     |                         | `threadIdx().z`                 | `workitemIdx().z`               |
+| `@index(Group, Linear)`           | `i ÷ g`                 | `blockIdx().x`                  | `workgroupIdx().x`              |
+| `@index(Group, Cartesian)[2]`     |                         | `blockIdx().y`                  | `workgroupIdx().y`              |
+| `@groupsize()[3]`                 |                         | `blockDim().z`                  | `workgroupIdx().z`              |
+| `prod(@groupsize())`              | `g`                     | `.x * .y * .z`                  | `.x * .y * .z`                  |
+| `@index(Global, Linear)`          | `i`                     | global index computation needed | global index computation needed |
+| `@index(Global, Cartesian)[2]`    |                         | global index computation needed | global index computation needed |
+| `@index(Global, NTuple)`          |                         | `(threadIdx().x, ... )`         | `(workitemIdx().x, ... )`       |
 
 
 The `@index(Global, NTuple)` returns a `NTuple` object, allowing more fine-grained memory control over the allocated arrays.

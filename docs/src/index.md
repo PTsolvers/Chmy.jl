@@ -6,22 +6,22 @@
 
 To install Chmy.jl, one can simply add it using the Julia package manager:
 
-```julia
+```julia-repl
 julia> using Pkg
 julia> Pkg.add("Chmy")
 ```
 
 After the package is installed, one can load the package by using:
 
-```julia
-using Chmy
+```julia-repl
+julia> using Chmy
 ```
 
-!!! info "Install from a Specific Branch" 
+!!! info "Install from a Specific Branch"
     For developers and advanced users, one might want to use the implementation of Chmy.jl from a specific branch by specifying the url. In the following code snippet, we do this by explicitly specifying to use the current implementation that is available under the `main` branch:
 
-    ```julia
-    using Pkg; Pkg.add(url="https://github.com/PTsolvers/Chmy.jl#main")
+    ```julia-repl
+    julia> using Pkg; Pkg.add(url="https://github.com/PTsolvers/Chmy.jl#main")
     ```
 
 ## Feature Summary

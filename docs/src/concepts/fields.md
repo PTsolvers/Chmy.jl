@@ -74,7 +74,7 @@ set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, r=0.1lx, in=T0, out=Ta))
 
 A field could also be represented in a parameterized way, having a function that associates a single number to every point in the space.
 
-An object of the concrete type `FunctionField` can be initialized with its constructor. The constructor takes in 
+An object of the concrete type `FunctionField` can be initialized with its constructor. The constructor takes in
 
 1. A function `func`
 2. A `grid`
@@ -132,7 +132,7 @@ onefield = Chmy.OneField{Float64}()
 
 Notably, these two fields shall equal to each other as expected.
 
-```julia
+```julia-repl
 julia> field == onefield
 true
 ```
