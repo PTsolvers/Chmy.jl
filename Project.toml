@@ -19,7 +19,7 @@ ChmyAMDGPUExt = "AMDGPU"
 ChmyCUDAExt = "CUDA"
 
 [compat]
-AMDGPU = "0.8, 0.9, 1.0"
+AMDGPU = "0.8, 0.9, 1"
 Adapt = "4"
 CUDA = "5"
 KernelAbstractions = "0.9"
