@@ -5,6 +5,7 @@
 To run the Chmy test suite on the CPU, simple run `test` from within the package mode or using `Pkg`:
 ```julia-repl
 julia> using Pkg
+
 julia> Pkg.test("Chmy")
 ```
 
@@ -16,6 +17,7 @@ To run the Chmy test suite on CUDA or ROC backend (Nvidia or AMD GPUs), respecti
 
 ```julia-repl
 julia> using Pkg
+
 julia> Pkg.test("Chmy"; test_args=["--backend=CUDA"])
 ```
 
@@ -23,5 +25,6 @@ julia> Pkg.test("Chmy"; test_args=["--backend=CUDA"])
 
 ```julia-repl
 julia> using Pkg
+
 julia> Pkg.test("Chmy"; test_args=["--backend=AMDGPU"])
 ```

@@ -12,24 +12,24 @@ This section highlights some important features of [KernelAbstactions.jl](https:
 using KernelAbstactions
 
 # Define a kernel that performs element-wise operations on A
-@kernel function mul2(A)
+@kernel function mul2!(A)
     # use @index macro to obtain the global Cartesian index of the current work item.
     I = @index(Global, Cartesian)
     A[I] *= 2
 end
 ```
 
-With the kernel `mul2` as defined using `@kernel` macro, we can launch it on the desired backend to perform the element-wise operations on host.
+The kernel `mul2!` being defined using the `@kernel` macro, we can launch it on the desired backend to perform the element-wise operations on host.
 
 ```julia
 # Define array and work group size
-workgroup_size = 64
-A              = ones(1024, 1024)
-backend        = get_backend(A) # CPU
+A       = ones(1024, 1024)
+backend = get_backend(A) # CPU
 
 # Launch kernel and explicitly synchronize
-mul2(backend, workgroup_size)(A, ndrange=size(A))
-synchronize(backend)
+kernel = mul2!(backend)
+kernel(A, ndrange=size(A))
+KernelAbstactions.synchronize(backend)
 
 # Result assertion
 @assert(all(A .== 2.0) == true)
@@ -52,12 +52,10 @@ The following table is non-exhaustive and provides a reference of commonly used 
 | `@index(Local, Cartesian)[3]`     |                         | `threadIdx().z`                 | `workitemIdx().z`               |
 | `@index(Group, Linear)`           | `i ÷ g`                 | `blockIdx().x`                  | `workgroupIdx().x`              |
 | `@index(Group, Cartesian)[2]`     |                         | `blockIdx().y`                  | `workgroupIdx().y`              |
-| `@groupsize()[3]`                 |                         | `blockDim().z`                  | `workgroupIdx().z`              |
-| `prod(@groupsize())`              | `g`                     | `.x * .y * .z`                  | `.x * .y * .z`                  |
+| `@groupsize()[3]`                 |                         | `blockDim().z`                  | `workgroupDim().z`              |
 | `@index(Global, Linear)`          | `i`                     | global index computation needed | global index computation needed |
 | `@index(Global, Cartesian)[2]`    |                         | global index computation needed | global index computation needed |
-| `@index(Global, NTuple)`          |                         | `(threadIdx().x, ... )`         | `(workitemIdx().x, ... )`       |
-
+| `@index(Global, NTuple)`          |                         | global index computation needed | global index computation needed |
 
 The `@index(Global, NTuple)` returns a `NTuple` object, allowing more fine-grained memory control over the allocated arrays.
 
