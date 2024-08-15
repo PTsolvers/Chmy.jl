@@ -83,8 +83,8 @@ Followingly, we define a kernel launcher associated with an `UniformGrid` object
 
 ```julia
 # Define backend and geometry
-arch   = Arch(CUDABackend())
-grid   = UniformGrid(arch; origin=(-1, -1), extent=(2, 2), dims=(126, 126))
+arch = Arch(CUDABackend())
+grid = UniformGrid(arch; origin=(-1, -1), extent=(2, 2), dims=(126, 126))
 
 # Define launcher
 launch = Launcher(arch, grid)
