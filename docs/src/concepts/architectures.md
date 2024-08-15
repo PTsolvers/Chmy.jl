@@ -11,11 +11,13 @@ arch = Arch(CPU())
 
 ```julia
 using CUDA
+
 arch = Arch(CUDABackend())
 ```
 
 ```julia
 using AMDGPU
+
 arch = Arch(ROCBackend())
 ```
 

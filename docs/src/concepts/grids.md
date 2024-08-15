@@ -95,7 +95,10 @@ Using the method `connectivity(::SG{N,T,C}, ::Dim{D}, ::Side{S})`, one can obtai
 
 ```julia-repl
 julia> @assert connectivity(grid, Dim(1), Side(1)) isa Bounded "Left boundary is bounded"
+
 julia> @assert connectivity(grid, Dim(1), Side(2)) isa Bounded "Right boundary is bounded"
+
 julia> @assert connectivity(grid, Dim(2), Side(1)) isa Bounded "Upper boundary is bounded"
+
 julia> @assert connectivity(grid, Dim(2), Side(2)) isa Bounded "Lower boundary is bounded"
 ```

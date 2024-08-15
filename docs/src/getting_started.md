@@ -79,12 +79,20 @@ end
 ```
 
 !!! note "Non-Cartesian indices"
-    You can use not only `Cartesian` indices, but more usual "subscript" indices as well. For example, `update_C!` will become:
+    Besides using `Cartesian` indices, more standard indexing works as well, using `NTuple`. For example, `update_C!` will become:
     ```julia
     @kernel inbounds = true function update_C!(C, q, Δt, g::StructuredGrid, O)
         ix, iy = @index(Global, NTuple)
         (ix, iy) = (ix, iy) + O
         C[ix, iy] -= Δt * divg(q, g, ix, iy)
+    end
+    ```
+    where the dimensions could be abstracted by splatting the returned index (`I...`):
+    ```julia
+    @kernel inbounds = true function update_C!(C, q, Δt, g::StructuredGrid, O)
+        I = @index(Global, NTuple)
+        I = I + O
+        C[I...] -= Δt * divg(q, g, I...)
     end
     ```
 
@@ -96,8 +104,10 @@ The diffusion model that we solve should contain the following model setup
 # geometry
 grid   = UniformGrid(arch; origin=(-1, -1), extent=(2, 2), dims=(126, 126))
 launch = Launcher(arch, grid)
+
 # physics
 χ = 1.0
+
 # numerics
 Δt = minimum(spacing(grid))^2 / χ / ndims(grid) / 2.1
 ```

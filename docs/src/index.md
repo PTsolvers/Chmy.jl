@@ -8,6 +8,7 @@ To install Chmy.jl, one can simply add it using the Julia package manager:
 
 ```julia-repl
 julia> using Pkg
+
 julia> Pkg.add("Chmy")
 ```
 
@@ -34,7 +35,7 @@ A general list of the features is:
 - Multi-dimensional, parameterizable discrete and continuous fields on structured grids
 - High-level interface for specifying boundary conditions with automatic batching for performance
 - Finite difference and interpolation operators on discrete fields
-- Extensibility. The whole package is written in pure Julia, so adding new functions, simplification rules, and model transformations has no barrier.
+- Extensibility; The package is written in pure Julia, so adding new functions, simplification rules, and model transformations has no barrier
 
 ## Funding
 
