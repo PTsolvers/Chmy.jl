@@ -6,10 +6,10 @@ In the following, we show how to write and launch kernels on various backends. W
 
 ## Writing Kernels
 
-This section highlights some important features of [KernelAbstactions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) that are essential for understanding the high-level abstraction of the kernel concept that is used throughout our package. As it barely serves for illustrative purposes, for more specific examples, please refer to their [documentation](https://juliagpu.github.io/KernelAbstractions.jl/stable/).
+This section highlights some important features of [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) that are essential for understanding the high-level abstraction of the kernel concept that is used throughout our package. As it barely serves for illustrative purposes, for more specific examples, please refer to their [documentation](https://juliagpu.github.io/KernelAbstractions.jl/stable/).
 
 ```julia
-using KernelAbstactions
+using KernelAbstractions
 
 # Define a kernel that performs element-wise operations on A
 @kernel function mul2!(A)
