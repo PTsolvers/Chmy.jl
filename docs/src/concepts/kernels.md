@@ -1,6 +1,6 @@
 # Kernels
 
-The [KernelAbstactions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) package provides a macro-based dialect that hides the intricacies of vendor-specific GPU programming. It allows one to write hardware-agnostic kernels that can be instantiated and launched for different device backends without modifying the high-level code nor sacrificing performance.
+The [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) package provides a macro-based dialect that hides the intricacies of vendor-specific GPU programming. It allows one to write hardware-agnostic kernels that can be instantiated and launched for different device backends without modifying the high-level code nor sacrificing performance.
 
 In the following, we show how to write and launch kernels on various backends. We also explain the concept of a `Launcher` in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl), that complements the default kernel launching, allowing us to hide the latency between the bulk of the computations and boundary conditions or MPI communications.
 
@@ -29,7 +29,7 @@ backend = get_backend(A) # CPU
 # Launch kernel and explicitly synchronize
 kernel = mul2!(backend)
 kernel(A, ndrange=size(A))
-KernelAbstactions.synchronize(backend)
+KernelAbstractions.synchronize(backend)
 
 # Result assertion
 @assert(all(A .== 2.0) == true)
@@ -41,7 +41,7 @@ To launch the kernel on GPU devices, one could simply define `A` as `CuArray`, `
 
 Thread indexing is essential for memory usage on GPU devices; however, it can quickly become cumbersome to figure out the thread index, especially when working with multi-dimensional grids of multi-dimensional blocks of threads. The performance of kernels can also depend significantly on access patterns.
 
-In the example above, we saw the usage of `I = @index(Global, Cartesian)`, which retrieves the global index of threads for the two-dimensional array `A`. Such powerful macros are provided by [KernelAbstactions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) for conveniently retrieving the desired index of threads.
+In the example above, we saw the usage of `I = @index(Global, Cartesian)`, which retrieves the global index of threads for the two-dimensional array `A`. Such powerful macros are provided by [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) for conveniently retrieving the desired index of threads.
 
 The following table is non-exhaustive and provides a reference of commonly used terminology. Here, [`KernelAbstractions.@index`](https://juliagpu.github.io/KernelAbstractions.jl/stable/api/#KernelAbstractions.@index) is used for index retrieval, and [`KernelAbstractions.@groupsize`](https://juliagpu.github.io/KernelAbstractions.jl/stable/api/#KernelAbstractions.@groupsize) is used for obtaining the dimensions of blocks of threads.
 
