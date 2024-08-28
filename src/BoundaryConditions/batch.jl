@@ -156,13 +156,16 @@ end
 
 bc!(arch::Architecture, grid::SG, f_bc::Vararg{FieldAndBC}; kwargs...) = bc!(arch, grid, batch(grid, f_bc...; kwargs...))
 
+@inline to_bc_index(::SG, I)    = I .- 1
+@inline to_bc_index(::SG{1}, I) = ()
+
 # batched kernels
 @kernel function bc_kernel!(side::Side, dim::Dim,
                             grid::SG{N},
                             fields::NTuple{K,Field},
                             conditions::NTuple{K,FieldBoundaryCondition}) where {N,K}
     J = @index(Global, NTuple)
-    I = J .- 1
+    I = to_bc_index(grid, J)
     ntuple(Val(K)) do ifield
         Base.@_inline_meta
         @inbounds begin
