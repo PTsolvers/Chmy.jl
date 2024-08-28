@@ -57,7 +57,7 @@ end
 @propagate_inbounds neighbor_index(::Side{2}, ::Dim{D}, I::Vararg{Integer,N}) where {D,N} = ntuple(i -> i == D ? I[i] - 1 : I[i], Val(N))
 
 @add_cartesian function bc!(side::Side, dim::Dim, grid, f, ::Center, bc::Dirichlet, I::Vararg{Integer,N}) where {N}
-    I_f  = insert_dim(dim, I, itp_halo_index(side, dim, f))
+    I_f  = (grid isa StructuredGrid{1}) ? I : insert_dim(dim, I, itp_halo_index(side, dim, f))
     I_f2 = neighbor_index(side, dim, I_f...)
     if grid isa UniformGrid
         t = eltype(f)(2)
