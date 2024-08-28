@@ -51,6 +51,8 @@ Takes a tuple `A` and inserts a new element `i` at position specified by `dim`.
         @inbounds (I < D) ? A[I] : (I == D) ? i : A[I-1]
     end
 
+@inline insert_dim(::Dim{1}, A::NTuple{1}, i) = A
+
 """
     insert_dim(dim::Dim, I::CartesianIndex, i)
 
