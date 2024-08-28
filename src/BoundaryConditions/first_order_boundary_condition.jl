@@ -48,7 +48,7 @@ halo_index(::Side{2}, ::Dim{D}, f::Field) where {D} = lastindex(f, D)
 itp_halo_index(side, dim, f) = halo_index(side, dim, f) + delta_index(side)
 
 @propagate_inbounds function bc!(side::Side, dim::Dim, grid, f, loc::Vertex, bc::Dirichlet, I::Vararg{Integer})
-    I_f = insert_dim(dim, I, halo_index(side, dim, f))
+    I_f = (grid isa StructuredGrid{1}) ? I : insert_dim(dim, I, halo_index(side, dim, f))
     f[I_f...] = value(bc, grid, loc, dim, I_f...)
     return
 end
@@ -74,7 +74,7 @@ flux_sign(q, ::Side{1}) = -q
 flux_sign(q, ::Side{2}) = +q
 
 @add_cartesian function bc!(side::Side, dim::Dim, grid, f, loc::Location, bc::Neumann, I::Vararg{Integer,N}) where {N}
-    I_f       = insert_dim(dim, I, itp_halo_index(side, dim, f))
+    I_f       = (grid isa StructuredGrid{1}) ? I : insert_dim(dim, I, itp_halo_index(side, dim, f))
     I_f2      = neighbor_index(side, dim, I_f...)
     q         = value(bc, grid, flip(loc), dim, I_f...)
     q_s       = flux_sign(q, side)
