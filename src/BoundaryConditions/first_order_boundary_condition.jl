@@ -26,7 +26,7 @@ Dirichlet(value=nothing) = FirstOrderBC{DirichletKind}(value)
 
 Create a `Neumann` object representing the Neumann boundary condition with the specified value.
 """
-Neumann(value=nothing)   = FirstOrderBC{NeumannKind}(value)
+Neumann(value=nothing) = FirstOrderBC{NeumannKind}(value)
 
 Base.show(io::IO, ::Dirichlet{Nothing}) = print(io, "Dirichlet(0)")
 Base.show(io::IO, ::Neumann{Nothing}) = print(io, "Neumann(0)")
