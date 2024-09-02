@@ -1,6 +1,6 @@
 # Chmy.jl
 
-[Chmy.jl](https://github.com/PTsolvers/Chmy.jl) is a backend-agnostic toolkit for finite difference computations on multi-dimensional computational staggered grids. Chmy.jl features task-based distributed memory parallelisation capabilities.
+[Chmy.jl](https://github.com/PTsolvers/Chmy.jl) (pronounce *tsh-mee*) is a backend-agnostic toolkit for finite difference computations on multi-dimensional computational staggered grids. Chmy.jl features task-based distributed memory parallelisation capabilities.
 
 ## Installation
 
