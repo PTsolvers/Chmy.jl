@@ -35,10 +35,6 @@ jobs:
           - windows-latest
         arch:
           - x64
-        include:
-          - os: macos-14
-            arch: "aarch64"
-            version: "1"
         # include:
         #   - version: 'nightly'
         #     os: ubuntu-latest
