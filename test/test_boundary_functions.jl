@@ -10,7 +10,7 @@ using Chmy.BoundaryConditions
         nx, ny = 8, 8
         grid = UniformGrid(arch; origin=(-π, -π), extent=(2π, 2π), dims=(nx, ny))
 
-        @testset "continous" begin
+        @testset "continuous" begin
             @testset "reduced dimensions" begin
                 bf = BoundaryFunction(ξ -> cos(ξ))
                 @test bf(grid, Vertex(), Dim(1), 1, 1) ≈ -1.0

@@ -30,7 +30,7 @@ for backend in backends
                 @test all(field_i[end] .≈ field_i[end-1])
             end
 
-            @testset "non-homogenous Dirichlet" begin
+            @testset "non-homogeneous Dirichlet" begin
                 set!(field, 1)
                 v = 2.0
                 bc!(arch, grid, field => Dirichlet(v))
@@ -39,7 +39,7 @@ for backend in backends
                 @test all(field_i[end] .≈ .-field_i[end-1] .+ 2v)
             end
 
-            @testset "non-homogenous Neumann" begin
+            @testset "non-homogeneous Neumann" begin
                 set!(field, 1)
                 q = 2.0
                 bc!(arch, grid, field => Neumann(q))
@@ -70,7 +70,7 @@ for backend in backends
                 @test all(field_i[end] .≈ field_i[end-1])
             end
 
-            @testset "non-homogenous Dirichlet" begin
+            @testset "non-homogeneous Dirichlet" begin
                 set!(field, 1)
                 v = 2.0
                 bc!(arch, grid, field => Dirichlet(v))
@@ -79,7 +79,7 @@ for backend in backends
                 @test all(field_i[end-1] .≈ v)
             end
 
-            @testset "non-homogenous Neumann" begin
+            @testset "non-homogeneous Neumann" begin
                 set!(field, 1)
                 q = 2.0
                 bc!(arch, grid, field => Neumann(q))
@@ -116,7 +116,7 @@ for backend in backends
                 @test all(field_i[2:end-1, end] .≈ field_i[2:end-1, end-1])
             end
 
-            @testset "non-homogenous Dirichlet" begin
+            @testset "non-homogeneous Dirichlet" begin
                 set!(field, 1)
                 v = 2.0
                 bc!(arch, grid, field => Dirichlet(v))
@@ -128,7 +128,7 @@ for backend in backends
                 @test all(field_i[2:end-1, end-1] .≈ v)
             end
 
-            @testset "non-homogenous Neumann" begin
+            @testset "non-homogeneous Neumann" begin
                 set!(field, 1)
                 q = 2.0
                 bc!(arch, grid, field => Neumann(q))
@@ -174,7 +174,7 @@ for backend in backends
                 @test all(field_i[2:end-1, 2:end-1, end] .≈ field_i[2:end-1, 2:end-1, end-1])
             end
 
-            @testset "non-homogenous Dirichlet" begin
+            @testset "non-homogeneous Dirichlet" begin
                 set!(field, 1)
                 v = 2.0
                 bc!(arch, grid, field => Dirichlet(v))
@@ -189,7 +189,7 @@ for backend in backends
                 @test all(field_i[2:end-1, 2:end-1, end] .≈ .-field_i[2:end-1, 2:end-1, end-1] .+ 2v)
             end
 
-            @testset "non-homogenous Neumann" begin
+            @testset "non-homogeneous Neumann" begin
                 set!(field, 1)
                 q = 2.0
                 bc!(arch, grid, field => Neumann(q))
