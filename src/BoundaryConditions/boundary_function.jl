@@ -43,7 +43,7 @@ end
     bc.value(grid, loc, dim, I...)
 end
 
-# Create a continous or discrete boundary function
+# Create a continuous or discrete boundary function
 # if discrete = true, the function has signature f(grid, loc, dim, inds...)
 # if reduce_dims = false, the boundary condition function accepts the same number of coordinates as the number of indices
 function BoundaryFunction(fun::Function; discrete=false, parameters=nothing, reduce_dims=true)

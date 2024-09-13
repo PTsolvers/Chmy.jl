@@ -115,7 +115,7 @@ has_neighbor(t::CartesianTopology, dim, side) = t.neighbors[dim][side] != MPI.PR
 """
     global_size(topo)
 
-Total number of processes withing the topology.
+Total number of processes within the topology.
 """
 global_size(t::CartesianTopology) = MPI.Comm_size(t.cart_comm)
 

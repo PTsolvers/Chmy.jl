@@ -26,7 +26,7 @@ function exchange_halo!(side::Side{S}, dim::Dim{D},
     reset_allocators!(tle)
     init!(tle, Architectures.get_backend(arch), dim, side, fields)
 
-    # initiate non-blocking MPI recieve and device-to-device copy to the send buffer
+    # initiate non-blocking MPI receive and device-to-device copy to the send buffer
     for idx in eachindex(fields)
         tle.recv_reqs[idx] = MPI.Irecv!(tle.recv_bufs[idx], comm; source=nbrank)
         send_view = get_send_view(Side(S), Dim(D), fields[idx])
@@ -90,7 +90,7 @@ end
                                 grid::StructuredGrid,
                                 batch::ExchangeBatch; kwargs...)
 
-Apply boundary conditions on a distrbuted grid with halo exchange performed internally.
+Apply boundary conditions on a distributed grid with halo exchange performed internally.
 
 # Arguments
 - `side`: The side of the grid where the halo exchange is performed.
