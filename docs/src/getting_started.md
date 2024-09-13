@@ -52,7 +52,8 @@ using Printf, CairoMakie # for I/O and plotting
 In this introductory tutorial, we will use the CPU backend for simplicity:
 
 ```julia
-arch = Arch(CPU())
+backend = CPU()
+arch = Arch(backend)
 ```
 
 If a different backend is desired, one needs to load the relevant package accordingly. For example, if Nvidia or AMD GPUs are available, one can comment out `using CUDA` or `using AMDGPU` and make sure to use `arch = Arch(CUDABackend())` or `arch = Arch(ROCBackend())`, respectively, when selecting the architecture. For further information about executing on a single-device or multi-device architecture, see the documentation section for [Architectures](./concepts/architectures.md)
@@ -128,6 +129,20 @@ set!(C, grid, (_, _) -> rand())
 bc!(arch, grid, C => Neumann(); exchange=C)
 ```
 
+You should get a result like in the following plot.
+
+```julia
+fig = Figure()
+ax  = Axis(fig[1, 1];
+           aspect = DataAspect(),
+           xlabel = "x", ylabel = "y",
+           title = "it = 0")
+plt = heatmap!(ax, centers(grid)..., interior(C) |> Array;
+               colormap = :turbo)
+Colorbar(fig[1, 2], plt)
+display(fig)
+```
+
 ```@raw html
 <div style="text-align: center;">
     <img src="https://raw.githubusercontent.com/PTsolvers/Chmy.jl/main/docs/src/assets/field_set_ic_random.png" width="50%"/>
@@ -149,6 +164,18 @@ end
 ```
 
 After running the simulation, you should see something like this, here the final result at `it = 100` for the field `C` is plotted:
+
+```julia
+fig = Figure()
+ax  = Axis(fig[1, 1];
+           aspect = DataAspect(),
+           xlabel = "x", ylabel = "y",
+           title = "it = 100")
+plt = heatmap!(ax, centers(grid)..., interior(C) |> Array;
+               colormap = :turbo)
+Colorbar(fig[1, 2], plt)
+display(fig)
+```
 
 ```@raw html
 <div style="text-align: center;">
