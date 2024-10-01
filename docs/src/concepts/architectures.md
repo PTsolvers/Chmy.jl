@@ -2,7 +2,7 @@
 
 ## Backend Selection & Architecture Initialization
 
-Chmy.jl supports CPUs, as well as CUDA and ROC backends for Nvidia and AMD GPUs through a thin wrapper around the [`KernelAbstractions.jl`](https://github.com/JuliaGPU/KernelAbstractions.jl) for users to select desirable backends.
+Chmy.jl supports CPUs, as well as CUDA, ROC and Metal backends for Nvidia, AMD and Apple M-serie GPUs through a thin wrapper around the [`KernelAbstractions.jl`](https://github.com/JuliaGPU/KernelAbstractions.jl) for users to select desirable backends.
 
 ```julia
 # Default with CPU
@@ -19,6 +19,12 @@ arch = Arch(CUDABackend())
 using AMDGPU
 
 arch = Arch(ROCBackend())
+```
+
+```julia
+using Metal
+
+arch = Arch(MetalBackend())
 ```
 
 At the beginning of program, one may specify the backend and initialize the architecture they desire to use. The initialized `arch` variable will be required explicitly at creation of some objects such as grids and kernel launchers.
