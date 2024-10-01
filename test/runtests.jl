@@ -67,6 +67,9 @@ _, backend_name = parse_flags!(ARGS, "--backend"; default="CPU", typ=String)
 elseif backend_name == "CUDA"
     Pkg.add("CUDA")
     ENV["JULIA_CHMY_BACKEND"] = "CUDA"
+elseif backend_name == "Metal"
+    Pkg.add("Metal")
+    ENV["JULIA_CHMY_BACKEND"] = "Metal"
 end
 
 exit(runtests())
