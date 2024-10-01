@@ -2,7 +2,7 @@
 
 ## Backend Selection & Architecture Initialization
 
-Chmy.jl supports CPUs, as well as CUDA, ROC and Metal backends for Nvidia, AMD and Apple M-serie GPUs through a thin wrapper around the [`KernelAbstractions.jl`](https://github.com/JuliaGPU/KernelAbstractions.jl) for users to select desirable backends.
+Chmy.jl supports CPUs, as well as CUDA, ROC and Metal backends for Nvidia, AMD and Apple M-series GPUs through a thin wrapper around the [`KernelAbstractions.jl`](https://github.com/JuliaGPU/KernelAbstractions.jl) for users to select desirable backends.
 
 ```julia
 # Default with CPU
