@@ -57,7 +57,7 @@ steps:
     env:
       JULIA_NUM_THREADS: 4
 
-  - label: "Metal Julia {{matrix.julia}}"
+  - label: "Metal Julia {{matrix.version}}"
     matrix:
       setup:
         version:
