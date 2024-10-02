@@ -57,6 +57,7 @@ steps:
     env:
       JULIA_NUM_THREADS: 4
 
+# We cannot sumbit coverage right now for Metal as this would require using a cryptic setup not enabled here.
   - label: "Metal Julia {{matrix.version}}"
     matrix:
       setup:
@@ -67,7 +68,7 @@ steps:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"
       - JuliaCI/julia-coverage#v1:
-          codecov: true
+          codecov: false
     command: |
       julia -e 'println("--- :julia: Instantiating project")
                 using Pkg
@@ -75,7 +76,7 @@ steps:
 
       julia -e 'println("+++ :julia: Running tests")
                 using Pkg
-                Pkg.test("Chmy"; test_args=["--backend=Metal"], coverage=true)'
+                Pkg.test("Chmy"; test_args=["--backend=Metal"], coverage=false)'
     agents:
       queue: "juliaecosystem"
       os: "macos"
