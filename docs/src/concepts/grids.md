@@ -49,7 +49,7 @@ grid   = UniformGrid(arch;
 ```
 
 !!! warning "Metal backend"
-    If using the Metal backend, ensure to initialise the grid using `Float32` (`f0`) values in the `origin` and `extent` tuples.
+    If using the Metal backend, ensure to use `Float32` (`f0`) element types in the `origin` and `extent` tuples when initialising the grid.
 
 !!! info "Interactive Grid Visualization"
     - [grids_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/grids_2d.jl):  Visualization of a 2D `StructuredGrid`
