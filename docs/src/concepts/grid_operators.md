@@ -100,23 +100,23 @@ hlerp(f, to, grid, I...) # implements itp(f, to, HarmonicLinear(), grid, I...)
 In the following example, we use the linear interpolation wrapper `lerp` when interpolating nodal values of the density field `ρ`, defined on cell centres, i.e. having the location `(Center(), Center())` to `ρx` and `ρy`, defined on cell interfaces in the x- and y- direction, respectively.
 
 ```julia
-# define density ρ on pressure nodes
+# define density ρ on cell centres
 ρ   = Field(backend, grid, Center())
 ρ0  = 3.0; set!(ρ, ρ0)
 
-# allocate memory for density on Vx, Vy nodes
-ρvx = Field(backend, grid, (Vertex(), Center()))
-ρvy = Field(backend, grid, (Center(), Vertex()))
+# allocate memory for density on cell interfaces
+ρx = Field(backend, grid, (Vertex(), Center()))
+ρy = Field(backend, grid, (Center(), Vertex()))
 ```
 
 The kernel `interpolate_ρ!` performs the actual interpolation and requires the grid information passed by `g`.
 
 ```julia
-@kernel function interpolate_ρ!(ρ, ρvx, ρvy, g::StructuredGrid, O)
+@kernel function interpolate_ρ!(ρ, ρx, ρy, g::StructuredGrid, O)
     I = @index(Global, Cartesian)
     I = I + O
-    # Interpolate from pressure nodes to Vx, Vy nodes
-    ρvx = lerp(ρ, location(ρvx), g, I)
-    ρvy = lerp(ρ, location(ρvy), g, I)
+    # interpolate from cell centres to cell interfaces
+    ρx = lerp(ρ, location(ρx), g, I)
+    ρy = lerp(ρ, location(ρy), g, I)
 end
 ```
