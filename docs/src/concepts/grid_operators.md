@@ -80,7 +80,7 @@ launch(arch, grid, update_strain_rate! => (ε̇, V, ω, grid))
 
 ## Interpolation
 
-Interpolating physical parameters such as permeability and density between various grid locations is frequently necessary on a staggered grid. Chmy.jl provides an interface `itp` which interpolates the field `f` from its current location to the specified location(s) `to` using the given interpolation rule `r`. The indices specify the position within the grid at location(s) `to`:
+Chmy.jl provides an interface `itp` which interpolates the field `f` from its location to the specified location `to` using the given interpolation rule `r`. The indices specify the position within the grid at location `to`:
 
 ```julia
 itp(f, to, r, grid, I...)
