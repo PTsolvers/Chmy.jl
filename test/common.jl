@@ -3,31 +3,45 @@ using Chmy
 
 using KernelAbstractions
 
-# testing for various floating point arithmetic precisions
-precisions = [Float32, Float64]
+compatible(::Backend, ::DataType) = true
 
-# add KA backends
-backends = KernelAbstractions.Backend[CPU()]
+# number types to test
+TEST_TYPES = [Float32, Float64]
 
-# do not test Float64 on Metal.jl
-skip_Float64 = [false]
+# add backends
+TEST_BACKENDS = []
 
-if get(ENV, "JULIA_CHMY_BACKEND", "") == "AMDGPU"
-    using AMDGPU
-    if AMDGPU.functional()
-        push!(backends, ROCBackend())
-        push!(skip_Float64, false)
-    end
-elseif get(ENV, "JULIA_CHMY_BACKEND", "") == "CUDA"
+if haskey(ENV, "JULIA_CHMY_BACKEND_CPU")
+    push!(TEST_BACKENDS, CPU())
+end
+
+if haskey(ENV, "JULIA_CHMY_BACKEND_CUDA")
     using CUDA
     if CUDA.functional()
-        push!(backends, CUDABackend())
-        push!(skip_Float64, false)
+        push!(TEST_BACKENDS, CUDABackend())
     end
-elseif get(ENV, "JULIA_CHMY_BACKEND", "") == "Metal"
+end
+
+if haskey(ENV, "JULIA_CHMY_BACKEND_AMDGPU")
+    using AMDGPU
+    if AMDGPU.functional()
+        push!(TEST_BACKENDS, ROCBackend())
+    end
+end
+
+if haskey(ENV, "JULIA_CHMY_BACKEND_Metal")
     using Metal
+
+    function compatible(::MetalBackend, T::DataType)
+        try
+            Metal.check_eltype(T)
+            return true
+        catch
+            return false
+        end
+    end
+
     if Metal.functional()
-        push!(backends, MetalBackend())
-        push!(skip_Float64, true)
+        push!(TEST_BACKENDS, MetalBackend())
     end
 end

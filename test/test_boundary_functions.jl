@@ -4,15 +4,15 @@ using Chmy.Architectures
 using Chmy.Grids
 using Chmy.BoundaryConditions
 
-for precis in precisions
+for T in TEST_TYPES
     # deal with tolerances for isapprox
-    tol = precis==Float32 ? 1e-6 : 0
+    tol = T==Float32 ? 1e-6 : 0
 
-    @testset "$(basename(@__FILE__)) (backend: CPU, precis: $precis)" begin
+    @testset "$(basename(@__FILE__)) (backend: CPU, type: $T)" begin
         @testset "boundary functions" begin
             arch = Arch(CPU())
             nx, ny = 8, 8
-            grid = UniformGrid(arch; origin=(precis(-π), precis(-π)), extent=(precis(2π), precis(2π)), dims=(nx, ny))
+            grid = UniformGrid(arch; origin=(T(-π), T(-π)), extent=(T(2π), T(2π)), dims=(nx, ny))
 
             @testset "continuous" begin
                 @testset "reduced dimensions" begin

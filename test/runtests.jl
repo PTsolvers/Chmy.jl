@@ -3,54 +3,58 @@ using Chmy
 
 using Pkg
 
-excludedfiles = ["test_excluded.jl"]
-
 # distributed
 using MPI
 
-function parse_flags!(args, flag; default=nothing, typ=typeof(default))
-    for f in args
-        startswith(f, flag) || continue
+EXCLUDE_TESTS = []
 
-        if f != flag
-            val = split(f, '=')[2]
-            if !(typ ≡ nothing || typ <: AbstractString)
-                @show typ val
-                val = parse(typ, val)
-            end
-        else
-            val = default
-        end
+istest(f) = startswith(f, "test_") && endswith(f, ".jl")
 
-        filter!(x -> x != f, args)
-        return true, val
+function parse_flag(args, flag; default=nothing, type::DataType=Nothing)
+    key = findfirst(arg -> startswith(arg, flag), args)
+
+    if isnothing(key)
+        # flag not found
+        return false, default
+    elseif args[key] == flag
+        # flag found but no value
+        return true, default
     end
-    return false, default
+
+    splitarg = split(args[key], '=')
+
+    if splitarg[1] != flag
+        # argument started with flag but is not the flag
+        return false, default
+    end
+
+    values = strip.(split(splitarg[2], ','))
+
+    if type <: Nothing || type <: AbstractString
+        # common cases, return as strings
+        return true, values
+    elseif !(type <: Number) || !isbitstype(type)
+        error("type must be a bitstype number, got '$type'")
+    end
+
+    return true, parse.(Ref(type), values)
 end
 
 function runtests()
-    testdir   = pwd()
-    istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")
-    testfiles = sort(filter(istest, vcat([joinpath.(root, files) for (root, dirs, files) in walkdir(testdir)]...)))
+    testdir   = @__DIR__
+    testfiles = sort(filter(istest, readdir(testdir)))
 
     nfail = 0
     printstyled("Testing package Chmy.jl\n"; bold=true, color=:white)
 
     for f in testfiles
         println("")
-        if basename(f) ∈ excludedfiles
-            println("Test Skip:")
-            println("$f")
+        if f ∈ EXCLUDE_TESTS
+            @info "Skip test:" f
             continue
         end
         try
-            # if basename(f) ∈ test_distributed
-            #     nprocs = contains(f, "2D") ? nprocs_2D : nprocs_3D
-            #     cmd(n=nprocs) = `$(mpiexec()) -n $n $(Base.julia_cmd()) --startup-file=no --color=yes $(joinpath(testdir, f))`
-            #     run(cmd())
-            # else
-                run(`$(Base.julia_cmd()) --startup-file=no $(joinpath(testdir, f))`)
-            # end
+            run(`$(Base.julia_cmd()) --startup-file=no $(joinpath(testdir, f))`)
         catch ex
             @error ex
             nfail += 1
@@ -59,17 +63,13 @@ function runtests()
     return nfail
 end
 
-_, backend_name = parse_flags!(ARGS, "--backend"; default="CPU", typ=String)
+_, backends = parse_flag(ARGS, "--backends"; default=["CPU"])
 
-@static if backend_name == "AMDGPU"
-    Pkg.add("AMDGPU")
-    ENV["JULIA_CHMY_BACKEND"] = "AMDGPU"
-elseif backend_name == "CUDA"
-    Pkg.add("CUDA")
-    ENV["JULIA_CHMY_BACKEND"] = "CUDA"
-elseif backend_name == "Metal"
-    Pkg.add("Metal")
-    ENV["JULIA_CHMY_BACKEND"] = "Metal"
+for backend in backends
+    if backend != "CPU"
+        Pkg.add(backend)
+    end
+    ENV["JULIA_CHMY_BACKEND_$backend"] = true
 end
 
 exit(runtests())

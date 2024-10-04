@@ -3,8 +3,8 @@ include("common.jl")
 using Chmy.Grids
 using Chmy.Architectures
 
-for precis in precisions
-    @testset "$(basename(@__FILE__)) (backend: CPU, precis: $precis)" begin
+for T in TEST_TYPES
+    @testset "$(basename(@__FILE__)) (backend: CPU, type: $T)" begin
         @testset "common" begin
             @test flip(Center()) == Vertex()
             @test flip(Vertex()) == Center()
@@ -14,11 +14,11 @@ for precis in precisions
             arch = Arch(CPU())
             nx, ny = 5, 20
             @testset "uniform grids" begin
-                grid = UniformGrid(arch; origin=(precis(-1), precis(-2)), extent=(precis(2), precis(4)), dims=(nx, ny))
+                grid = UniformGrid(arch; origin=(T(-1), T(-2)), extent=(T(2), T(4)), dims=(nx, ny))
                 @test grid isa UniformGrid
 
                 @testset "type" begin
-                    @test eltype(grid) == precis
+                    @test eltype(grid) == T
                 end
 
                 # connectivity
