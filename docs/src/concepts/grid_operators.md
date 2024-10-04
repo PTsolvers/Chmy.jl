@@ -86,7 +86,7 @@ Chmy.jl provides an interface `itp` which interpolates the field `f` from its lo
 itp(f, to, r, grid, I...)
 ```
 
-Available interpolation rules consist of:
+Currently implemented interpolation rules are:
 - `Linear()` which implements `rule(t, v0, v1) = v0 + t * (v1 - v0)`;
 - `HarmonicLinear()` which implements `rule(t, v0, v1) = 1/(1/v0 + t * (1/v1 - 1/v0))`.
 
