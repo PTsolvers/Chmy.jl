@@ -49,7 +49,7 @@ In the following example, we first define a mask `ω` on the 2D `StructuredGrid`
 r = 2.0
 init_inclusion = (x,y) -> ifelse(x^2 + y^2 < r^2, 1.0, 0.0)
 
-# mask all other entries other than the initial inclusion 
+# mask all other entries other than the initial inclusion
 set!(ω.vc, grid, init_inclusion)
 set!(ω.cv, grid, init_inclusion)
 ```
@@ -80,28 +80,43 @@ launch(arch, grid, update_strain_rate! => (ε̇, V, ω, grid))
 
 ## Interpolation
 
-Interpolating physical parameters such as permeability and density between various grid locations is frequently necessary on a staggered grid. Chmy.jl provides functions for performing interpolations of field values between different locations.
-
-In the following example, we specify to use the linear interpolation rule `lerp` when interpolating nodal values of the density field `ρ`, defined on pressure nodes (with location `(Center(), Center())`) to `ρvx` and `ρvy`, defined on Vx and Vy nodes respectively.
+Chmy.jl provides an interface `itp` which interpolates the field `f` from its location to the specified location `to` using the given interpolation rule `r`. The indices specify the position within the grid at location `to`:
 
 ```julia
-# define density ρ on pressure nodes
+itp(f, to, r, grid, I...)
+```
+
+Currently implemented interpolation rules are:
+- `Linear()` which implements `rule(t, v0, v1) = v0 + t * (v1 - v0)`;
+- `HarmonicLinear()` which implements `rule(t, v0, v1) = 1/(1/v0 + t * (1/v1 - 1/v0))`.
+
+Both rules are exposed as convenience wrapper functions `lerp` and `hlerp`, using `Linear()` and `HarmonicLinear()` rules, respectively:
+
+```julia
+lerp(f, to, grid, I...)  # implements itp(f, to, Linear(), grid, I...)
+hlerp(f, to, grid, I...) # implements itp(f, to, HarmonicLinear(), grid, I...)
+```
+
+In the following example, we use the linear interpolation wrapper `lerp` when interpolating nodal values of the density field `ρ`, defined on cell centres, i.e. having the location `(Center(), Center())` to `ρx` and `ρy`, defined on cell interfaces in the x- and y- direction, respectively.
+
+```julia
+# define density ρ on cell centres
 ρ   = Field(backend, grid, Center())
 ρ0  = 3.0; set!(ρ, ρ0)
 
-# allocate memory for density on Vx, Vy nodes
-ρvx = Field(backend, grid, (Vertex(), Center()))
-ρvy = Field(backend, grid, (Center(), Vertex()))
+# allocate memory for density on cell interfaces
+ρx = Field(backend, grid, (Vertex(), Center()))
+ρy = Field(backend, grid, (Center(), Vertex()))
 ```
 
-The kernel `interpolate_ρ!` performs the actual interpolation of nodal values and requires the grid information passed by `g`.
+The kernel `interpolate_ρ!` performs the actual interpolation and requires the grid information passed by `g`.
 
 ```julia
-@kernel function interpolate_ρ!(ρ, ρvx, ρvy, g::StructuredGrid, O)
+@kernel function interpolate_ρ!(ρ, ρx, ρy, g::StructuredGrid, O)
     I = @index(Global, Cartesian)
     I = I + O
-    # Interpolate from pressure nodes to Vx, Vy nodes
-    ρvx = lerp(ρ, location(ρvx), g, I)
-    ρvy = lerp(ρ, location(ρvy), g, I)
+    # interpolate from cell centres to cell interfaces
+    ρx = lerp(ρ, location(ρx), g, I)
+    ρy = lerp(ρ, location(ρy), g, I)
 end
 ```
