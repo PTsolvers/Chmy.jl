@@ -18,7 +18,7 @@ steps:
 
       julia -e 'println("+++ :julia: Running tests")
                 using Pkg
-                Pkg.test("Chmy"; test_args=["--backend=CUDA"], coverage=true)'
+                Pkg.test("Chmy"; test_args=["--backends=CUDA"], coverage=true)'
     agents:
       queue: "juliagpu"
       cuda: "*"
@@ -46,7 +46,7 @@ steps:
 
       julia -e 'println("+++ :julia: Running tests")
                 using Pkg
-                Pkg.test("Chmy"; test_args=["--backend=AMDGPU"], coverage=true)'
+                Pkg.test("Chmy"; test_args=["--backends=AMDGPU"], coverage=true)'
     agents:
       queue: "juliagpu"
       rocm: "*"
@@ -76,7 +76,7 @@ steps:
 
       julia -e 'println("+++ :julia: Running tests")
                 using Pkg
-                Pkg.test("Chmy"; test_args=["--backend=Metal"], coverage=false)'
+                Pkg.test("Chmy"; test_args=["--backends=Metal"], coverage=false)'
     agents:
       queue: "juliaecosystem"
       os: "macos"
