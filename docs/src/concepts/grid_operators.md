@@ -97,7 +97,7 @@ lerp(f, to, grid, I...)  # implements itp(f, to, Linear(), grid, I...)
 hlerp(f, to, grid, I...) # implements itp(f, to, HarmonicLinear(), grid, I...)
 ```
 
-In the following example, we specify to use the linear interpolation rule `lerp` when interpolating nodal values of the density field `ρ`, defined on pressure nodes with location `(Center(), Center())` to `ρvx` and `ρvy`, defined on Vx and Vy nodes, respectively.
+In the following example, we use the linear interpolation wrapper `lerp` when interpolating nodal values of the density field `ρ`, defined on cell centres, i.e. having the location `(Center(), Center())` to `ρx` and `ρy`, defined on cell interfaces in the x- and y- direction, respectively.
 
 ```julia
 # define density ρ on pressure nodes
