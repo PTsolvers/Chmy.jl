@@ -5,13 +5,17 @@ using Chmy.Fields
 using Chmy.Grids
 using Chmy.BoundaryConditions
 
-for backend in backends
-    @testset "$(basename(@__FILE__)) (backend: $backend)" begin
+for backend in TEST_BACKENDS, T in TEST_TYPES
+    if !compatible(backend, T)
+        continue
+    end
+
+    @testset "$(basename(@__FILE__)) (backend: $backend, type: $T)" begin
         arch = Arch(backend)
 
         @testset "1D Cartesian Center()" begin
             nx = 8
-            grid = UniformGrid(arch; origin=(-π,), extent=(2π,), dims=(nx,))
+            grid = UniformGrid(arch; origin=(T(-π),), extent=(T(2π),), dims=(nx,))
             field = Field(arch, grid, Center())
 
             @testset "default Dirichlet" begin
@@ -32,7 +36,7 @@ for backend in backends
 
             @testset "non-homogeneous Dirichlet" begin
                 set!(field, 1)
-                v = 2.0
+                v = T(2.0)
                 bc!(arch, grid, field => Dirichlet(v))
                 field_i = interior(field; with_halo=true) |> Array
                 @test all(field_i[1] .≈ .-field_i[2] .+ 2v)
@@ -41,7 +45,7 @@ for backend in backends
 
             @testset "non-homogeneous Neumann" begin
                 set!(field, 1)
-                q = 2.0
+                q = T(2.0)
                 bc!(arch, grid, field => Neumann(q))
                 field_i = interior(field; with_halo=true) |> Array
                 @test all((field_i[2] .- field_i[1]) ./ Δx(grid, Vertex(), 1) .≈ q)
@@ -51,7 +55,7 @@ for backend in backends
 
         @testset "1D Cartesian Vertex()" begin
             nx = 8
-            grid = UniformGrid(arch; origin=(-π,), extent=(2π,), dims=(nx,))
+            grid = UniformGrid(arch; origin=(T(-π),), extent=(T(2π),), dims=(nx,))
             field = Field(arch, grid, Vertex())
 
             @testset "default Dirichlet" begin
@@ -72,7 +76,7 @@ for backend in backends
 
             @testset "non-homogeneous Dirichlet" begin
                 set!(field, 1)
-                v = 2.0
+                v = T(2.0)
                 bc!(arch, grid, field => Dirichlet(v))
                 field_i = interior(field; with_halo=true) |> Array
                 @test all(field_i[2] .≈ v)
@@ -81,7 +85,7 @@ for backend in backends
 
             @testset "non-homogeneous Neumann" begin
                 set!(field, 1)
-                q = 2.0
+                q = T(2.0)
                 bc!(arch, grid, field => Neumann(q))
                 field_i = interior(field; with_halo=true) |> Array
                 @test all((field_i[2] .- field_i[1]) ./ Δx(grid, Center(), 0) .≈ q)
@@ -91,7 +95,7 @@ for backend in backends
 
         @testset "2D Cartesian" begin
             nx, ny = 8, 8
-            grid = UniformGrid(arch; origin=(-π, -π), extent=(2π, 2π), dims=(nx, ny))
+            grid = UniformGrid(arch; origin=(T(-π), T(-π)), extent=(T(2π), T(2π)), dims=(nx, ny))
             field = Field(arch, grid, (Center(), Vertex()))
 
             @testset "default Dirichlet" begin
@@ -118,7 +122,7 @@ for backend in backends
 
             @testset "non-homogeneous Dirichlet" begin
                 set!(field, 1)
-                v = 2.0
+                v = T(2.0)
                 bc!(arch, grid, field => Dirichlet(v))
                 field_i = interior(field; with_halo=true) |> Array
                 @test all(field_i[1, 2:end-1] .≈ .-field_i[2, 2:end-1] .+ 2v)
@@ -130,7 +134,7 @@ for backend in backends
 
             @testset "non-homogeneous Neumann" begin
                 set!(field, 1)
-                q = 2.0
+                q = T(2.0)
                 bc!(arch, grid, field => Neumann(q))
                 field_i = interior(field; with_halo=true) |> Array
                 @test all((field_i[2, 2:end-1] .- field_i[1, 2:end-1]) ./ Δx(grid, Vertex(), 1, 1) .≈ q)
@@ -143,7 +147,7 @@ for backend in backends
 
         @testset "3D Cartesian" begin
             nx, ny, nz = 8, 8, 6
-            grid = UniformGrid(arch; origin=(-π, -π, -π), extent=(2π, 2π, 2π), dims=(nx, ny, nz))
+            grid = UniformGrid(arch; origin=(T(-π), T(-π), T(-π)), extent=(T(2π), T(2π), T(2π)), dims=(nx, ny, nz))
             field = Field(arch, grid, (Center(), Vertex(), Center()))
 
             @testset "default Dirichlet" begin
@@ -176,7 +180,7 @@ for backend in backends
 
             @testset "non-homogeneous Dirichlet" begin
                 set!(field, 1)
-                v = 2.0
+                v = T(2.0)
                 bc!(arch, grid, field => Dirichlet(v))
                 field_i = interior(field; with_halo=true) |> Array
                 @test all(field_i[1, 2:end-1, 2:end-1] .≈ .-field_i[2, 2:end-1, 2:end-1] .+ 2v)
@@ -191,7 +195,7 @@ for backend in backends
 
             @testset "non-homogeneous Neumann" begin
                 set!(field, 1)
-                q = 2.0
+                q = T(2.0)
                 bc!(arch, grid, field => Neumann(q))
                 field_i = interior(field; with_halo=true) |> Array
                 @test all((field_i[2, 2:end-1, 2:end-1] .- field_i[1, 2:end-1, 2:end-1]) ./ Δx(grid, Vertex(), 1, 1, 1) .≈ q)

@@ -3,13 +3,45 @@ using Chmy
 
 using KernelAbstractions
 
-# add KA backends
-backends = KernelAbstractions.Backend[CPU()]
+compatible(::Backend, ::DataType) = true
 
-if get(ENV, "JULIA_CHMY_BACKEND", "") == "AMDGPU"
-    using AMDGPU
-    AMDGPU.functional() && push!(backends, ROCBackend())
-elseif get(ENV, "JULIA_CHMY_BACKEND", "") == "CUDA"
+# number types to test
+TEST_TYPES = [Float32, Float64]
+
+# add backends
+TEST_BACKENDS = []
+
+if haskey(ENV, "JULIA_CHMY_BACKEND_CPU")
+    push!(TEST_BACKENDS, CPU())
+end
+
+if haskey(ENV, "JULIA_CHMY_BACKEND_CUDA")
     using CUDA
-    CUDA.functional() && push!(backends, CUDABackend())
+    if CUDA.functional()
+        push!(TEST_BACKENDS, CUDABackend())
+    end
+end
+
+if haskey(ENV, "JULIA_CHMY_BACKEND_AMDGPU")
+    using AMDGPU
+    if AMDGPU.functional()
+        push!(TEST_BACKENDS, ROCBackend())
+    end
+end
+
+if haskey(ENV, "JULIA_CHMY_BACKEND_Metal")
+    using Metal
+
+    function compatible(::MetalBackend, T::DataType)
+        try
+            Metal.check_eltype(T)
+            return true
+        catch
+            return false
+        end
+    end
+
+    if Metal.functional()
+        push!(TEST_BACKENDS, MetalBackend())
+    end
 end

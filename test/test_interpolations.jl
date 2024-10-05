@@ -9,10 +9,14 @@ using Chmy.Architectures
 @views avx(A) = 0.5 .* (A[1:end-1, :] .+ A[2:end, :])
 @views avy(A) = 0.5 .* (A[:, 1:end-1] .+ A[:, 2:end])
 
-for backend in backends
-    @testset "$(basename(@__FILE__)) (backend: $backend)" begin
+for backend in TEST_BACKENDS, T in TEST_TYPES
+    if !compatible(backend, T)
+        continue
+    end
+
+    @testset "$(basename(@__FILE__)) (backend: $backend, type: $T)" begin
         arch = Arch(backend)
-        grid = UniformGrid(arch; origin=(0, 0), extent=(1, 1), dims=(2, 2))
+        grid = UniformGrid(arch; origin=(T(0.0), T(0.0)), extent=(T(1.0), T(1.0)), dims=(2, 2))
         @testset "center" begin
             f_c = Field(arch, grid, Center())
             src = reshape(1:4, size(grid, Center())) |> collect

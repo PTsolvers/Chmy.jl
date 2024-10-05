@@ -47,6 +47,7 @@ using KernelAbstractions # for backend-agnostic kernels
 using Printf, CairoMakie # for I/O and plotting
 # using CUDA
 # using AMDGPU
+# using Metal
 ```
 
 In this introductory tutorial, we will use the CPU backend for simplicity:
@@ -56,7 +57,10 @@ backend = CPU()
 arch = Arch(backend)
 ```
 
-If a different backend is desired, one needs to load the relevant package accordingly. For example, if Nvidia or AMD GPUs are available, one can comment out `using CUDA` or `using AMDGPU` and make sure to use `arch = Arch(CUDABackend())` or `arch = Arch(ROCBackend())`, respectively, when selecting the architecture. For further information about executing on a single-device or multi-device architecture, see the documentation section for [Architectures](./concepts/architectures.md)
+If a different backend is desired, one needs to load the relevant package accordingly. For example, if Nvidia or AMD GPUs are available, one can comment out `using CUDA`, `using AMDGPU` or `using Metal` and make sure to use `arch = Arch(CUDABackend())`, `arch = Arch(ROCBackend())` or `arch = Arch(MetalBackend())`, respectively, when selecting the architecture. For further information about executing on a single-device or multi-device architecture, see the documentation section for [Architectures](./concepts/architectures.md).
+
+!!! warning "Metal backend"
+    Metal backend restricts floating point arithmetic precision of computations to `Float32` or lower. In Chmy, this can be achieved by initialising the grid object using `Float32` (`f0`) elements in the `origin` and `extent` tuples.
 
 ## Writing & Launch Compute Kernels
 

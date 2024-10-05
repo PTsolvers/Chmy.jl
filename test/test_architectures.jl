@@ -2,7 +2,7 @@ include("common.jl")
 
 using Chmy.Architectures
 
-for backend in backends
+for backend in TEST_BACKENDS
     @testset "$(basename(@__FILE__)) (backend: $backend)" begin
         device = get_device(backend, 1)
         arch = SingleDeviceArchitecture(backend, device)
