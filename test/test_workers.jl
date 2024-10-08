@@ -1,6 +1,5 @@
 include("common.jl")
 
-
 @testset "$(basename(@__FILE__)) (backend: CPU)" begin
     @testset "workers" begin
         @testset "setup" begin

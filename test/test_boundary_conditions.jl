@@ -1,7 +1,5 @@
 include("common.jl")
 
-using Chmy.Grids
-
 for backend in TEST_BACKENDS, T in TEST_TYPES
     if !compatible(backend, T)
         continue

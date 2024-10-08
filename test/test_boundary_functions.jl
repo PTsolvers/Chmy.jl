@@ -1,7 +1,5 @@
 include("common.jl")
 
-using Chmy.Grids
-
 for T in TEST_TYPES
     # deal with tolerances for isapprox
     tol = T==Float32 ? 1e-6 : 0

@@ -31,8 +31,38 @@ export
     divg,
     
     # Grids
+    Location, Center, Vertex, flip,
+    Connectivity, Bounded, Connected, Periodic, Flat,
+    AbstractAxis, UniformAxis, FunctionAxis,
+    StructuredGrid, UniformGrid,
+    nvertices, ncenters, spacing, inv_spacing, Δ, iΔ, volume, inv_volume,
+    coord, coords, center, vertex, centers, vertices,
+    origin, extent, bounds, axis,
+    direction, axes_names, expand_loc,
+    connectivity,
+
+    Δx, Δy, Δz,
+    xcoord, ycoord, zcoord,
+    xcoords, ycoords, zcoords,
+    xvertex, yvertex, zvertex,
+    xcenter, ycenter, zcenter,
+    xvertices, yvertices, zvertices,
+    xcenters, ycenters, zcenters,
 
     # GridOperators
+    left, right, δ, ∂,
+    InterpolationRule, Linear, HarmonicLinear,
+    itp, lerp, hlerp,
+    divg, vmag,
+    AbstractMask, FieldMask, FieldMask1D, FieldMask2D, FieldMask3D, at,
+
+    leftx, rightx, δx, ∂x,
+    lefty, righty, δy, ∂y,
+    leftz, rightz, δz, ∂z,
+
+    leftx_masked, rightx_masked, δx_masked, ∂x_masked,
+    lefty_masked, righty_masked, δy_masked, ∂y_masked,
+    leftz_masked, rightz_masked, δz_masked, ∂z_masked,
 
     # KernelLaunch
     Launcher,
@@ -63,6 +93,7 @@ using .Distributed
 using .DoubleBuffers
 using .Fields
 using .Grids
+using .GridOperators
 using .KernelLaunch
 using .Workers
 
