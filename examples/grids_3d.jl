@@ -1,4 +1,4 @@
-using Chmy.Grids, Chmy.Architectures
+using Chmy
 using KernelAbstractions
 using GLMakie
 

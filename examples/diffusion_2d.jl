@@ -1,4 +1,4 @@
-using Chmy, Chmy.Grids, Chmy.GridOperators
+using Chmy
 using KernelAbstractions
 using Printf
 using CairoMakie

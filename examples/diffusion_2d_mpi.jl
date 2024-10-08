@@ -1,4 +1,4 @@
-using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
+using Chmy
 using KernelAbstractions
 using Printf
 # using CairoMakie
@@ -8,7 +8,6 @@ using Printf
 # using CUDA
 # CUDA.allowscalar(false)
 
-using Chmy.Distributed
 using MPI
 MPI.Init()
 

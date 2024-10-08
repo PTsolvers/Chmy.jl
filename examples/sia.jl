@@ -1,4 +1,4 @@
-using Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators
+using Chmy
 using KernelAbstractions
 
 using Printf

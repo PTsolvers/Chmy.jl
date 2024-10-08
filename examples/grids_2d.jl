@@ -1,4 +1,4 @@
-using Chmy.Grids
+using Chmy
 using GLMakie
 
 import .Iterators: product, flatten
