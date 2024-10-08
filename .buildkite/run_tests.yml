@@ -6,7 +6,6 @@ steps:
           - "1.9"
           - "1.10"
           - "1.11"
-          - "pre"
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"
@@ -35,7 +34,6 @@ steps:
         version:
           - "1.10"
           - "1.11"
-          - "pre"
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"
@@ -66,7 +64,6 @@ steps:
         version:
           - "1.10"
           - "1.11"
-          - "pre"
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"
