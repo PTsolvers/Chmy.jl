@@ -1,9 +1,6 @@
 include("common.jl")
 
-using Chmy.Architectures
-using Chmy.Fields
 using Chmy.Grids
-using Chmy.BoundaryConditions
 
 for backend in TEST_BACKENDS, T in TEST_TYPES
     if !compatible(backend, T)

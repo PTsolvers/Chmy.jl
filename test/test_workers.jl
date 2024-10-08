@@ -1,6 +1,5 @@
 include("common.jl")
 
-using Chmy.Workers
 
 @testset "$(basename(@__FILE__)) (backend: CPU)" begin
     @testset "workers" begin

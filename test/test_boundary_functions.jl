@@ -1,8 +1,6 @@
 include("common.jl")
 
-using Chmy.Architectures
 using Chmy.Grids
-using Chmy.BoundaryConditions
 
 for T in TEST_TYPES
     # deal with tolerances for isapprox

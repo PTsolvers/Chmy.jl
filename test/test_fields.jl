@@ -1,7 +1,5 @@
 include("common.jl")
 
-using Chmy.Architectures
-using Chmy.Fields
 using Chmy.Grids
 
 using LinearAlgebra

@@ -1,7 +1,6 @@
 include("common.jl")
 
 using Chmy.Grids
-using Chmy.Architectures
 
 for T in TEST_TYPES
     @testset "$(basename(@__FILE__)) (backend: CPU, type: $T)" begin
