@@ -42,7 +42,7 @@ where $\frac{\partial C}{\partial \boldsymbol{n}}$ is the derivative of `C` norm
 As the first step, we need to load the main module and any necessary submodules of [Chmy.jl](https://github.com/PTsolvers/Chmy.jl). Moreover, we use [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) for writing backend-agnostic kernels that are compatible with Chmy.jl.
 
 ```julia
-using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
+using Chmy
 using KernelAbstractions # for backend-agnostic kernels
 using Printf, CairoMakie # for I/O and plotting
 # using CUDA
