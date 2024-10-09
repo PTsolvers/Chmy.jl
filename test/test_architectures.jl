@@ -1,7 +1,5 @@
 include("common.jl")
 
-using Chmy.Architectures
-
 for backend in TEST_BACKENDS
     @testset "$(basename(@__FILE__)) (backend: $backend)" begin
         device = get_device(backend, 1)
@@ -19,9 +17,9 @@ for backend in TEST_BACKENDS
         end
         # Test for functionality of methods
         @testset "Method functionalities" begin
-            @test Architectures.get_backend(arch) == backend
-            @test Architectures.get_device(arch) == device
-            @test Architectures.set_device!(arch.device) == device
+            @test get_backend(arch) == backend
+            @test get_device(arch) == device
+            @test set_device!(arch.device) == device
         end
     end
 end

@@ -53,7 +53,7 @@ end
 
 Get the backend associated with a SingleDeviceArchitecture.
 """
-get_backend(arch::SingleDeviceArchitecture) = arch.backend
+KernelAbstractions.get_backend(arch::SingleDeviceArchitecture) = arch.backend
 
 """
     get_device(arch::SingleDeviceArchitecture)
