@@ -21,7 +21,8 @@ makedocs(
                         "concepts/fields.md",
                         "concepts/bc.md",
                         "concepts/grid_operators.md",
-                        "concepts/kernels.md"
+                        "concepts/kernels.md",
+                        "concepts/distributed.md"
         ],
         "Examples" => Any["examples/overview.md"
         ],

@@ -51,4 +51,4 @@ using MPI
 arch = Arch(CPU(), MPI.COMM_WORLD, (0, 0, 0))
 ```
 
-Passing zeros as the last argument will automatically spread the dimensions to be as close as possible to each other, see [MPI.jl documentation](https://juliaparallel.org/MPI.jl/stable/reference/topology/#MPI.Dims_create) for details.
+Passing zeros as the last argument will automatically spread the dimensions to be as close as possible to each other, see [MPI.jl documentation](https://juliaparallel.org/MPI.jl/stable/reference/topology/#MPI.Dims_create) for details. For distributed usage of Chmy.jl see [Distributed](./distributed.md)
