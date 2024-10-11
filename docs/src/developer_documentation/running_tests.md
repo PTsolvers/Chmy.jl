@@ -11,7 +11,7 @@ julia> Pkg.test("Chmy")
 
 ## GPU tests
 
-To run the Chmy test suite on CUDA or ROC backend (Nvidia or AMD GPUs), respectively, run the tests using `Pkg` adding following `test_args`:
+To run the Chmy test suite on CUDA, ROC or Metal backend (Nvidia, AMD or Apple GPUs), respectively, run the tests using `Pkg` adding following `test_args`:
 
 ### For CUDA backend (Nvidia GPUs):
 
@@ -27,4 +27,12 @@ julia> Pkg.test("Chmy"; test_args=["--backend=CUDA"])
 julia> using Pkg
 
 julia> Pkg.test("Chmy"; test_args=["--backend=AMDGPU"])
+```
+
+### For Metal backend (Apple GPUs):
+
+```julia-repl
+julia> using Pkg
+
+julia> Pkg.test("Chmy"; test_args=["--backends=Metal"])
 ```
