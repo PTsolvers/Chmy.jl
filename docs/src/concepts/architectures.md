@@ -27,7 +27,7 @@ using Metal
 arch = Arch(MetalBackend())
 ```
 
-At the beginning of program, one may specify the backend and initialize the architecture they desire to use. The initialized `arch` variable will be required explicitly at creation of some objects such as grids and kernel launchers.
+At the beginning of program, one may specify the backend and initialise the architecture they desire to use. The initialised `arch` variable will be required explicitly at creation of some objects such as grids and kernel launchers.
 
 ## Specifying the device ID and stream priority
 
