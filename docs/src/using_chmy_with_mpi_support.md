@@ -29,7 +29,7 @@ MPI.Init()
 To make the `Architecture` object aware of MPI topology, the user can pass an MPI communicator object and dimensions of the Cartesian topology to the `Arch` constructor. Passing zeros as the last argument will automatically spread the dimensions to be as close as possible to each other, see [MPI.jl documentation](https://juliaparallel.org/MPI.jl/stable/reference/topology/#MPI.Dims_create) for details.
 
 ```julia
-arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0))
+arch = Arch(backend, MPI.COMM_WORLD, (0, 0))
 topo = topology(arch)
 me   = global_rank(topo)
 ```
