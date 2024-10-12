@@ -2,7 +2,7 @@
 
 **Task-based parallelism** in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) is featured by the usage of [`Threads.@spawn`](https://docs.julialang.org/en/v1/base/multi-threading/#Base.Threads.@spawn), with an additional layer of a [Worker](../developer_documentation/workers.md) construct for efficiently managing the lifespan of tasks. Note that the task-based parallelism provides a high-level abstraction of program execution **not only** for **shared-memory architecture** on a single machine, but it can be also extended to **hybrid parallelism**, consisting of both shared and distributed-memory parallelism. The `Distributed` module in Chmy.jl allows users to leverage the hybrid parallelism through the power of abstraction.
 
-We will start with some basic background knowledge for understanding the architecture of modern HPC clusters, the underlying memory model and the programming paradgm complied with it.
+We will start with some basic background knowledge for understanding the architecture of modern HPC clusters, the underlying memory model and the programming paradigm complied with it.
 
 ## HPC Cluster & Distributed Memory
 
@@ -26,14 +26,3 @@ Expanding upon our understanding of message passing in HPC clusters, we now turn
 
 !!! warning "GPU-Aware MPI Required for Distributed Module on GPU backend"
     The `Distributed` module currently only supports [GPU-aware MPI](https://juliaparallel.org/MPI.jl/stable/usage/#CUDA-aware-MPI-support) when a GPU backend is selected for multi-GPU computations. For the `Distributed` module to function properly, any GPU-aware MPI library installation shall be used. Otherwise, a segmentation fault will occur.
-
-
-To make the `Architecture` object aware of MPI topology, user can pass an MPI communicator object and dimensions of the Cartesian topology to the `Arch` constructor:
-
-```julia
-using MPI
-
-arch = Arch(CPU(), MPI.COMM_WORLD, (0, 0, 0))
-```
-
-Passing zeros as the last argument will automatically spread the dimensions to be as close as possible to each other, see [MPI.jl documentation](https://juliaparallel.org/MPI.jl/stable/reference/topology/#MPI.Dims_create) for details.
