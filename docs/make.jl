@@ -16,7 +16,7 @@ makedocs(
     pages = Any[
         "Home" => "index.md",
         "Getting Started with Chmy.jl" => "getting_started.md",
-        "Using Chmy.jl with MPI Support" => "using_chmy_with_mpi_support.md",
+        "Using Chmy.jl with MPI" => "using_chmy_with_mpi.md",
         "Concepts" => Any["concepts/architectures.md",
                         "concepts/grids.md",
                         "concepts/fields.md",
