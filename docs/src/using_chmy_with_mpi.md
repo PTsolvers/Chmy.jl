@@ -1,4 +1,4 @@
-# Using Chmy.jl with MPI Support
+# Using Chmy.jl with MPI
 
 In this tutorial, we dive into the `Distributed` module in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) and learn how to run our code on multiple processes in a typical HPC cluster setup. We start from the [diffusion_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d.jl) code from the tutorial section [Getting Started with Chmy.jl](./getting_started.md).
 
@@ -125,6 +125,13 @@ At the very end of the program, we need to call `MPI.Finalize()` to clean up the
 
 ```julia
 MPI.Finalize()
+```
+
+## Run the simulation on an MPI-parallel machine
+If you want to run this on multiple processes, you will need to setup the [MPI.jl](https://juliaparallel.org/MPI.jl) package, such that `mpiexecjl` is created on the command line. You can than run it on 4 MPI ranks (processes) with:
+
+```sh
+mpiexecjl -n 4 --project=. julia diffusion_2d_mpi.jl
 ```
 
 !!! note "MPI finalisation"
