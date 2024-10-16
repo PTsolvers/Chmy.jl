@@ -16,12 +16,14 @@ makedocs(
     pages = Any[
         "Home" => "index.md",
         "Getting Started with Chmy.jl" => "getting_started.md",
+        "Using Chmy.jl with MPI" => "using_chmy_with_mpi.md",
         "Concepts" => Any["concepts/architectures.md",
                         "concepts/grids.md",
                         "concepts/fields.md",
                         "concepts/bc.md",
                         "concepts/grid_operators.md",
-                        "concepts/kernels.md"
+                        "concepts/kernels.md",
+                        "concepts/distributed.md"
         ],
         "Examples" => Any["examples/overview.md"
         ],

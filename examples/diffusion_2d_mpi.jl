@@ -1,7 +1,7 @@
 using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
 using KernelAbstractions
 using Printf
-# using CairoMakie
+using CairoMakie
 
 # using AMDGPU
 # AMDGPU.allowscalar(false)
