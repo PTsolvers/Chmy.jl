@@ -6,7 +6,8 @@ We will start with some basic background knowledge for understanding the archite
 
 ## HPC Cluster & Distributed Memory
 
-An **high-performance computing (HPC)** cluster consists of a **network** of independent computers combined into a system through specialised hardware. We call each computer a *node*, and each node manages its own private memory. Such system with interconnected nodes, without having access to memory of any other node, features the **distributed memory model**. The underlying fast interconnect architecture (e.g. *InfiniBand*) that physically connects the nodes in the **network** can transfer the data from one node to another in an extremely efficient manner.
+An **high-performance computing (HPC)** cluster is a collection of many separate **servers (computers)**, called *nodes*, which are connected via a fast interconnect.
+Each node manages its own private memory. Such system with interconnected nodes, without having access to memory of any other node, features the **distributed memory model**. The underlying fast interconnect (e.g. *InfiniBand*), that physically connects the nodes in the **network** via specialised hardware, can transfer the data from one node to another in an extremely efficient manner.
 
 ```@raw html
 <center>
@@ -14,7 +15,7 @@ An **high-performance computing (HPC)** cluster consists of a **network** of ind
 </center>
 ```
 
-By using the fast interconnection, processes across different nodes can communicate with each other through the exchange of messages in a high-throughput, low-latency fashion. The syntax and semantics of how **message passing** should proceed through such network is defined by a standard called the **Message-Passing Interface (MPI)**, and there are different libraries that implement the standard, resulting in a wide range of choice (MPICH, Open MPI, MVAPICH etc.) for users. [MPI.jl](https://github.com/JuliaParallel/MPI.jl) package provides a high-level API for Julia users to call library routines of an implementation of user's choice.
+By using the fast interconnect, processes across different nodes can communicate with each other through the exchange of messages in a high-throughput, low-latency fashion. The syntax and semantics of how **message passing** should proceed through such network is defined by a standard called the **Message-Passing Interface (MPI)**, and there are different libraries that implement the standard, resulting in a wide range of choice (MPICH, Open MPI, MVAPICH etc.) for users. [MPI.jl](https://github.com/JuliaParallel/MPI.jl) package provides a high-level API for Julia users to call library routines of an implementation of user's choice.
 
 
 !!! info "Message-Passing Interface (MPI) is a General Specification"
