@@ -11,7 +11,7 @@ Each node manages its own private memory. Such system with interconnected nodes,
 
 ```@raw html
 <center>
-    <img src="../assets/compute_cluster.jpg" width="35%"/>
+    <img src="https://raw.githubusercontent.com/PTsolvers/Chmy.jl/main/docs/src/assets/compute_cluster.jpg" width="35%"/>
 </center>
 ```
 
