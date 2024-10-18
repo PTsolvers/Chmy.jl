@@ -1,4 +1,4 @@
-using Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.Distributed
+using Chmy
 
 using KernelAbstractions
 using AMDGPU

@@ -1,10 +1,5 @@
 include("common.jl")
 
-using Chmy.Grids
-using Chmy.GridOperators
-using Chmy.Fields
-using Chmy.Architectures
-
 @views av4(A) = 0.25 .* (A[1:end-1, 1:end-1] .+ A[2:end, 1:end-1] .+ A[2:end, 2:end] .+ A[1:end-1, 2:end])
 @views avx(A) = 0.5 .* (A[1:end-1, :] .+ A[2:end, :])
 @views avy(A) = 0.5 .* (A[:, 1:end-1] .+ A[:, 2:end])
