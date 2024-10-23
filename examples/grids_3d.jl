@@ -1,4 +1,4 @@
-using Chmy.Grids, Chmy.Architectures
+using Chmy
 using KernelAbstractions
 using GLMakie
 
@@ -45,9 +45,9 @@ linesegments!(ax, xedges; linewidth=1.5, color=:gray)
 linesegments!(ax, yedges; linewidth=1.5, color=:gray)
 linesegments!(ax, zedges; linewidth=1.5, color=:gray)
 
-scatter!(ax, xface; marker=:hline, markersize=15, label=L"v_x", rotations=0)
-scatter!(ax, yface; marker=:hline, markersize=15, label=L"v_y", rotations=0)
-scatter!(ax, zface; marker=:vline, markersize=15, label=L"v_z", rotations=0)
+scatter!(ax, xface; marker=:hline, markersize=15, label=L"v_x", rotation=0)
+scatter!(ax, yface; marker=:hline, markersize=15, label=L"v_y", rotation=0)
+scatter!(ax, zface; marker=:vline, markersize=15, label=L"v_z", rotation=0)
 scatter!(ax, cells; marker=:xcross, markersize=10, label=L"\sigma_{xx}\,,~\sigma_{yy}\,,~\sigma_{zz}")
 scatter!(ax, xyedge; marker=:circle, markersize=10, label=L"\tau_{xy}")
 scatter!(ax, xzedge; marker=:circle, markersize=10, label=L"\tau_{xz}")

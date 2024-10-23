@@ -1,4 +1,4 @@
-using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
+using Chmy
 using KernelAbstractions
 using Printf
 using CairoMakie
