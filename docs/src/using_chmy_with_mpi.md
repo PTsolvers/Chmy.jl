@@ -128,7 +128,7 @@ MPI.Finalize()
 ```
 
 !!! note "MPI finalisation"
-    Running a Julia MPI code on a single process within the REPL (for e.g. development purpose) will require to terminate the Julia session upon MPI finalisation. Simply omitting `MPI.Finalize` will allow for repeated execution of the code.
+    Running a Julia MPI code on a single process within the REPL (for e.g. development purpose) will require to terminate the Julia session upon MPI finalisation. Simply omitting `MPI.Finalize()` will allow for repeated execution of the code.
 
 ## Run the simulation on an MPI-parallel machine
 If you want to run this on multiple MPI processes, you will need to setup the [MPI.jl](https://juliaparallel.org/MPI.jl) package, such that `mpiexecjl` is created on the command line. You can then run it on, e.g., 4 MPI ranks (processes) with:
