@@ -3,13 +3,13 @@ module Chmy
 using MacroTools
 using KernelAbstractions
 
-export 
+export
     # utils
     Dim, Side, Left, Right, remove_dim, insert_dim, Offset,
 
     # Architectures
-    Architecture, SingleDeviceArchitecture, Arch, get_backend, get_device, activate!, set_device!, heuristic_groupsize, pointertype,
-    
+    Architecture, SingleDeviceArchitecture, Arch, get_backend, get_device, activate!, set_device!, heuristic_groupsize, pointertype, disable_task_sync!,
+
     # BoundaryConditions
     FieldBoundaryCondition, FirstOrderBC, Dirichlet, Neumann, bc!,
     BoundaryFunction,
@@ -29,7 +29,7 @@ export
     AbstractField, Field, VectorField, TensorField, ConstantField, ZeroField, OneField, ValueField, FunctionField,
     location, halo, interior, set!,
     divg,
-    
+
     # Grids
     Location, Center, Vertex, flip,
     Connectivity, Bounded, Connected, Periodic, Flat,
