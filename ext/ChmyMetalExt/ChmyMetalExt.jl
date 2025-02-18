@@ -2,7 +2,7 @@ module ChmyMetalExt
 
 using Metal, KernelAbstractions
 
-import Chmy.Architectures: heuristic_groupsize, set_device!, get_device, pointertype
+import Chmy.Architectures: heuristic_groupsize, set_device!, get_device, pointertype, disable_task_sync!
 
 Base.unsafe_wrap(::MetalBackend, ptr::Metal.MtlPtr, dims) = unsafe_wrap(MtlArray, ptr, dims)
 
