@@ -1,9 +1,9 @@
 # Using Chmy.jl with MPI
 
-This tutorial dives into the `Distributed` module in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) To show how to run a code on multiple processes in a typical HPC cluster setup. We start from the [diffusion_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d.jl) code from the [Getting Started with Chmy.jl](./getting_started.md) section.
+This tutorial dives into the `Distributed` module in [Chmy.jl](https://github.com/PTsolvers/Chmy.jl) To show how to run a code on multiple processes in a typical HPC cluster setup. We start from the [diffusion_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d.jl) code from the [Getting Started with Chmy.jl](./introduction.md) section.
 
 !!! warning "Experience with HPC Clusters Assumed"
-    In this tutorial, we assume users to be familiar with HPC clusters and the basic concepts of distributed computing. If you find anything conceptually difficult to start with, have a look at the concept documentation on the [Distributed](./concepts/distributed.md) module.
+    In this tutorial, we assume users to be familiar with HPC clusters and the basic concepts of distributed computing. If you find anything conceptually difficult to start with, have a look at the concept documentation on the [Distributed](../concepts/distributed.md) module.
 
 We need to make the following changes to our code to enable MPI support, in which we:
 

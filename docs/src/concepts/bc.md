@@ -26,7 +26,7 @@ Note that the syntax shown in the table above is a **fused expression** of both 
 !!! warning "$\partial \Omega$ Refers to the Entire Domain Boundary!"
     By specifying `field` to a single boundary condition, we impose the boundary condition on the entire domain boundary by default. See the section for "Mixed Boundary Conditions" below for specifying different BC on different parts of the domain boundary.
 
-Alternatively, one could also define the boundary conditions beforehand using `batch()` provided the `grid` information as well as the `field` variable. This way the boundary condition to be prescibed is **precomputed**.
+Alternatively, one could also define the boundary conditions beforehand using `batch()` provided the `grid` information as well as the `field` variable. This way the boundary condition to be prescribed is **precomputed**.
 
 ```julia
 # pre-compute batch
@@ -40,7 +40,7 @@ In the script [batcher.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/exampl
 
 When using `launch` to specify the execution of a kernel (more see section [Kernels](./kernels.md)), one can pass the specified boundary condition(s) as an optional parameter using `batch`, provided the grid information of the discretized space. This way we can gain efficiency from making good use of already cached values.
 
-In the 2D diffusion example as introduced in the tutorial ["Getting Started with Chmy.jl"](../getting_started.md), we need to update the temperature field `C` at k-th iteration using the values of heat flux `q` and physical time step size `Δt` from (k-1)-th iteration. When launching the kernel `update_C!` with `launch`, we simultaneously launch the kernel for the BC update using:
+In the 2D diffusion example as introduced in the tutorial ["Getting Started with Chmy.jl"](../getting_started/introduction.md), we need to update the temperature field `C` at k-th iteration using the values of heat flux `q` and physical time step size `Δt` from (k-1)-th iteration. When launching the kernel `update_C!` with `launch`, we simultaneously launch the kernel for the BC update using:
 
 ```julia
 launch(arch, grid, update_C! => (C, q, Δt, grid); bc=batch(grid, C => Neumann(); exchange=C))

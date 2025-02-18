@@ -10,7 +10,7 @@ hero:
   actions:
     - theme: brand
       text: Getting Started
-      link: /getting_started
+      link: /getting_started/introduction
     - theme: alt
       text: API Reference 📚
       link: /lib/modules
@@ -35,12 +35,12 @@ features:
   - icon: 🛠️
     title: Framework
     details: Fields, boundary conditions and interpolation operators on structured grids.
-    link: /concepts/distributed
+    link: /getting_started/introduction
 
   - icon: 🧩
     title: Extensibility
     details: Written in pure Julia, adding new functions, simplification rules, and model transformations has no barrier.
-    link: /getting_started
+    link: /concepts/kernels
 ---
 ```
 

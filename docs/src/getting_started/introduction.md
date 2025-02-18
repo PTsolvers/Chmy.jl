@@ -28,7 +28,7 @@ Introducing the diffusion flux $q$, we can rewrite equation `(1)` as a system of
 
 ### Boundary Conditions
 
-Generally, partial differential equations (PDEs) require initial or [boundary conditions](./concepts/bc.md) to ensure a unique and stable solution. For the field `C`, a Neumann boundary condition is given by:
+Generally, partial differential equations (PDEs) require initial or [boundary conditions](../concepts/bc.md) to ensure a unique and stable solution. For the field `C`, a Neumann boundary condition is given by:
 
 ```math
 \begin{equation}
@@ -57,7 +57,7 @@ backend = CPU()
 arch = Arch(backend)
 ```
 
-If a different backend is desired, one needs to load the relevant package accordingly. For example, if Nvidia or AMD GPUs are available, one can comment out `using CUDA`, `using AMDGPU` or `using Metal` and make sure to use `arch = Arch(CUDABackend())`, `arch = Arch(ROCBackend())` or `arch = Arch(MetalBackend())`, respectively, when selecting the architecture. For further information about executing on a single-device or multi-device architecture, see the documentation section for [Architectures](./concepts/architectures.md).
+If a different backend is desired, one needs to load the relevant package accordingly. For example, if Nvidia or AMD GPUs are available, one can comment out `using CUDA`, `using AMDGPU` or `using Metal` and make sure to use `arch = Arch(CUDABackend())`, `arch = Arch(ROCBackend())` or `arch = Arch(MetalBackend())`, respectively, when selecting the architecture. For further information about executing on a single-device or multi-device architecture, see the documentation section for [Architectures](../concepts/architectures.md).
 
 !!! warning "Metal backend"
     Metal backend restricts floating point arithmetic precision of computations to `Float32` or lower. In Chmy, this can be achieved by initialising the grid object using `Float32` (`f0`) elements in the `origin` and `extent` tuples.
@@ -117,7 +117,7 @@ launch = Launcher(arch, grid)
 Δt = minimum(spacing(grid))^2 / χ / ndims(grid) / 2.1
 ```
 
-In the 2D problem only three physical fields, the field `C` and the diffusion flux `q` in `x`- and `y`-dimension are evolving with time. We define these fields on different locations on the staggered grid (more see [Grids](./concepts/grids.md)).
+In the 2D problem only three physical fields, the field `C` and the diffusion flux `q` in `x`- and `y`-dimension are evolving with time. We define these fields on different locations on the staggered grid (more see [Grids](../concepts/grids.md)).
 
 ```julia
 # allocate fields
@@ -125,7 +125,7 @@ C = Field(backend, grid, Center())
 q = VectorField(backend, grid)
 ```
 
-We randomly initialized the entries of `C` field and finished the initial model setup. One can refer to the section [Fields](./concepts/fields.md) for setting up more complex initial conditions.
+We randomly initialized the entries of `C` field and finished the initial model setup. One can refer to the section [Fields](../concepts/fields.md) for setting up more complex initial conditions.
 
 ```julia
 # initial conditions
