@@ -1,6 +1,9 @@
 docs/build/
 docs/site/
 
+package-lock.json
+node_modules
+
 Manifest.toml
 LocalPreferences.toml
 
