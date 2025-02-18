@@ -8,7 +8,7 @@ Base.unsafe_wrap(::ROCBackend, ptr::Ptr, dims) = unsafe_wrap(ROCArray, ptr, dims
 
 pointertype(::ROCBackend, T::DataType) = Ptr{T}
 
-disable_task_sync!(::ROCBackend, array::ROCArray) = array
+disable_task_sync!(::ROCBackend, array) = array
 
 set_device!(dev::HIPDevice) = AMDGPU.device!(dev)
 
