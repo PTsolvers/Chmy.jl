@@ -27,7 +27,7 @@ arch = Arch(backend)
 ```julia [Apple GPUs]
 using Metal
 backend = MetalBackend()
-arch = Arch()
+arch = Arch(backend)
 ```
 
 :::
