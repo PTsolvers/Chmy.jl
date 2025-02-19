@@ -50,7 +50,7 @@ features:
 
 ## How to Install Chmy.jl?
 
-To install Chmy, one can simply add it using the Julia package manager by running the following command in the Julia REPL:
+To install Chmy.jl, one can simply add it using the Julia package manager by running the following command in the Julia REPL:
 
 ```julia-repl
 julia> using Pkg
@@ -84,7 +84,7 @@ backend = CPU()
 arch = Arch(backend)
 ```
 
-```julia [NVIDIA GPUs]
+```julia [Nvidia GPUs]
 using Chmy
 using KernelAbstractions
 using CUDA
@@ -112,4 +112,4 @@ arch = Arch(backend)
 
 ## Funding
 
-The development of this package is supported by the [GPU4GEO](https://pasc-ch.org/projects/2021-2024/gpu4geo/index.html) and [∂GPU4GEO]() PASC projects. More information about the GPU4GEO project can be found on the [GPU4GEO website](https://ptsolvers.github.io/GPU4GEO/).
+The development of this package is supported by the [GPU4GEO](https://pasc-ch.org/projects/2021-2024/gpu4geo/index.html) and ∂GPU4GEO PASC projects. More information about the GPU4GEO project can be found on the [GPU4GEO website](https://ptsolvers.github.io/GPU4GEO/).
