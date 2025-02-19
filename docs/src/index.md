@@ -50,7 +50,7 @@ features:
 
 ## How to Install Chmy.jl?
 
-To install Chmy, one can simply add it using the Julia package manager by running the following command in the Julia REPL:
+To install Chmy.jl, one can simply add it using the Julia package manager by running the following command in the Julia REPL:
 
 ```julia-repl
 julia> using Pkg
@@ -84,7 +84,7 @@ backend = CPU()
 arch = Arch(backend)
 ```
 
-```julia [NVIDIA GPUs]
+```julia [Nvidia GPUs]
 using Chmy
 using KernelAbstractions
 using CUDA
