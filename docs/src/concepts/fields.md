@@ -132,7 +132,7 @@ onefield = Chmy.OneField{Float64}()
 
 Notably, these two fields shall equal to each other as expected.
 
-```julia-repl
+```julia
 julia> field == onefield
 true
 ```

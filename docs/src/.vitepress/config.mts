@@ -77,95 +77,10 @@ export default defineConfig({
     },
     nav: [
       { text: "Home", link: "/" },
-      { text: "Getting Started",
-        items: [
-          { text: "Introduction", link: "/getting_started/introduction" },
-          { text: "Chmy.jl with MPI", link: "/getting_started/using_chmy_with_mpi" },
-        ],
-      },
-      { text: "Concepts",
-        items: [
-          {text: "Architecture", link: "/concepts/architectures"},
-          {text: "Grids", link: "/concepts/grids"},
-          {text: "Fields", link: "/concepts/fields"},
-          {text: "Boundary Conditions", link: "/concepts/bc"},
-          {text: "Grid Operators", link: "/concepts/grid_operators"},
-          {text: "Kernels", link: "/concepts/kernels"},
-          {text: "Distributed", link: "/concepts/distributed"},
-        ],
-      },
-      { text: "Examples",
-        items: [
-          { text: "Examples Overview", link: "/examples/overview" },
-        ],
-      },
-      { text: "Library",
-        items: [
-          { text: "Modules", link: "/lib/modules" },
-        ],
-      },
-      { text: "Developer Doc",
-        items: [
-          { text: "Running Tests", link: "/developer_doc/running_tests" },
-          { text: "Workers", link: "/developer_doc/workers" },
-        ],
-      },
+      { text: "Documentation", link: "/getting_started/introduction" },
+      { text: "API", link: "/lib/modules" },
     ],
-    sidebar: {
-      "/getting_started/": [
-        {
-          text: "Getting Started",
-          collapsed: false,
-          items: [
-            { text: "Introduction", link: "/getting_started/introduction" },
-            { text: "Chmy.jl with MPI", link: "/getting_started/using_chmy_with_mpi" },
-          ]
-        }
-      ],
-      "/concepts/": [
-        {
-          text: "Concepts",
-          collapsed: false,
-          items: [
-            {text: "Architecture", link: "/concepts/architectures"},
-            {text: "Grids", link: "/concepts/grids"},
-            {text: "Fields", link: "/concepts/fields"},
-            {text: "Boundary Conditions", link: "/concepts/bc"},
-            {text: "Grid Operators", link: "/concepts/grid_operators"},
-            {text: "Kernels", link: "/concepts/kernels"},
-            {text: "Distributed", link: "/concepts/distributed"},
-         ]
-        }
-      ],
-      "/examples/": [
-        {
-          text: "Examples",
-          collapsed: false,
-          items: [
-            { text: "Examples Overview", link: "/examples/overview" },
-          ]
-        }
-      ],
-      "/lib/": [
-        {
-          text: "Library",
-          collapsed: false,
-          items: [
-            { text: "Modules", link: "/lib/modules" },
-          ]
-        }
-      ],
-      "/developer_doc/": [
-        {
-          text: "Developer Doc",
-          collapsed: false,
-          items: [
-            { text: "Running Tests", link: "/developer_doc/running_tests" },
-            { text: "Workers", link: "/developer_doc/workers" },
-          ]
-        }
-      ],
-    },
+    sidebar: 'REPLACE_ME_DOCUMENTER_VITEPRESS',
     editLink: 'REPLACE_ME_DOCUMENTER_VITEPRESS',
     socialLinks: [
       { icon: 'github', link: 'REPLACE_ME_DOCUMENTER_VITEPRESS' },
