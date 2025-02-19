@@ -3,8 +3,9 @@ Chmy = "33a72cf0-4690-46d7-b987-06506c2248b9"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DocumenterVitepress = "4710194d-e776-4893-9690-8d956a29c365"
 
-[sources]
-Chmy = {path = ".."}
+[sources.Chmy]
+path = ".."
 
 [compat]
+Chmy = "0.1"
 Documenter = "1"
