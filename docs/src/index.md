@@ -52,7 +52,7 @@ features:
 
 To install Chmy.jl, one can simply add it using the Julia package manager by running the following command in the Julia REPL:
 
-```julia-repl
+```julia
 julia> using Pkg
 
 julia> Pkg.add("Chmy")
@@ -60,13 +60,13 @@ julia> Pkg.add("Chmy")
 
 After the package is installed, one can load the package by using:
 
-```julia-repl
+```julia
 julia> using Chmy
 ```
 
 If you want to use the latest unreleased version of Chmy.jl, you can run the following command:
 
-```julia-repl
+```julia
 julia> using Pkg
 
 julia> Pkg.add(url="https://github.com/PTsolvers/Chmy.jl")
