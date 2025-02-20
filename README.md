@@ -13,4 +13,4 @@ Chmy.jl (pronounce *tsh-mee*) provides a backend-agnostic toolkit for finite dif
 Checkout the [documentation](https://PTsolvers.github.io/Chmy.jl/dev) for API reference and usage.
 
 ## Funding
-The development of this package is supported by the [GPU4GEO](https://ptsolvers.github.io/GPU4GEO/) [PASC](https://www.pasc-ch.org) project.
+The development of this package is supported by the [GPU4GEO](https://GPU4GEO.org) [PASC](https://www.pasc-ch.org) project.
