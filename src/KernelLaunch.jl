@@ -32,7 +32,7 @@ Constructs a `Launcher` object configured based on the input parameters.
 
 !!! warning
 
-    worksize for the last dimension N takes into account only last outer width 
+    worksize for the last dimension N takes into account only last outer width
     W[N], N-1 uses W[N] and W[N-1], N-2 uses W[N], W[N-1], and W[N-2].
 """
 function Launcher(arch, grid; outer_width=nothing)
@@ -135,19 +135,28 @@ import KernelAbstractions.NDIteration.StaticSize
         fun(args..., offset)
         bc!(arch, grid, bc)
     else
-        inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
-        inner_fun(args..., offset + Offset(inner_offset(launcher)...))
-
         N = ndims(grid)
+
         ntuple(Val(N)) do J
             Base.@_inline_meta
             D = N - J + 1
             outer_fun = kernel(backend, groupsize, StaticSize(outer_worksize(launcher, Dim(D))))
             ntuple(Val(2)) do S
+                outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(S))...))
+                bc!(Side(S), Dim(D), arch, grid, bc[D][S]) # TODO: need a way to filter only the `bc::FieldBatch` here
+                KernelAbstractions.synchronize(backend)
+            end
+        end
+
+        inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
+        inner_fun(args..., offset + Offset(inner_offset(launcher)...))
+
+        ntuple(Val(N)) do J
+            Base.@_inline_meta
+            D = N - J + 1
+            ntuple(Val(2)) do S
                 put!(launcher.workers[D][S]) do
-                    outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(S))...))
-                    bc!(Side(S), Dim(D), arch, grid, bc[D][S])
-                    KernelAbstractions.synchronize(backend)
+                    exchange_halo!(Side(S), Dim(D), arch, grid, bc[D][S]) # TODO: need a way to filter only the `bc::ExchangeBatch` here
                 end
             end
             wait(launcher.workers[D][1])
