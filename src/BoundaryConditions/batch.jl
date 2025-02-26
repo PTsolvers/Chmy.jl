@@ -36,6 +36,7 @@ EmptyBatch represents no boundary conditions.
 struct EmptyBatch <: AbstractBatch end
 
 bc!(::Side, ::Dim, ::Architecture, ::SG, ::EmptyBatch) = nothing
+bc!(::Side, ::Dim, ::Architecture, ::SG, ::EmptyBatch, workers) = nothing
 
 """
     FieldBatch <: AbstractBatch

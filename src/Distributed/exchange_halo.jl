@@ -108,3 +108,12 @@ function BoundaryConditions.bc!(side::Side,
     end
     return
 end
+
+function BoundaryConditions.bc!(side::Side,
+                                dim::Dim,
+                                arch::DistributedArchitecture,
+                                grid::StructuredGrid,
+                                batch::ExchangeBatch)
+    exchange_halo!(side, dim, arch, grid, batch.fields...)
+    return
+end

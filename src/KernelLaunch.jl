@@ -144,15 +144,13 @@ import KernelAbstractions.NDIteration.StaticSize
                 KernelAbstractions.synchronize(backend)
                 bc!(Side(S), Dim(D), arch, grid, bc[D][S], launcher.workers[D][S])
             end
+            wait(launcher.workers[D][1])
+            wait(launcher.workers[D][2])
         end
 
         inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
         inner_fun(args..., offset + Offset(inner_offset(launcher)...))
-
-        ntuple(Val(N)) do D
-            wait(launcher.workers[D][1])
-            wait(launcher.workers[D][2])
-        end
+        KernelAbstractions.synchronize(backend)
     end
     return
 end
