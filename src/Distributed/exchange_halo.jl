@@ -82,7 +82,8 @@ function exchange_halo!(arch::DistributedArchitecture, grid::StructuredGrid{N}, 
 end
 
 """
-    BoundaryConditions.bc!(side::Side, dim::Dim,
+    BoundaryConditions.bc!(side::Side,
+                           dim::Dim,
                            arch::DistributedArchitecture,
                            grid::StructuredGrid,
                            batch::ExchangeBatch)
@@ -96,7 +97,8 @@ Apply boundary conditions on a distributed grid with halo exchange performed int
 - `grid`: The structured grid on which the halo exchange is performed.
 - `batch`: The batch set to apply boundary conditions to.
 """
-function BoundaryConditions.bc!(side::Side, dim::Dim,
+function BoundaryConditions.bc!(side::Side,
+                                dim::Dim,
                                 arch::DistributedArchitecture,
                                 grid::StructuredGrid,
                                 batch::ExchangeBatch,
