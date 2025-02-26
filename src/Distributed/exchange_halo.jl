@@ -1,5 +1,5 @@
 """
-    exchange_halo!(side::Side, dim::Dim, arch, grid, fields...; async=false)
+    exchange_halo!(side::Side, dim::Dim, arch, grid, fields...)
 
 Perform halo exchange communication between neighboring processes in a distributed architecture.
 
@@ -9,14 +9,11 @@ Perform halo exchange communication between neighboring processes in a distribut
 - `arch`: The distributed architecture used for communication.
 - `grid`: The structured grid on which the halo exchange is performed.
 - `fields...`: The fields to be exchanged.
-
-# Optional Arguments
-- `async=false`: Whether to perform the halo exchange asynchronously.
 """
 function exchange_halo!(side::Side{S}, dim::Dim{D},
                         arch::DistributedArchitecture,
                         ::StructuredGrid,
-                        fields::Vararg{Field,K}; async=false) where {S,D,K}
+                        fields::Vararg{Field,K}) where {S,D,K}
     comm = cart_comm(topology(arch))
     nbrank = neighbor(topology(arch), D, S)
     @assert nbrank != MPI.PROC_NULL "no neighbor to communicate"
@@ -56,7 +53,7 @@ function exchange_halo!(side::Side{S}, dim::Dim{D},
         yield()
     end
 
-    async || KernelAbstractions.synchronize(Architectures.get_backend(arch))
+    KernelAbstractions.synchronize(Architectures.get_backend(arch))
 
     return
 end
@@ -86,9 +83,9 @@ end
 
 """
     BoundaryConditions.bc!(side::Side, dim::Dim,
-                                arch::DistributedArchitecture,
-                                grid::StructuredGrid,
-                                batch::ExchangeBatch; kwargs...)
+                           arch::DistributedArchitecture,
+                           grid::StructuredGrid,
+                           batch::ExchangeBatch)
 
 Apply boundary conditions on a distributed grid with halo exchange performed internally.
 
@@ -99,11 +96,13 @@ Apply boundary conditions on a distributed grid with halo exchange performed int
 - `grid`: The structured grid on which the halo exchange is performed.
 - `batch`: The batch set to apply boundary conditions to.
 """
-function BoundaryConditions.bc!(side::Side, 
-                                dim::Dim,
+function BoundaryConditions.bc!(side::Side, dim::Dim,
                                 arch::DistributedArchitecture,
                                 grid::StructuredGrid,
-                                batch::ExchangeBatch; kwargs...)
-    exchange_halo!(side, dim, arch, grid, batch.fields...; kwargs...)
+                                batch::ExchangeBatch,
+                                workers)
+    put!(workers) do
+        exchange_halo!(side, dim, arch, grid, batch.fields...)
+    end
     return
 end

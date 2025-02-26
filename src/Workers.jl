@@ -28,7 +28,7 @@ mutable struct Worker{T}
             isnothing(setup) || invokelatest(setup)
             try
                 for work in src
-                    invokelatest(work)
+                    isnothing(work) || invokelatest(work)
                     notify(out)
                 end
             finally

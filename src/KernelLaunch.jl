@@ -85,7 +85,7 @@ Base.@assume_effects :foldable function outer_offset(launcher::Launcher, ::Dim{D
 end
 
 """
-    (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,Args}; bc=nothing, async=false) where {F,Args}
+    (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,Args}; bc=nothing) where {F,Args}
 
 Launches a computational kernel using the specified `arch`, `grid`, `kernel_and_args`, and optional boundary conditions (`bc`).
 
@@ -94,14 +94,13 @@ Launches a computational kernel using the specified `arch`, `grid`, `kernel_and_
 - `grid`: The grid defining the computational domain.
 - `kernel_and_args::Pair{F,Args}`: A pair consisting of the computational kernel `F` and its arguments `Args`.
 - `bc=nothing`: Optional boundary conditions for the computation.
-- `async=false`: If `true`, launches the kernel asynchronously.
 
 !!! warning
     - `arch` should be compatible with the `Launcher`'s architecture.
     - If `bc` is `nothing`, the kernel is launched without boundary conditions.
-    - If `async` is `false` (default), the function waits for the computation to complete before returning.
+    - The function waits for the computation to complete before returning.
 """
-function (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,Args}; bc=nothing, async=false) where {F,Args}
+function (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,Args}; bc=nothing) where {F,Args}
     kernel, args = kernel_and_args
 
     backend = Architectures.get_backend(arch)
@@ -113,7 +112,7 @@ function (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,
         launch_with_bc(arch, grid, launcher, offset, kernel, bc, args...)
     end
 
-    async || KernelAbstractions.synchronize(backend)
+    KernelAbstractions.synchronize(backend)
     return
 end
 
@@ -136,29 +135,21 @@ import KernelAbstractions.NDIteration.StaticSize
         bc!(arch, grid, bc)
     else
         N = ndims(grid)
-
         ntuple(Val(N)) do J
             Base.@_inline_meta
             D = N - J + 1
             outer_fun = kernel(backend, groupsize, StaticSize(outer_worksize(launcher, Dim(D))))
             ntuple(Val(2)) do S
                 outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(S))...))
-                bc!(Side(S), Dim(D), arch, grid, bc[D][S]) # TODO: need a way to filter only the `bc::FieldBatch` here
                 KernelAbstractions.synchronize(backend)
+                bc!(Side(S), Dim(D), arch, grid, bc[D][S], launcher.workers[D][S])
             end
         end
 
         inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
         inner_fun(args..., offset + Offset(inner_offset(launcher)...))
 
-        ntuple(Val(N)) do J
-            Base.@_inline_meta
-            D = N - J + 1
-            ntuple(Val(2)) do S
-                put!(launcher.workers[D][S]) do
-                    exchange_halo!(Side(S), Dim(D), arch, grid, bc[D][S]) # TODO: need a way to filter only the `bc::ExchangeBatch` here
-                end
-            end
+        ntuple(Val(N)) do D
             wait(launcher.workers[D][1])
             wait(launcher.workers[D][2])
         end
