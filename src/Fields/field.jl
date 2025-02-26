@@ -128,7 +128,7 @@ end
     dst[I...] = fun(grid, loc, I..., args...)
 end
 
-function set!(f::Field{T,N}, grid::StructuredGrid{N}, fun::F; discrete=false, parameters=(), async=false) where {T,F,N}
+function set!(f::Field{T,N}, grid::StructuredGrid{N}, fun::F; discrete=false, parameters=()) where {T,F,N}
     loc = location(f)
     dst = interior(f)
     backend = KernelAbstractions.get_backend(dst)
@@ -137,7 +137,7 @@ function set!(f::Field{T,N}, grid::StructuredGrid{N}, fun::F; discrete=false, pa
     else
         _set_continuous!(backend, 256, size(dst))(dst, grid, loc, fun, parameters...)
     end
-    async || KernelAbstractions.synchronize(backend)
+    KernelAbstractions.synchronize(backend)
     return
 end
 
