@@ -102,7 +102,7 @@ function BoundaryConditions.bc!(side::Side,
                                 grid::StructuredGrid,
                                 batch::ExchangeBatch,
                                 launcher)
-    # exchange_halo!(side, dim, arch, grid, batch.fields...; kwargs...)
+    # exchange_halo!(side, dim, arch, grid, batch.fields...)
     D = typeof(dim).parameters[1]
     S = typeof(side).parameters[1]
     KernelAbstractions.synchronize(Architectures.get_backend(arch))
@@ -111,5 +111,14 @@ function BoundaryConditions.bc!(side::Side,
             exchange_halo!(side, dim, arch, grid, batch.fields...)
         end
     end
+    return
+end
+
+function BoundaryConditions.bc!(side::Side,
+                                dim::Dim,
+                                arch::DistributedArchitecture,
+                                grid::StructuredGrid,
+                                batch::ExchangeBatch)
+    exchange_halo!(side, dim, arch, grid, batch.fields...)
     return
 end
