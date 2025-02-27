@@ -183,6 +183,17 @@ function bc!(side::Side, dim::Dim, arch::Architecture, grid::SG, batch::FieldBat
     return
 end
 
+function bc!(side::Side, dim::Dim, arch::Architecture, grid::SG, batch::FieldBatch, launcher)
+    D = typeof(dim).parameters[1]
+    S = typeof(side).parameters[1]
+    put!(launcher.workers[D][S]) do
+        nothing
+    end
+    bc!(side, dim, arch, grid, batch)
+    return
+end
+
+
 # merging batches and batch sets
 Base.merge(b1::FieldBatch, b2::FieldBatch) = FieldBatch((b1.fields..., b2.fields...), (b1.conditions..., b2.conditions...))
 Base.merge(b1::FieldBatch, b2::EmptyBatch) = b1
