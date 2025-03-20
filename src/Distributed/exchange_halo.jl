@@ -18,6 +18,10 @@ function exchange_halo!(side::Side{S}, dim::Dim{D},
     nbrank = neighbor(topology(arch), D, S)
     @assert nbrank != MPI.PROC_NULL "no neighbor to communicate"
 
+    # for idx in eachindex(fields)
+    #     disable_task_sync!(Architectures.get_backend(arch), fields[idx].data)
+    # end
+
     tle = task_local_exchanger()
 
     reset_allocators!(tle)
@@ -26,8 +30,8 @@ function exchange_halo!(side::Side{S}, dim::Dim{D},
     # initiate non-blocking MPI receive and device-to-device copy to the send buffer
     for idx in eachindex(fields)
         tle.recv_reqs[idx] = MPI.Irecv!(tle.recv_bufs[idx], comm; source=nbrank)
-        send_view = get_send_view(Side(S), Dim(D), fields[idx])
-        copyto!(tle.send_bufs[idx], send_view)
+        # send_view = get_send_view(Side(S), Dim(D), fields[idx])
+        # copyto!(tle.send_bufs[idx], send_view)
     end
     KernelAbstractions.synchronize(Architectures.get_backend(arch))
 
@@ -44,8 +48,8 @@ function exchange_halo!(side::Side{S}, dim::Dim{D},
     while !(all(recv_ready) && all(send_ready))
         for idx in eachindex(fields)
             if MPI.Test(tle.recv_reqs[idx]) && !recv_ready[idx]
-                recv_view = get_recv_view(Side(S), Dim(D), fields[idx])
-                copyto!(recv_view, tle.recv_bufs[idx])
+                # recv_view = get_recv_view(Side(S), Dim(D), fields[idx])
+                # copyto!(recv_view, tle.recv_bufs[idx])
                 recv_ready[idx] = true
             end
             send_ready[idx] = MPI.Test(tle.send_reqs[idx])
@@ -54,6 +58,10 @@ function exchange_halo!(side::Side{S}, dim::Dim{D},
     end
 
     KernelAbstractions.synchronize(Architectures.get_backend(arch))
+
+    # for idx in eachindex(fields)
+    #     enable_task_sync!(Architectures.get_backend(arch), fields[idx].data)
+    # end
 
     return
 end
@@ -105,10 +113,11 @@ function BoundaryConditions.bc!(side::Side,
     # exchange_halo!(side, dim, arch, grid, batch.fields...)
     D = typeof(dim).parameters[1]
     S = typeof(side).parameters[1]
-    KernelAbstractions.synchronize(Architectures.get_backend(arch))
+    # KernelAbstractions.synchronize(Architectures.get_backend(arch))
     put!(launcher.workers[end]) do
         put!(launcher.workers[D][S]) do
-            exchange_halo!(side, dim, arch, grid, batch.fields...)
+            nothing
+            # exchange_halo!(side, dim, arch, grid, batch.fields...)
         end
     end
     return
