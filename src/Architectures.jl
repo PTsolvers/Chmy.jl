@@ -1,7 +1,7 @@
 module Architectures
 
 export Architecture, SingleDeviceArchitecture
-export Arch, get_backend, get_device, activate!, set_device!, heuristic_groupsize, pointertype
+export Arch, get_backend, get_device, activate!, set_device!, heuristic_groupsize, pointertype, disable_task_sync!
 
 using Chmy
 using KernelAbstractions
@@ -65,7 +65,7 @@ get_device(arch::SingleDeviceArchitecture) = arch.device
 """
     activate!(arch::SingleDeviceArchitecture; priority=:normal)
 
-Activate the given architecture on the specified device and set the priority of the 
+Activate the given architecture on the specified device and set the priority of the
 backend. For the priority accepted values are `:normal`, `:low` and `:high`.
 """
 function activate!(arch::SingleDeviceArchitecture; priority=:normal)
@@ -81,5 +81,7 @@ heuristic_groupsize(::CPU, ::Val{N}) where {N} = 256
 Base.unsafe_wrap(::CPU, ptr::Ptr, dims) = unsafe_wrap(Array, ptr, dims)
 
 pointertype(::CPU, T::DataType) = Ptr{T}
+
+disable_task_sync!(::CPU, array) = array
 
 end
