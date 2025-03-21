@@ -116,7 +116,13 @@ The kernel `interpolate_ρ!` performs the actual interpolation and requires the 
     I = @index(Global, Cartesian)
     I = I + O
     # interpolate from cell centres to cell interfaces
-    ρx = lerp(ρ, location(ρx), g, I)
-    ρy = lerp(ρ, location(ρy), g, I)
+    ρx[I] = lerp(ρ, location(ρx), g, I)
+    ρy[I] = lerp(ρ, location(ρy), g, I)
 end
 ```
+
+you can execute this with
+```julia
+launch(arch, grid, interpolate_ρ! => (ρ,ρx,ρy, grid))
+```
+
