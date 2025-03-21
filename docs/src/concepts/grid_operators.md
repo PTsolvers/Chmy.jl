@@ -109,7 +109,7 @@ In the following example, we use the linear interpolation wrapper `lerp` when in
 ρy = Field(backend, grid, (Center(), Vertex()))
 ```
 
-The kernel `interpolate_ρ!` performs the actual interpolation and requires the grid information passed by `g`.
+The kernel `interpolate_ρ!` performs the actual interpolation and requires the grid information passed by `g`,
 
 ```julia
 @kernel function interpolate_ρ!(ρ, ρx, ρy, g::StructuredGrid, O)
@@ -121,8 +121,8 @@ The kernel `interpolate_ρ!` performs the actual interpolation and requires the 
 end
 ```
 
-you can execute this with
+and can be launched with some launcher defined using `launch = Launcher(arch, grid)`:
 ```julia
-launch(arch, grid, interpolate_ρ! => (ρ,ρx,ρy, grid))
+launch(arch, grid, interpolate_ρ! => (ρ, ρx, ρy, grid))
 ```
 
