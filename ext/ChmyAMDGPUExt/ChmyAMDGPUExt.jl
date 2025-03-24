@@ -2,11 +2,14 @@ module ChmyAMDGPUExt
 
 using AMDGPU, KernelAbstractions
 
-import Chmy.Architectures: heuristic_groupsize, set_device!, get_device, pointertype
+import Chmy.Architectures: heuristic_groupsize, set_device!, get_device, pointertype, disable_task_sync!, enable_task_sync!
 
 Base.unsafe_wrap(::ROCBackend, ptr::Ptr, dims) = unsafe_wrap(ROCArray, ptr, dims; lock=false)
 
 pointertype(::ROCBackend, T::DataType) = Ptr{T}
+
+disable_task_sync!(::ROCArray) = nothing
+enable_task_sync!(::ROCArray) = nothing
 
 set_device!(dev::HIPDevice) = AMDGPU.device!(dev)
 
