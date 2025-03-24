@@ -96,7 +96,7 @@ With a structured grid defined that consists of `nx = N` cells horizontally and 
 
 Using the method `connectivity(::SG{N,T,C}, ::Dim{D}, ::Side{S})`, one can obtain the connectivity underlying a structured grid. If no special grid topology is provided, a default `Bounded` grid topology is used for the `UniformGrid`. Therefore, on a default `UniformGrid`, the following assertions hold:
 
-```julia-repl
+```julia
 julia> @assert connectivity(grid, Dim(1), Side(1)) isa Bounded "Left boundary is bounded"
 
 julia> @assert connectivity(grid, Dim(1), Side(2)) isa Bounded "Right boundary is bounded"

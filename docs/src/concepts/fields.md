@@ -116,7 +116,7 @@ gravity = (x=FunctionField(ρgx, grid, vx_node; parameters=η0),
 
 ## Defining Constant Fields
 
-For completeness, we also provide an abstract type `ConstantField`, which comprises of a generic `ValueField` type, and two special types `ZeroField`, `OneField` allowing dispatch for special casess. With such a construct, we can easily define value fields properties and other parameters using constant values in a straightforward and readable manner. Moreover, explicit information about the grid on which the field should be defined can be abbreviated. For example:
+For completeness, we also provide an abstract type `ConstantField`, which comprises of a generic `ValueField` type, and two special types `ZeroField`, `OneField` allowing dispatch for special cases. With such a construct, we can easily define value fields properties and other parameters using constant values in a straightforward and readable manner. Moreover, explicit information about the grid on which the field should be defined can be abbreviated. For example:
 
 ```julia
 # Defines a field with constant values 1.0
@@ -132,7 +132,7 @@ onefield = Chmy.OneField{Float64}()
 
 Notably, these two fields shall equal to each other as expected.
 
-```julia-repl
+```julia
 julia> field == onefield
 true
 ```

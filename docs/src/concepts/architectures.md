@@ -4,28 +4,33 @@
 
 Chmy.jl supports CPUs, as well as CUDA, ROC and Metal backends for Nvidia, AMD and Apple M-series GPUs through a thin wrapper around the [`KernelAbstractions.jl`](https://github.com/JuliaGPU/KernelAbstractions.jl) for users to select desirable backends. For distributed usage of Chmy.jl see the concept documentation on [Distributed](./distributed.md).
 
-```julia
+:::code-group
+
+```julia [CPUs]
 # Default with CPU
-arch = Arch(CPU())
+backend = CPU()
+arch = Arch(backend)
 ```
 
-```julia
+```julia [Nvidia GPUs]
 using CUDA
-
-arch = Arch(CUDABackend())
+backend = CUDABackend()
+arch = Arch(backend)
 ```
 
-```julia
+```julia [AMD GPUs]
 using AMDGPU
-
-arch = Arch(ROCBackend())
+backend = ROCBackend()
+arch = Arch(backend)
 ```
 
-```julia
+```julia [Apple GPUs]
 using Metal
-
-arch = Arch(MetalBackend())
+backend = MetalBackend()
+arch = Arch(backend)
 ```
+
+:::
 
 At the beginning of program, one may specify the backend and initialise the architecture they desire to use. The initialised `arch` variable will be required explicitly at creation of some objects such as grids and kernel launchers.
 
