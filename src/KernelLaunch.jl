@@ -32,7 +32,7 @@ Constructs a `Launcher` object configured based on the input parameters.
 
 !!! warning
 
-    worksize for the last dimension N takes into account only last outer width 
+    worksize for the last dimension N takes into account only last outer width
     W[N], N-1 uses W[N] and W[N-1], N-2 uses W[N], W[N-1], and W[N-2].
 """
 function Launcher(arch, grid; outer_width=nothing)
@@ -126,6 +126,26 @@ end
 
 import KernelAbstractions.NDIteration.StaticSize
 
+@inline function apply_disable_task_sync!(backend, x, disable_task_sync!)
+    if isa(x, Field)
+        return disable_task_sync!(backend, x.data)  # Apply disable_task_sync! to Field
+    elseif isa(x, NamedTuple)
+        return map(v -> apply_disable_task_sync!(backend, v, disable_task_sync!), x)  # Recurse for NamedTuple values
+    else
+        return x  # Leave other types unchanged
+    end
+end
+
+@inline function apply_enable_task_sync!(backend, x, enable_task_sync!)
+    if isa(x, Field)
+        return enable_task_sync!(backend, x.data)  # Apply enable_task_sync! to Field
+    elseif isa(x, NamedTuple)
+        return map(v -> apply_enable_task_sync!(backend, v, enable_task_sync!), x)  # Recurse for NamedTuple values
+    else
+        return x  # Leave other types unchanged
+    end
+end
+
 @inline function launch_with_bc(arch, grid, launcher, offset, kernel, bc, args...)
     backend   = Architectures.get_backend(arch)
     groupsize = StaticSize(heuristic_groupsize(backend, Val(ndims(launcher))))
@@ -135,6 +155,8 @@ import KernelAbstractions.NDIteration.StaticSize
         fun(args..., offset)
         bc!(arch, grid, bc)
     else
+        foreach(arg -> apply_disable_task_sync!(backend, arg, disable_task_sync!), args)
+
         inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
         inner_fun(args..., offset + Offset(inner_offset(launcher)...))
 
@@ -153,6 +175,8 @@ import KernelAbstractions.NDIteration.StaticSize
             wait(launcher.workers[D][1])
             wait(launcher.workers[D][2])
         end
+
+        foreach(arg -> apply_enable_task_sync!(backend, arg, enable_task_sync!), args)
     end
     return
 end
