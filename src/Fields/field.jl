@@ -57,7 +57,7 @@ function Field(backend::Backend, grid::StructuredGrid{N}, loc::LocOrLocs{N}, typ
     dims = size(grid, loc)
     data_size = size(grid, loc) .+ 4 .* halo
     data = KernelAbstractions.zeros(backend, type, data_size)
-    disable_task_sync!(backend, data)
+    # disable_task_sync!(backend, data)
     loc = expand_loc(Val(N), loc)
     return Field{typeof(loc),halo}(data, dims)
 end
