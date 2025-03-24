@@ -85,7 +85,7 @@ Base.@assume_effects :foldable function outer_offset(launcher::Launcher, ::Dim{D
 end
 
 """
-    (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,Args}; bc=nothing, async=false) where {F,Args}
+    (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,Args}; bc=nothing) where {F,Args}
 
 Launches a computational kernel using the specified `arch`, `grid`, `kernel_and_args`, and optional boundary conditions (`bc`).
 
@@ -94,14 +94,13 @@ Launches a computational kernel using the specified `arch`, `grid`, `kernel_and_
 - `grid`: The grid defining the computational domain.
 - `kernel_and_args::Pair{F,Args}`: A pair consisting of the computational kernel `F` and its arguments `Args`.
 - `bc=nothing`: Optional boundary conditions for the computation.
-- `async=false`: If `true`, launches the kernel asynchronously.
 
 !!! warning
     - `arch` should be compatible with the `Launcher`'s architecture.
     - If `bc` is `nothing`, the kernel is launched without boundary conditions.
-    - If `async` is `false` (default), the function waits for the computation to complete before returning.
+    - The function waits for the computation to complete before returning.
 """
-function (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,Args}; bc=nothing, async=false) where {F,Args}
+function (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,Args}; bc=nothing) where {F,Args}
     kernel, args = kernel_and_args
 
     backend = Architectures.get_backend(arch)
@@ -113,7 +112,7 @@ function (launcher::Launcher)(arch::Architecture, grid, kernel_and_args::Pair{F,
         launch_with_bc(arch, grid, launcher, offset, kernel, bc, args...)
     end
 
-    async || KernelAbstractions.synchronize(backend)
+    KernelAbstractions.synchronize(backend)
     return
 end
 
