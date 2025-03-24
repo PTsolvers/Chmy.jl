@@ -8,8 +8,8 @@ Base.unsafe_wrap(::MetalBackend, ptr::Metal.MtlPtr, dims) = unsafe_wrap(MtlArray
 
 pointertype(::MetalBackend, T::DataType) = Metal.MtlPtr{T}
 
-disable_task_sync!(::MetalBackend, array) = array
-enable_task_sync!(::MetalBackend, array) = array
+disable_task_sync!(::MtlArray) = nothing
+enable_task_sync!(::MtlArray) = nothing
 
 set_device!(dev::Metal.MTL.MTLDeviceInstance) = Metal.device!(dev)
 

@@ -8,8 +8,8 @@ Base.unsafe_wrap(::CUDABackend, ptr::CuPtr, dims) = unsafe_wrap(CuArray, ptr, di
 
 pointertype(::CUDABackend, T::DataType) = CuPtr{T}
 
-disable_task_sync!(::CUDABackend, array) = CUDA.unsafe_disable_task_sync!(array)
-enable_task_sync!(::CUDABackend, array) = CUDA.unsafe_enable_task_sync!(array)
+disable_task_sync!(array::CuArray) = CUDA.unsafe_disable_task_sync!(array)
+enable_task_sync!(array::CuArray) = CUDA.unsafe_enable_task_sync!(array)
 
 set_device!(dev::CuDevice) = CUDA.device!(dev)
 
