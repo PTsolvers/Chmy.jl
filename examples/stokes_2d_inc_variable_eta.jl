@@ -78,6 +78,7 @@ end
 function stokes_iterations(launch, arch, grid, ds, ds_PT, bc_V, niter, ncheck, ϵ_it, τsc, ly, psc)
     Pr, ∇V, V, r_V, τ, ηc, ρgy, ηnum = ds
     dτ_Pr, dτ_r, νdτ, _ = ds_PT
+    nx = grid.axes[1].length
     
     # Compute numeric viscosity
     launch(arch, grid, compute_η_numeric! => (ηnum, ηc, grid))
@@ -174,6 +175,7 @@ end
     Colorbar(fig[2, 1][1, 2], plt.Vy)
     Colorbar(fig[2, 2][1, 2], plt.η)
     display(fig)
+    
     # action
     @time begin
         
@@ -182,6 +184,7 @@ end
 
         KernelAbstractions.synchronize(backend)
     end
+    
     plt.Pr[3] = interior(ds.Pr) |> Array
     plt.Vx[3] = interior(ds.V.x) |> Array
     plt.Vy[3] = interior(ds.V.y) |> Array
