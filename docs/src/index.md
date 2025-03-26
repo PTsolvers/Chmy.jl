@@ -1,12 +1,58 @@
-# Chmy.jl
+```@raw html
+---
+# https://vitepress.dev/reference/default-theme-home-page
+layout: home
 
-[Chmy.jl](https://github.com/PTsolvers/Chmy.jl) (pronounce *tsh-mee*) is a backend-agnostic toolkit for finite difference computations on multi-dimensional computational staggered grids. Chmy.jl features task-based distributed memory parallelisation capabilities.
+hero:
+  name: Chmy.jl Docs
+  text: Finite differences and staggered grids on CPUs and GPUs
+  tagline: A backend-agnostic toolkit for finite difference computations with task-based distributed memory parallelisation.
+  actions:
+    - theme: brand
+      text: Getting Started
+      link: /getting_started/introduction
+    - theme: alt
+      text: API Reference 📚
+      link: /lib/modules
+    - theme: alt
+      text: View on GitHub
+      link: https://github.com/PTsolvers/Chmy.jl
+  image:
+    src: /logo.png
+    alt: Chmy.jl
 
-## Installation
+features:
+  - icon: 🚀
+    title: Backend Agnostic
+    details: Effortlessly execute your code on CPUs and GPUs with KernelAbstractions.jl.
+    link: /concepts/architectures
 
-To install Chmy.jl, one can simply add it using the Julia package manager:
+  - icon: ⚡
+    title: Multi-device
+    details: Leverages task-based distributed memory parallelisation capabilities with MPI.jl.
+    link: /concepts/distributed
 
-```julia-repl
+  - icon: 🛠️
+    title: Framework
+    details: Fields, boundary conditions and interpolation operators on structured grids.
+    link: /getting_started/introduction
+
+  - icon: 🧩
+    title: Extensibility
+    details: Written in pure Julia, adding new functions, simplification rules, and model transformations has no barrier.
+    link: /concepts/kernels
+---
+```
+
+## What is Chmy.jl?
+
+[Chmy.jl](https://github.com/PTsolvers/Chmy.jl) (pronounce *tsh-mee*) is a **backend-agnostic toolkit for finite difference computations** on multi-dimensional computational staggered grids. Chmy.jl features **task-based distributed memory parallelisation capabilities** and provides a comprehensive **framework for handling complex computational tasks on structured grids**, leveraging both single and multi-device architectures. It seamlessly integrates with Julia's powerful parallel and concurrent programming capabilities, making it suitable for a wide range of scientific and engineering applications.
+
+## How to Install Chmy.jl?
+
+To install Chmy.jl, one can simply add it using the Julia package manager by running the following command in the Julia REPL:
+
+```julia
 julia> using Pkg
 
 julia> Pkg.add("Chmy")
@@ -14,30 +60,56 @@ julia> Pkg.add("Chmy")
 
 After the package is installed, one can load the package by using:
 
-```julia-repl
+```julia
 julia> using Chmy
 ```
 
-!!! info "Install from a Specific Branch"
-    For developers and advanced users, one might want to use the implementation of Chmy.jl from a specific branch by specifying the url. In the following code snippet, we do this by explicitly specifying to use the current implementation that is available under the `main` branch:
+If you want to use the latest unreleased version of Chmy.jl, you can run the following command:
 
-    ```julia-repl
-    julia> using Pkg; Pkg.add(url="https://github.com/PTsolvers/Chmy.jl#main")
-    ```
+```julia
+julia> using Pkg
 
-## Feature Summary
+julia> Pkg.add(url="https://github.com/PTsolvers/Chmy.jl")
+```
 
-Chmy.jl provides a comprehensive framework for handling complex computational tasks on structured grids, leveraging both single and multi-device architectures. It seamlessly integrates with Julia's powerful parallel and concurrent programming capabilities, making it suitable for a wide range of scientific and engineering applications.
+## Select an Accelerator Backend
 
-A general list of the features is:
+:::code-group
 
-- Backend-agnostic capabilities leveraging [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl)
-- Distributed computing support with [MPI.jl](https://github.com/JuliaParallel/MPI.jl)
-- Multi-dimensional, parametrisable discrete and continuous fields on structured grids
-- High-level interface for specifying boundary conditions with automatic batching for performance
-- Finite difference and interpolation operators on discrete fields
-- Extensibility; The package is written in pure Julia, so adding new functions, simplification rules, and model transformations has no barrier
+```julia [CPUs]
+using Chmy
+using KernelAbstractions
+
+backend = CPU()
+arch = Arch(backend)
+```
+
+```julia [Nvidia GPUs]
+using Chmy
+using KernelAbstractions
+using CUDA
+backend = CUDABackend()
+arch = Arch(backend)
+```
+
+```julia [AMD GPUs]
+using Chmy
+using KernelAbstractions
+using AMDGPU
+backend = ROCBackend()
+arch = Arch(backend)
+```
+
+```julia [Apple GPUs]
+using Chmy
+using KernelAbstractions
+using Metal
+backend = MetalBackend()
+arch = Arch(backend)
+```
+
+:::
 
 ## Funding
 
-The development of this package is supported by the [GPU4GEO PASC project](https://pasc-ch.org/projects/2021-2024/gpu4geo/index.html). More information about the GPU4GEO project can be found on the [GPU4GEO website](https://ptsolvers.github.io/GPU4GEO/).
+The development of this package is supported by the [GPU4GEO](https://pasc-ch.org/projects/2021-2024/gpu4geo/index.html) and ∂GPU4GEO PASC projects. More information about the GPU4GEO project can be found on the [GPU4GEO website](https://GPU4GEO.org/).

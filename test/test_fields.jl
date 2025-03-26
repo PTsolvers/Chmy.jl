@@ -1,9 +1,5 @@
 include("common.jl")
 
-using Chmy.Architectures
-using Chmy.Fields
-using Chmy.Grids
-
 using LinearAlgebra
 
 for backend in TEST_BACKENDS, T in TEST_TYPES
@@ -24,34 +20,34 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             f = Field(backend, grid, (Center(), Vertex(), Center()); halo=(1, 0, 1))
             @testset "discrete" begin
                 # no parameters vertex
-                fill!(parent(f), NaN)
+                fill!(parent(f), T(NaN))
                 set!(f, grid, (grid, loc, ix, iy, iz) -> ycoord(grid, loc, iy); discrete=true)
                 @test Array(interior(f)) == [0.0; 0.0;; 0.5; 0.5;; 1.0; 1.0;;;
                                                 0.0; 0.0;; 0.5; 0.5;; 1.0; 1.0]
                 # no parameters center
-                fill!(parent(f), NaN)
+                fill!(parent(f), T(NaN))
                 set!(f, grid, (grid, loc, ix, iy, iz) -> xcoord(grid, loc, ix); discrete=true)
                 @test Array(interior(f)) == [0.25; 0.75;; 0.25; 0.75;; 0.25; 0.75;;;
                                                 0.25; 0.75;; 0.25; 0.75;; 0.25; 0.75]
                 # with parameters
-                fill!(parent(f), NaN)
+                fill!(parent(f), T(NaN))
                 set!(f, grid, (grid, loc, ix, iy, iz, sc) -> ycoord(grid, loc, iy) * sc; discrete=true, parameters=(T(2.0),))
                 @test Array(interior(f)) == [0.0; 0.0;; 1.0; 1.0;; 2.0; 2.0;;;
                                                 0.0; 0.0;; 1.0; 1.0;; 2.0; 2.0]
             end
             @testset "continuous" begin
                 # no parameters vertex
-                fill!(parent(f), NaN)
+                fill!(parent(f), T(NaN))
                 set!(f, grid, (x, y, z) -> y)
                 @test Array(interior(f)) == [0.0; 0.0;; 0.5; 0.5;; 1.0; 1.0;;;
                                                 0.0; 0.0;; 0.5; 0.5;; 1.0; 1.0]
                 # no parameters center
-                fill!(parent(f), NaN)
+                fill!(parent(f), T(NaN))
                 set!(f, grid, (x, y, z) -> x)
                 @test Array(interior(f)) == [0.25; 0.75;; 0.25; 0.75;; 0.25; 0.75;;;
                                                 0.25; 0.75;; 0.25; 0.75;; 0.25; 0.75]
                 # with parameters
-                fill!(parent(f), NaN)
+                fill!(parent(f), T(NaN))
                 set!(f, grid, (x, y, z, sc) -> y * sc; parameters=(T(2.0),))
                 @test Array(interior(f)) == [0.0; 0.0;; 1.0; 1.0;; 2.0; 2.0;;;
                                                 0.0; 0.0;; 1.0; 1.0;; 2.0; 2.0]

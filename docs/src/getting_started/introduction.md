@@ -1,6 +1,6 @@
 # Getting Started with Chmy.jl
 
-[Chmy.jl](https://github.com/PTsolvers/Chmy.jl) is a backend-agnostic toolkit for finite difference computations on multi-dimensional computational staggered grids. In this introductory tutorial, we will showcase the essence of Chmy.jl by solving a simple 2D diffusion problem. The full code of the tutorial material is available under [diffusion_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d.jl).
+[Chmy.jl](https://github.com/PTsolvers/Chmy.jl) is a backend-agnostic toolkit for finite difference computations on multi-dimensional computational staggered grids. In this introductory tutorial, we showcase the essence of Chmy.jl by solving a simple 2D diffusion problem. The full code of the tutorial material is available under [diffusion_2d.jl](https://github.com/PTsolvers/Chmy.jl/blob/main/examples/diffusion_2d.jl).
 
 ## Basic Diffusion
 
@@ -12,7 +12,7 @@ The diffusion equation is a second order parabolic PDE, here for a multivariable
 \end{equation}
 ```
 
-Introducing the diffusion flux $q$, we can rewrite equation `(1)` as a system of two PDEs, consisting of equations `(2)` and `(3)`.
+Introducing the diffusion flux $q$, we can rewrite the above equation as a system of two PDEs, consisting of the following two equations,
 
 ```math
 \begin{equation}
@@ -28,7 +28,7 @@ Introducing the diffusion flux $q$, we can rewrite equation `(1)` as a system of
 
 ### Boundary Conditions
 
-Generally, partial differential equations (PDEs) require initial or [boundary conditions](./concepts/bc.md) to ensure a unique and stable solution. For the field `C`, a Neumann boundary condition is given by:
+Generally, partial differential equations (PDEs) require initial or [boundary conditions](../concepts/bc.md) to ensure a unique and stable solution. For the field `C`, a Neumann boundary condition is given by:
 
 ```math
 \begin{equation}
@@ -41,14 +41,45 @@ where $\frac{\partial C}{\partial \boldsymbol{n}}$ is the derivative of `C` norm
 
 As the first step, we need to load the main module and any necessary submodules of [Chmy.jl](https://github.com/PTsolvers/Chmy.jl). Moreover, we use [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) for writing backend-agnostic kernels that are compatible with Chmy.jl.
 
-```julia
-using Chmy, Chmy.Architectures, Chmy.Grids, Chmy.Fields, Chmy.BoundaryConditions, Chmy.GridOperators, Chmy.KernelLaunch
+:::code-group
+
+```julia [CPUs]
+using Chmy
 using KernelAbstractions # for backend-agnostic kernels
 using Printf, CairoMakie # for I/O and plotting
-# using CUDA
-# using AMDGPU
-# using Metal
+
+backend = CPU()
+arch = Arch(backend)
 ```
+
+```julia [Nvidia GPUs]
+using Chmy
+using KernelAbstractions # for backend-agnostic kernels
+using Printf, CairoMakie # for I/O and plotting
+using CUDA
+backend = CUDABackend()
+arch = Arch(backend)
+```
+
+```julia [AMD GPUs]
+using Chmy
+using KernelAbstractions # for backend-agnostic kernels
+using Printf, CairoMakie # for I/O and plotting
+using AMDGPU
+backend = ROCBackend()
+arch = Arch(backend)
+```
+
+```julia [Apple GPUs]
+using Chmy
+using KernelAbstractions # for backend-agnostic kernels
+using Printf, CairoMakie # for I/O and plotting
+using Metal
+backend = MetalBackend()
+arch = Arch(backend)
+```
+
+:::
 
 In this introductory tutorial, we will use the CPU backend for simplicity:
 
@@ -57,7 +88,7 @@ backend = CPU()
 arch = Arch(backend)
 ```
 
-If a different backend is desired, one needs to load the relevant package accordingly. For example, if Nvidia or AMD GPUs are available, one can comment out `using CUDA`, `using AMDGPU` or `using Metal` and make sure to use `arch = Arch(CUDABackend())`, `arch = Arch(ROCBackend())` or `arch = Arch(MetalBackend())`, respectively, when selecting the architecture. For further information about executing on a single-device or multi-device architecture, see the documentation section for [Architectures](./concepts/architectures.md).
+If a different backend is desired, one needs to load the relevant package accordingly. For further information about executing on a single-device or multi-device architecture, see the documentation section for [Architectures](../concepts/architectures.md).
 
 !!! warning "Metal backend"
     Metal backend restricts floating point arithmetic precision of computations to `Float32` or lower. In Chmy, this can be achieved by initialising the grid object using `Float32` (`f0`) elements in the `origin` and `extent` tuples.
@@ -117,7 +148,7 @@ launch = Launcher(arch, grid)
 Δt = minimum(spacing(grid))^2 / χ / ndims(grid) / 2.1
 ```
 
-In the 2D problem only three physical fields, the field `C` and the diffusion flux `q` in `x`- and `y`-dimension are evolving with time. We define these fields on different locations on the staggered grid (more see [Grids](./concepts/grids.md)).
+In the 2D problem only three physical fields, the field `C` and the diffusion flux `q` in `x`- and `y`-dimension are evolving with time. We define these fields on different locations on the staggered grid (more see [Grids](../concepts/grids.md)).
 
 ```julia
 # allocate fields
@@ -125,7 +156,7 @@ C = Field(backend, grid, Center())
 q = VectorField(backend, grid)
 ```
 
-We randomly initialized the entries of `C` field and finished the initial model setup. One can refer to the section [Fields](./concepts/fields.md) for setting up more complex initial conditions.
+We randomly initialized the entries of `C` field and finished the initial model setup. One can refer to the section [Fields](../concepts/fields.md) for setting up more complex initial conditions.
 
 ```julia
 # initial conditions

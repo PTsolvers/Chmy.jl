@@ -1,4 +1,4 @@
-using Chmy.Grids, Chmy.BoundaryConditions, Chmy.Architectures, Chmy.Fields
+using Chmy
 using KernelAbstractions
 
 arch = Arch(CPU())

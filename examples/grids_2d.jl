@@ -1,4 +1,4 @@
-using Chmy.Grids
+using Chmy
 using GLMakie
 
 import .Iterators: product, flatten
@@ -34,8 +34,8 @@ yedges = collect(flatten(zip(nodes[:, 1:end-1], nodes[:, 2:end])))
 linesegments!(ax, xedges; linewidth=1.5, color=:gray)
 linesegments!(ax, yedges; linewidth=1.5, color=:gray)
 
-scatter!(ax, xface; marker=:hline, markersize=15, label=L"v_x", rotations=0)
-scatter!(ax, yface; marker=:vline, markersize=15, label=L"v_y", rotations=0)
+scatter!(ax, xface; marker=:hline, markersize=15, label=L"v_x", rotation=0)
+scatter!(ax, yface; marker=:vline, markersize=15, label=L"v_y", rotation=0)
 scatter!(ax, cells; marker=:xcross, markersize=10, label=L"\sigma_{xx}\,,~\sigma_{yy}")
 scatter!(ax, xyedge; marker=:circle, markersize=10, label=L"\tau_{xy}")
 

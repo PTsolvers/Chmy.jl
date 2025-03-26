@@ -1,9 +1,5 @@
 include("common.jl")
 
-using Chmy.Architectures
-using Chmy.Grids
-using Chmy.BoundaryConditions
-
 for T in TEST_TYPES
     # deal with tolerances for isapprox
     tol = T==Float32 ? 1e-6 : 0
