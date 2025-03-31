@@ -8,19 +8,19 @@ import Chmy.KernelLaunch
         modify_task_sync!(x, return_type)
 
         @testset "Tuples" begin
-            x = (T(1), T[3e3])
-            @test modify_task_sync!(x, return_type) == Vector{T}
+            x = (1, [3e3])
+            @test modify_task_sync!(x, return_type) == Vector{Float64}
 
-            y = (T(2), x)
-            @test modify_task_sync!(y, return_type) == Vector{T}
+            y = (2, x)
+            @test modify_task_sync!(y, return_type) == Vector{Float64}
         end
 
         @testset "NamedTuples" begin
             t1 = (; x=1, y=2)
             @test isnothing(modify_task_sync!(t1, return_type))
 
-            t2 = (; x=1, y=T[2])
-            @test modify_task_sync!(t2, return_type) == Vector{T}
+            t2 = (; x=1, y=[2.1])
+            @test modify_task_sync!(t2, return_type) == Vector{Float64}
         end
 
         @testset "Structs" begin
@@ -28,14 +28,14 @@ import Chmy.KernelLaunch
                 x::T
                 y::T
             end
-            foo1 = Foo1(T(1), T(2))
+            foo1 = Foo1(1, 2)
             @test isnothing(modify_task_sync!(foo1, return_type))
 
             struct Foo2
-                x::T
-                y::AbstractArray{T}
+                x::Int
+                y::AbstractArray{Float64}
             end
-            foo2 = Foo2(1, [2])
+            foo2 = Foo2(1, [2.1])
             @test modify_task_sync!(foo2, return_type) == Vector{T}
         end
     end
