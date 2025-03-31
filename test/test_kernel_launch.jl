@@ -1,6 +1,6 @@
 include("common.jl")
 
-import Chmy.KernelLaunch
+import Chmy.KernelLaunch: modify_task_sync!
 
 @testset "$(basename(@__FILE__)) (backend: CPU)" begin
     @testset "modify_task_sync! function" begin
