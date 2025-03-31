@@ -125,23 +125,21 @@ end
 
 import KernelAbstractions.NDIteration.StaticSize
 
-@inline function apply_disable_task_sync!(backend, x, disable_task_sync!)
-    if isa(x, Field)
-        return disable_task_sync!(backend, x.data)  # Apply disable_task_sync! to Field
-    elseif isa(x, NamedTuple)
-        return map(v -> apply_disable_task_sync!(backend, v, disable_task_sync!), x)  # Recurse for NamedTuple values
-    else
-        return x  # Leave other types unchanged
-    end
-end
+# because of https://github.com/JuliaGPU/CUDA.jl/pull/2335
+# disable_sync!(x) = modify_task_sync!(x, disable_task_sync!)
+# enable_sync!(x)  = modify_task_sync!(x, enable_task_sync!)
 
-@inline function apply_enable_task_sync!(backend, x, enable_task_sync!)
-    if isa(x, Field)
-        return enable_task_sync!(backend, x.data)  # Apply enable_task_sync! to Field
-    elseif isa(x, NamedTuple)
-        return map(v -> apply_enable_task_sync!(backend, v, enable_task_sync!), x)  # Recurse for NamedTuple values
-    else
-        return x  # Leave other types unchanged
+@inline modify_task_sync!(x::AbstractArray, fn::F) where F = fn(x)
+@inline modify_task_sync!(::Tuple{}, ::F)          where F = nothing
+
+@generated function modify_task_sync!(x::T, fn::F) where {T,F}
+    names  = fieldnames(x)
+    N      = length(names)
+    quote
+        @inline
+        Base.@nexprs $N i -> begin
+            modify_task_sync!(getfield(x, $names[i]), fn)
+        end
     end
 end
 
@@ -154,7 +152,7 @@ end
         fun(args..., offset)
         bc!(arch, grid, bc)
     else
-        foreach(arg -> apply_disable_task_sync!(backend, arg, disable_task_sync!), args)
+        modify_task_sync!(args, disable_sync!)
 
         inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
         inner_fun(args..., offset + Offset(inner_offset(launcher)...))
@@ -175,7 +173,7 @@ end
             wait(launcher.workers[D][2])
         end
 
-        foreach(arg -> apply_enable_task_sync!(backend, arg, enable_task_sync!), args)
+        modify_task_sync!(args, enable_sync!)
     end
     return
 end
