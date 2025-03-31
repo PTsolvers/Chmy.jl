@@ -5,7 +5,6 @@ import Chmy.KernelLaunch: modify_task_sync!
 @testset "$(basename(@__FILE__)) (backend: CPU)" begin
     @testset "modify_task_sync! function" begin
         return_type(x) = typeof(x)
-        modify_task_sync!(x, return_type)
 
         @testset "Tuples" begin
             x = (1, [3e3])
@@ -25,8 +24,8 @@ import Chmy.KernelLaunch: modify_task_sync!
 
         @testset "Structs" begin
             struct Foo1
-                x::T
-                y::T
+                x::Int
+                y::Int
             end
             foo1 = Foo1(1, 2)
             @test isnothing(modify_task_sync!(foo1, return_type))
@@ -36,7 +35,7 @@ import Chmy.KernelLaunch: modify_task_sync!
                 y::AbstractArray{Float64}
             end
             foo2 = Foo2(1, [2.1])
-            @test modify_task_sync!(foo2, return_type) == Vector{T}
+            @test modify_task_sync!(foo2, return_type) == Vector{Float64}
         end
     end
 end
