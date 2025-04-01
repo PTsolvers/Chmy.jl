@@ -1,7 +1,7 @@
 module Architectures
 
 export Architecture, SingleDeviceArchitecture
-export Arch, get_backend, get_device, activate!, set_device!, heuristic_groupsize, pointertype, disable_task_sync!, enable_task_sync!
+export Arch, get_backend, get_device, activate!, set_device!, heuristic_groupsize, pointertype, disable_task_sync!, enable_task_sync!, modify_sync!
 
 using Chmy
 using KernelAbstractions
@@ -82,7 +82,23 @@ Base.unsafe_wrap(::CPU, ptr::Ptr, dims) = unsafe_wrap(Array, ptr, dims)
 
 pointertype(::CPU, T::DataType) = Ptr{T}
 
-disable_task_sync!(::CPU) = nothing
-enable_task_sync!(::CPU) = nothing
+# because of https://github.com/JuliaGPU/CUDA.jl/pull/2335
+disable_task_sync!(::Array) = nothing
+enable_task_sync!(::Array) = nothing
+
+@inline modify_sync!(x::Array, fn::F) where F = fn(x)
+@inline modify_sync!(::Tuple{}, ::F)  where F = nothing
+
+@generated function modify_sync!(x::T, fn::F) where {T,F}
+    names  = fieldnames(x)
+    N      = length(names)
+    quote
+        @inline
+        Base.@nexprs $N i -> begin
+            args = getfield(x, $names[i])
+            modify_sync!(args, fn)
+        end
+    end
+end
 
 end

@@ -125,21 +125,6 @@ end
 
 import KernelAbstractions.NDIteration.StaticSize
 
-# because of https://github.com/JuliaGPU/CUDA.jl/pull/2335
-@inline modify_sync!(x::AbstractArray, fn::F) where F = fn(x)
-@inline modify_sync!(::Tuple{}, ::F)          where F = nothing
-
-@generated function modify_sync!(x::T, fn::F) where {T,F}
-    names  = fieldnames(x)
-    N      = length(names)
-    quote
-        @inline
-        Base.@nexprs $N i -> begin
-            modify_sync!(getfield(x, $names[i]), fn)
-        end
-    end
-end
-
 @inline function launch_with_bc(arch, grid, launcher, offset, kernel, bc, args...)
     backend   = Architectures.get_backend(arch)
     groupsize = StaticSize(heuristic_groupsize(backend, Val(ndims(launcher))))
