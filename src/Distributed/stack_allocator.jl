@@ -84,6 +84,6 @@ function allocate(sa::StackAllocator, T::DataType, dims, align::Integer=sizeof(T
     sa.offset = aligned + nbytes
     sa.nallocs += 1
     buffer = unsafe_wrap(backend, data_ptr, dims)
-    disable_task_sync!(backend, buffer)
+    disable_task_sync!(buffer)
     return buffer
 end
