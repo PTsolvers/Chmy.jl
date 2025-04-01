@@ -74,38 +74,38 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             @testset "CUDA task_sync" begin
                 @testset "Single Field" begin
                     @testset "disable_task_sync!" begin
-                        @assert C.data.task_sync == true
+                        @assert C.data.data[].task_sync == true
                         modify_sync!(C, disable_task_sync!)
-                        @test C.data.task_sync == false
+                        @test C.data.data[].task_sync == false
                     end
 
                     @testset "enable_task_sync!" begin
-                        @assert C.data.task_sync == false
+                        @assert C.data.data[].task_sync == false
                         modify_sync!(C, enable_task_sync!)
-                        @test C.data.task_sync == true
+                        @test C.data.data[].task_sync == true
                     end
                 end
 
                 @testset "Multiple args" begin
                     args = (C, q, Δt, grid)
                     @testset "disable_task_sync!" begin
-                        @assert C.data.task_sync == true
-                        @assert q.x.data.task_sync == true
-                        @assert q.y.data.task_sync == true
+                        @assert C.data.data[].task_sync == true
+                        @assert q.x.data.data[].task_sync == true
+                        @assert q.y.data.data[].task_sync == true
                         modify_sync!(args, disable_task_sync!)
-                        @test C.data.task_sync == false
-                        @test q.x.data.task_sync == false
-                        @test q.y.data.task_sync == false
+                        @test C.data.data[].task_sync == false
+                        @test q.x.data.data[].task_sync == false
+                        @test q.y.data.data[].task_sync == false
                     end
 
                     @testset "enable_task_sync!" begin
-                        @assert C.data.task_sync == false
-                        @assert q.x.data.task_sync == false
-                        @assert q.y.data.task_sync == false
+                        @assert C.data.data[].task_sync == false
+                        @assert q.x.data.data[].task_sync == false
+                        @assert q.y.data.data[].task_sync == false
                         modify_sync!(args, enable_task_sync!)
-                        @test C.data.task_sync == true
-                        @test q.x.data.task_sync == true
-                        @test q.y.data.task_sync == true
+                        @test C.data.data[].task_sync == true
+                        @test q.x.data.data[].task_sync == true
+                        @test q.y.data.data[].task_sync == true
                     end
                 end
             end
