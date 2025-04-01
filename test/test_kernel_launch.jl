@@ -1,41 +1,69 @@
 include("common.jl")
 
-import Chmy.KernelLaunch: modify_task_sync!
+for backend in TEST_BACKENDS, T in TEST_TYPES
+    if !compatible(backend, T)
+        continue
+    end
 
-@testset "$(basename(@__FILE__)) (backend: CPU)" begin
-    @testset "modify_task_sync! function" begin
+    @testset "$(basename(@__FILE__)) (backend: $backend, type: $T)" begin
+
         return_type(x) = typeof(x)
 
-        @testset "Tuples" begin
-            x = (1, [3e3])
-            @test modify_task_sync!(x, return_type) == Vector{Float64}
+        if (backend isa CPU)
+            @testset "modify_sync! on CPU backend" begin
 
-            y = (2, x)
-            @test modify_task_sync!(y, return_type) == Vector{Float64}
-        end
+                @testset "Tuples" begin
+                    x = (1, [3e3])
+                    @test modify_sync!(x, return_type) == Vector{Float64}
 
-        @testset "NamedTuples" begin
-            t1 = (; x=1, y=2)
-            @test isnothing(modify_task_sync!(t1, return_type))
+                    y = (2, x)
+                    @test modify_sync!(y, return_type) == Vector{Float64}
+                end
 
-            t2 = (; x=1, y=[2.1])
-            @test modify_task_sync!(t2, return_type) == Vector{Float64}
-        end
+                @testset "NamedTuples" begin
+                    t1 = (; x=1, y=2)
+                    @test isnothing(modify_sync!(t1, return_type))
 
-        @testset "Structs" begin
-            struct Foo1
-                x::Int
-                y::Int
+                    t2 = (; x=1, y=[2.1])
+                    @test modify_sync!(t2, return_type) == Vector{Float64}
+                end
+
+                @testset "Structs" begin
+                    struct Foo{A,B}
+                        x::A
+                        y::B
+                    end
+                    foo1 = Foo(1, 2)
+                    @test isnothing(modify_sync!(foo1, return_type))
+
+                    foo2 = Foo(1, [2.1])
+                    @test modify_sync!(foo2, return_type) == Vector{Float64}
+                end
             end
-            foo1 = Foo1(1, 2)
-            @test isnothing(modify_task_sync!(foo1, return_type))
-
-            struct Foo2
-                x::Int
-                y::AbstractArray{Float64}
-            end
-            foo2 = Foo2(1, [2.1])
-            @test modify_task_sync!(foo2, return_type) == Vector{Float64}
         end
+
+        @kernel function update_C!(C, q, Δt, g::StructuredGrid, O)
+            I = @index(Global, NTuple)
+            I = I + O
+            C[I...] += Δt * divg(q, g, I...)
+        end
+
+        arch = Arch(backend)
+        grid = UniformGrid(arch; origin=(T(0.0), T(0.0)), extent=(T(1.0), T(1.0)), dims=(6, 4))
+
+        Δt   = T(1.0)
+        C    = Field(backend, grid, Center())
+        q    = VectorField(backend, grid)
+
+        set!(q.x, grid, (x, y) -> x)
+        launch = Launcher(arch, grid; outer_width=(2, 2))
+
+        # @testset "Recurse into Field" begin
+        #     args = (C, q, Δt, grid)
+        #     modify_sync!(args, return_type)
+        # end
+        # @testset "Kernel" begin
+        #     launch(arch, grid, update_C! => (C, q, Δt, grid); bc=batch(grid, C => Neumann()))
+        # end
     end
 end
