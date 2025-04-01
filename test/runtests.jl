@@ -69,6 +69,10 @@ for backend in backends
     if backend != "CPU"
         Pkg.add(backend)
     end
+    # tmp fix to have the disable/enable task sync feature until merged in CUDA.jl
+    if backend == "CUDA"
+        Pkg.add(url="https://github.com/JuliaGPU/CUDA.jl", rev="vc/unsafe_stream_switching")
+    end
     ENV["JULIA_CHMY_BACKEND_$backend"] = true
 end
 

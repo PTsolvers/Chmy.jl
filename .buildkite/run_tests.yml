@@ -17,7 +17,6 @@ steps:
 
       julia -e 'println("+++ :julia: Running tests")
                 using Pkg
-                Pkg.add(url="https://github.com/JuliaGPU/CUDA.jl", rev="vc/unsafe_stream_switching")
                 Pkg.test("Chmy"; test_args=["--backends=CUDA"], coverage=true)'
     agents:
       queue: "juliagpu"
