@@ -126,19 +126,16 @@ end
 import KernelAbstractions.NDIteration.StaticSize
 
 # because of https://github.com/JuliaGPU/CUDA.jl/pull/2335
-# disable_sync!(x) = modify_task_sync!(x, disable_task_sync!)
-# enable_sync!(x)  = modify_task_sync!(x, enable_task_sync!)
+@inline modify_sync!(x::AbstractArray, fn::F) where F = fn(x)
+@inline modify_sync!(::Tuple{}, ::F)          where F = nothing
 
-@inline modify_task_sync!(x::AbstractArray, fn::F) where F = fn(x)
-@inline modify_task_sync!(::Tuple{}, ::F)          where F = nothing
-
-@generated function modify_task_sync!(x::T, fn::F) where {T,F}
+@generated function modify_sync!(x::T, fn::F) where {T,F}
     names  = fieldnames(x)
     N      = length(names)
     quote
         @inline
         Base.@nexprs $N i -> begin
-            modify_task_sync!(getfield(x, $names[i]), fn)
+            modify_sync!(getfield(x, $names[i]), fn)
         end
     end
 end
@@ -152,7 +149,7 @@ end
         fun(args..., offset)
         bc!(arch, grid, bc)
     else
-        modify_task_sync!(args, disable_sync!)
+        modify_sync!(args, disable_task_sync!)
 
         inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
         inner_fun(args..., offset + Offset(inner_offset(launcher)...))
@@ -173,7 +170,7 @@ end
             wait(launcher.workers[D][2])
         end
 
-        modify_task_sync!(args, enable_sync!)
+        modify_sync!(args, enable_task_sync!)
     end
     return
 end
