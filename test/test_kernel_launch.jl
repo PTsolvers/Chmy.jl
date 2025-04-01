@@ -6,64 +6,109 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
     end
 
     @testset "$(basename(@__FILE__)) (backend: $backend, type: $T)" begin
-
-        return_type(x) = typeof(x)
+        buff = Any[T]
+        myfun!(::T) where {T} = buff[1] = T
 
         if (backend isa CPU)
             @testset "modify_sync! on CPU backend" begin
-
                 @testset "Tuples" begin
-                    x = (1, [3e3])
-                    @test modify_sync!(x, return_type) == Vector{Float64}
+                    buff[1] = nothing
+                    x = (T(1), T[3e3])
+                    modify_sync!(x, myfun!)
+                    @test buff[1] == Vector{T}
 
-                    y = (2, x)
-                    @test modify_sync!(y, return_type) == Vector{Float64}
+                    buff[1] = nothing
+                    y = (T(2), x)
+                    modify_sync!(y, myfun!)
+                    @test buff[1] == Vector{T}
                 end
 
                 @testset "NamedTuples" begin
-                    t1 = (; x=1, y=2)
-                    @test isnothing(modify_sync!(t1, return_type))
+                    buff[1] = nothing
+                    t1 = (; x=T(1), y=T(2))
+                    modify_sync!(t1, myfun!)
+                    @test isnothing(buff[1])
 
-                    t2 = (; x=1, y=[2.1])
-                    @test modify_sync!(t2, return_type) == Vector{Float64}
+                    buff[1] = nothing
+                    t2 = (; x=1, y=T[2.1])
+                    modify_sync!(t2, myfun!)
+                    @test buff[1] == Vector{T}
                 end
 
                 @testset "Structs" begin
+                    buff[1] = nothing
                     struct Foo{A,B}
                         x::A
                         y::B
                     end
-                    foo1 = Foo(1, 2)
-                    @test isnothing(modify_sync!(foo1, return_type))
+                    foo1 = Foo(T(1), T(2))
+                    modify_sync!(foo1, myfun!)
+                    @test isnothing(buff[1])
 
-                    foo2 = Foo(1, [2.1])
-                    @test modify_sync!(foo2, return_type) == Vector{Float64}
+                    buff[1] = nothing
+                    foo2 = Foo(T(1), T[2.1])
+                    modify_sync!(foo2, myfun!)
+                    @test buff[1] == Vector{T}
                 end
             end
-        end
-
-        @kernel function update_C!(C, q, Δt, g::StructuredGrid, O)
-            I = @index(Global, NTuple)
-            I = I + O
-            C[I...] += Δt * divg(q, g, I...)
         end
 
         arch = Arch(backend)
         grid = UniformGrid(arch; origin=(T(0.0), T(0.0)), extent=(T(1.0), T(1.0)), dims=(6, 4))
 
-        Δt   = T(1.0)
-        C    = Field(backend, grid, Center())
-        q    = VectorField(backend, grid)
+        Δt = T(1.0)
+        C  = Field(backend, grid, Center())
+        q  = VectorField(backend, grid)
 
-        set!(q.x, grid, (x, y) -> x)
-        launch = Launcher(arch, grid; outer_width=(2, 2))
+        @testset "modify_sync! recurse into Field" begin
+            buff[1] = nothing
+            modify_sync!(C, myfun!)
+            @test buff[1] == typeof(C.data)
 
-        # @testset "Recurse into Field" begin
-        #     args = (C, q, Δt, grid)
-        #     modify_sync!(args, return_type)
-        # end
-        # @testset "Kernel" begin
-        #     launch(arch, grid, update_C! => (C, q, Δt, grid); bc=batch(grid, C => Neumann()))
-        # end
+            args = (q, Δt, grid)
+            modify_sync!(args, myfun!)
+            @test buff[1] == typeof(q.y.data)
+        end
+
+        if haskey(ENV, "JULIA_CHMY_BACKEND_CUDA") && (backend isa CUDABackend)
+            @testset "CUDA task_sync" begin
+                @testset "Single Field" begin
+                    @testset "disable_task_sync!" begin
+                        @assert C.data.task_sync == true
+                        modify_sync!(C, disable_task_sync!)
+                        @test C.data.task_sync == false
+                    end
+
+                    @testset "enable_task_sync!" begin
+                        @assert C.data.task_sync == false
+                        modify_sync!(C, enable_task_sync!)
+                        @test C.data.task_sync == true
+                    end
+                end
+
+                @testset "Multiple args" begin
+                    args = (C, q, Δt, grid)
+                    @testset "disable_task_sync!" begin
+                        @assert C.data.task_sync == true
+                        @assert q.x.data.task_sync == true
+                        @assert q.y.data.task_sync == true
+                        modify_sync!(args, disable_task_sync!)
+                        @test C.data.task_sync == false
+                        @test q.x.data.task_sync == false
+                        @test q.y.data.task_sync == false
+                    end
+
+                    @testset "enable_task_sync!" begin
+                        @assert C.data.task_sync == false
+                        @assert q.x.data.task_sync == false
+                        @assert q.y.data.task_sync == false
+                        modify_sync!(args, enable_task_sync!)
+                        @test C.data.task_sync == true
+                        @test q.x.data.task_sync == true
+                        @test q.y.data.task_sync == true
+                    end
+                end
+            end
+        end
     end
 end
