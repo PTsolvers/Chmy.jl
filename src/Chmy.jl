@@ -9,7 +9,7 @@ export
 
     # Architectures
     Architecture, SingleDeviceArchitecture, Arch, get_backend, get_device, activate!, set_device!,
-    heuristic_groupsize, pointertype, disable_task_sync!, enable_task_sync!, with_no_task_sync!,
+    heuristic_groupsize, pointertype,
 
     # BoundaryConditions
     FieldBoundaryCondition, FirstOrderBC, Dirichlet, Neumann, bc!,
