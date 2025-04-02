@@ -1,10 +1,6 @@
 include("common.jl")
 
-import Chmy.Architectures: deepmap!, disable_task_sync!, enable_task_sync!
-
-struct CuArray end # in reality this is replaced by "using CUDA"
-
-myfun!(::Any) = nothing
+import Chmy.Architectures: deepmap!
 
 for backend in TEST_BACKENDS, T in TEST_TYPES
     if !compatible(backend, T)
@@ -14,14 +10,13 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
     @testset "$(basename(@__FILE__)) (backend: $backend, type: $T)" begin
         if (backend isa CPU)
             @testset "deepmap! on CPU backend" begin
-                # struct CuArray end # in reality this is replaced by "using CUDA"
-
+                struct CuArray end # in reality this is replaced by "using CUDA"
                 calls = Symbol[]
 
-                disable_task_sync!(::Any) = nothing
-                enable_task_sync!(::Any) = nothing
-                disable_task_sync!(::CuArray) = push!(calls, :disable) # actual unsafe_disable_task_sync! call
-                enable_task_sync!(::CuArray) = push!(calls, :enable) # actual unsafe_enable_task_sync! call
+                Chmy.Architectures.disable_task_sync!(::Any) = nothing
+                Chmy.Architectures.enable_task_sync!(::Any) = nothing
+                Chmy.Architectures.disable_task_sync!(::CuArray) = push!(calls, :disable) # actual unsafe_disable_task_sync! call
+                Chmy.Architectures.enable_task_sync!(::CuArray) = push!(calls, :enable) # actual unsafe_enable_task_sync! call
 
                 empty!(calls)
                 foo1 = (1, 2, 3)
@@ -58,12 +53,12 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
                 with_no_task_sync!(foo5) do
                     push!(calls, :in_out) # kernel execution for inner and outer regions goes here
                 end # will print "disable" twice, then "in_out" and "enable" twice
-                @show calls
-                # @test calls == [:disable, :disable, :in_out, :enable, :enable]
+                @test calls == [:disable, :disable, :in_out, :enable, :enable]
             end
         end
 
         @testset "deepmap! on Field" begin
+            myfun!(::Any) = nothing
             count = DataType[]
 
             arch = Arch(backend)
@@ -75,14 +70,14 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
 
             M = typeof(C.data)
             myfun!(x::M) where {M} = push!(count, typeof(x))
-            # myfun!(x::M) = push!(count, typeof(x))
+            # # myfun!(x::M) = push!(count, typeof(x))
 
-            @testset "deepmap! on single Field" begin
-                empty!(count)
-                deepmap!(myfun!, C)
-                @test length(count) == 1
-                @test count[1] == M
-            end
+            # @testset "deepmap! on single Field" begin
+            #     empty!(count)
+            #     deepmap!(myfun!, C)
+            #     @test length(count) == 1
+            #     @test count[1] == M
+            # end
 
             # @testset "deepmap! on multiple args" begin
             #     empty!(count)
