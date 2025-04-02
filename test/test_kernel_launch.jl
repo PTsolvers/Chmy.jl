@@ -2,6 +2,12 @@ include("common.jl")
 
 import Chmy.Architectures: deepmap!
 
+struct CuArray end # in reality this is replaced by "using CUDA"
+
+myfun!(::Any) = nothing
+
+const buff = DataType[]
+
 for backend in TEST_BACKENDS, T in TEST_TYPES
     if !compatible(backend, T)
         continue
@@ -10,7 +16,6 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
     @testset "$(basename(@__FILE__)) (backend: $backend, type: $T)" begin
         if (backend isa CPU)
             @testset "deepmap! on CPU backend" begin
-                struct CuArray end # in reality this is replaced by "using CUDA"
                 calls = Symbol[]
 
                 Chmy.Architectures.disable_task_sync!(::Any) = nothing
@@ -58,9 +63,6 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
         end
 
         @testset "deepmap! on Field" begin
-            myfun!(::Any) = nothing
-            count = DataType[]
-
             arch = Arch(backend)
             grid = UniformGrid(arch; origin=(T(0.0), T(0.0)), extent=(T(1.0), T(1.0)), dims=(6, 4))
 
@@ -69,24 +71,23 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             q  = VectorField(backend, grid)
 
             M = typeof(C.data)
-            myfun!(x::M) where {M} = push!(count, typeof(x))
-            # # myfun!(x::M) = push!(count, typeof(x))
 
-            # @testset "deepmap! on single Field" begin
-            #     empty!(count)
-            #     deepmap!(myfun!, C)
-            #     @test length(count) == 1
-            #     @test count[1] == M
-            # end
+            @eval myfun!(x::$M) = push!(buff, typeof(x))
 
-            # @testset "deepmap! on multiple args" begin
-            #     empty!(count)
-            #     args = (q, Δt, grid)
-            #     deepmap!(myfun!, args)
-            #     @test length(count) == 2
-            #     @test count[1] == M
-            #     @test count[2] == M
-            # end
+            @testset "deepmap! on single Field" begin
+                empty!(buff)
+                deepmap!(myfun!, C)
+                @test length(buff) == 1
+                @test buff[1] == M
+            end
+            @testset "deepmap! on multiple args" begin
+                empty!(buff)
+                args = (q, Δt, grid)
+                deepmap!(myfun!, args)
+                @test length(buff) == 2
+                @test buff[1] == M
+                @test buff[2] == M
+            end
 
             if haskey(ENV, "JULIA_CHMY_BACKEND_CUDA") && (backend isa CUDABackend)
                 @testset "CUDA task_sync" begin
