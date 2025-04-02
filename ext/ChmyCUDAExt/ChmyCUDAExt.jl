@@ -2,16 +2,15 @@ module ChmyCUDAExt
 
 using CUDA, KernelAbstractions
 
-import Chmy.Architectures: heuristic_groupsize, set_device!, get_device, pointertype, disable_task_sync!, enable_task_sync!, modify_sync!
+import Chmy.Architectures: heuristic_groupsize, set_device!, get_device, pointertype, disable_task_sync!, enable_task_sync!
 
 Base.unsafe_wrap(::CUDABackend, ptr::CuPtr, dims) = unsafe_wrap(CuArray, ptr, dims)
 
 pointertype(::CUDABackend, T::DataType) = CuPtr{T}
 
-@inline disable_task_sync!(x::CuArray) = CUDA.unsafe_disable_task_sync!(x)
-@inline enable_task_sync!(x::CuArray) = CUDA.unsafe_enable_task_sync!(x)
-
-@inline modify_sync!(x::CuArray, fn::F) where F = fn(x)
+# because of https://github.com/JuliaGPU/CUDA.jl/pull/2335
+disable_task_sync!(x::CuArray) = CUDA.unsafe_disable_task_sync!(x)
+enable_task_sync!(x::CuArray) = CUDA.unsafe_enable_task_sync!(x)
 
 set_device!(dev::CuDevice) = CUDA.device!(dev)
 

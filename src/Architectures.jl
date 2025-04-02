@@ -1,7 +1,7 @@
 module Architectures
 
 export Architecture, SingleDeviceArchitecture
-export Arch, get_backend, get_device, activate!, set_device!, heuristic_groupsize, pointertype, disable_task_sync!, enable_task_sync!, modify_sync!
+export Arch, get_backend, get_device, activate!, set_device!, heuristic_groupsize, pointertype, disable_task_sync!, enable_task_sync!, with_no_task_sync!
 
 using Chmy
 using KernelAbstractions
@@ -83,22 +83,28 @@ Base.unsafe_wrap(::CPU, ptr::Ptr, dims) = unsafe_wrap(Array, ptr, dims)
 pointertype(::CPU, T::DataType) = Ptr{T}
 
 # because of https://github.com/JuliaGPU/CUDA.jl/pull/2335
-disable_task_sync!(::Array) = nothing
-enable_task_sync!(::Array) = nothing
+disable_task_sync!(::Any) = nothing
+enable_task_sync!(::Any)  = nothing
 
-@inline modify_sync!(x::Array, fn::F) where F = fn(x)
-@inline modify_sync!(::Tuple{}, ::F)  where F = nothing
-
-@generated function modify_sync!(x::T, fn::F) where {T,F}
-    names  = fieldnames(x)
-    N      = length(names)
+@generated function deepmap!(fn::F, x::T) where {F,T}
+    names = fieldnames(x)
+    N     = length(names)
     quote
         @inline
+        fn(x) # deepmap calls a function on the argument
         Base.@nexprs $N i -> begin
             args = getfield(x, $names[i])
-            modify_sync!(args, fn)
+            deepmap!(fn, args) # deepmap calls a function on its fields
         end
     end
+end
+
+# helper function to temporarily disable task sync for arguments
+function with_no_task_sync!(fn::F, args::T) where {F,T}
+    deepmap!(disable_task_sync!, args)
+    fn()
+    deepmap!(enable_task_sync!, args)
+    return
 end
 
 end

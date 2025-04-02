@@ -2,16 +2,11 @@ module ChmyMetalExt
 
 using Metal, KernelAbstractions
 
-import Chmy.Architectures: heuristic_groupsize, set_device!, get_device, pointertype, disable_task_sync!, enable_task_sync!, modify_sync!
+import Chmy.Architectures: heuristic_groupsize, set_device!, get_device, pointertype
 
 Base.unsafe_wrap(::MetalBackend, ptr::Metal.MtlPtr, dims) = unsafe_wrap(MtlArray, ptr, dims)
 
 pointertype(::MetalBackend, T::DataType) = Metal.MtlPtr{T}
-
-@inline disable_task_sync!(::MtlArray) = nothing
-@inline enable_task_sync!(::MtlArray) = nothing
-
-@inline modify_sync!(x::MtlArray, fn::F) where F = fn(x)
 
 set_device!(dev::Metal.MTL.MTLDeviceInstance) = Metal.device!(dev)
 

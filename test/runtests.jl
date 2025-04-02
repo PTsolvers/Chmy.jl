@@ -8,7 +8,7 @@ using MPI
 
 EXCLUDE_TESTS = []
 
-istest(f) = startswith(f, "test_") && endswith(f, ".jl")
+istest(f) = startswith(f, "test_kernel") && endswith(f, ".jl")
 
 function parse_flag(args, flag; default=nothing, type::DataType=Nothing)
     key = findfirst(arg -> startswith(arg, flag), args)

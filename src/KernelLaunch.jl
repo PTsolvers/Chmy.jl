@@ -134,28 +134,26 @@ import KernelAbstractions.NDIteration.StaticSize
         fun(args..., offset)
         bc!(arch, grid, bc)
     else
-        modify_sync!(args, disable_task_sync!)
+        with_no_task_sync!(args) do
+            inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
+            inner_fun(args..., offset + Offset(inner_offset(launcher)...))
 
-        inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
-        inner_fun(args..., offset + Offset(inner_offset(launcher)...))
-
-        N = ndims(grid)
-        ntuple(Val(N)) do J
-            Base.@_inline_meta
-            D = N - J + 1
-            outer_fun = kernel(backend, groupsize, StaticSize(outer_worksize(launcher, Dim(D))))
-            ntuple(Val(2)) do S
-                put!(launcher.workers[D][S]) do
-                    outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(S))...))
-                    bc!(Side(S), Dim(D), arch, grid, bc[D][S])
-                    KernelAbstractions.synchronize(backend)
+            N = ndims(grid)
+            ntuple(Val(N)) do J
+                Base.@_inline_meta
+                D = N - J + 1
+                outer_fun = kernel(backend, groupsize, StaticSize(outer_worksize(launcher, Dim(D))))
+                ntuple(Val(2)) do S
+                    put!(launcher.workers[D][S]) do
+                        outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(S))...))
+                        bc!(Side(S), Dim(D), arch, grid, bc[D][S])
+                        KernelAbstractions.synchronize(backend)
+                    end
                 end
+                wait(launcher.workers[D][1])
+                wait(launcher.workers[D][2])
             end
-            wait(launcher.workers[D][1])
-            wait(launcher.workers[D][2])
         end
-
-        modify_sync!(args, enable_task_sync!)
     end
     return
 end
