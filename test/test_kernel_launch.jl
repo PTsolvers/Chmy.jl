@@ -1,6 +1,6 @@
 include("common.jl")
 
-import Chmy.Architectures: deepmap!
+import Chmy.Architectures: deepmap!, disable_task_sync!, enable_task_sync!, with_no_task_sync!
 
 struct CuArray end # in reality this is replaced by "using CUDA"
 
