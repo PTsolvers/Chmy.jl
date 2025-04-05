@@ -9,8 +9,8 @@ Base.unsafe_wrap(::CUDABackend, ptr::CuPtr, dims) = unsafe_wrap(CuArray, ptr, di
 pointertype(::CUDABackend, T::DataType) = CuPtr{T}
 
 # because of https://github.com/JuliaGPU/CUDA.jl/pull/2335
-disable_task_sync!(x::CuArray) = CUDA.unsafe_disable_task_sync!(x)
-enable_task_sync!(x::CuArray) = CUDA.unsafe_enable_task_sync!(x)
+disable_task_sync!(x::CuArray) = CUDA.enable_synchronization!(x, false)
+enable_task_sync!(x::CuArray) = CUDA.enable_synchronization!(x, true)
 
 set_device!(dev::CuDevice) = CUDA.device!(dev)
 
