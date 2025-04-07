@@ -23,7 +23,7 @@ ChmyMetalExt = "Metal"
 [compat]
 AMDGPU = "0.8, 0.9, 1"
 Adapt = "4"
-CUDA = "5"
+CUDA = "5.7.2"
 KernelAbstractions = "0.9"
 MPI = "0.20"
 MacroTools = "0.5"
