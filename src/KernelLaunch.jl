@@ -9,6 +9,8 @@ using Chmy.Grids
 using Chmy.BoundaryConditions
 using Chmy.Workers
 
+import Chmy.Architectures: enable_task_sync!, disable_task_sync!
+
 using KernelAbstractions
 
 """
@@ -124,6 +126,28 @@ end
 end
 
 import KernelAbstractions.NDIteration.StaticSize
+
+# recursively apply a function to all fields of an object
+@generated function deepmap!(fn::F, x::T) where {F,T}
+    names = fieldnames(x)
+    N     = length(names)
+    quote
+        @inline
+        fn(x) # deepmap calls a function on the argument
+        Base.@nexprs $N i -> begin
+            args = getfield(x, $names[i])
+            deepmap!(fn, args) # deepmap calls a function on its fields
+        end
+    end
+end
+
+# helper function to temporarily disable task sync for arguments
+function with_no_task_sync!(fn::F, args::T) where {F,T}
+    deepmap!(disable_task_sync!, args)
+    fn()
+    deepmap!(enable_task_sync!, args)
+    return
+end
 
 @inline function launch_with_bc(arch, grid, launcher, offset, kernel, bc, args...)
     backend   = Architectures.get_backend(arch)

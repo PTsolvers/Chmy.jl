@@ -1,8 +1,7 @@
 include("common.jl")
 
-import Chmy.Architectures: deepmap!, disable_task_sync!, enable_task_sync!, with_no_task_sync!
-
-struct CuArray end # in reality this is replaced by "using CUDA"
+import Chmy.Architectures: disable_task_sync!, enable_task_sync!
+import Chmy.KernelLaunch: deepmap!, with_no_task_sync!
 
 myfun!(::Any) = nothing
 
@@ -18,10 +17,12 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             @testset "deepmap! on CPU backend" begin
                 calls = Symbol[]
 
+                struct CuArray end # Dummy struct to simulate CUDA array
+
                 Chmy.Architectures.disable_task_sync!(::Any) = nothing
                 Chmy.Architectures.enable_task_sync!(::Any) = nothing
-                Chmy.Architectures.disable_task_sync!(::CuArray) = push!(calls, :disable) # actual unsafe_disable_task_sync! call
-                Chmy.Architectures.enable_task_sync!(::CuArray) = push!(calls, :enable) # actual unsafe_enable_task_sync! call
+                Chmy.Architectures.disable_task_sync!(::CuArray) = push!(calls, :disable)
+                Chmy.Architectures.enable_task_sync!(::CuArray) = push!(calls, :enable)
 
                 empty!(calls)
                 foo1 = (1, 2, 3)
