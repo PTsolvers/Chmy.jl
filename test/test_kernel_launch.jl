@@ -90,41 +90,41 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             end
 
             if haskey(ENV, "JULIA_CHMY_BACKEND_CUDA") && (backend isa CUDABackend)
-                @testset "CUDA task_sync" begin
+                @testset "CUDA implicit synchronization" begin
                     @testset "Single Field" begin
                         @testset "disable_task_sync!" begin
-                            @assert C.data.data[].task_sync == true
+                            @assert C.data.data[].synchronizing == true
                             deepmap!(disable_task_sync!, C)
-                            @test C.data.data[].task_sync == false
+                            @test C.data.data[].synchronizing == false
                         end
 
                         @testset "enable_task_sync!" begin
-                            @assert C.data.data[].task_sync == false
+                            @assert C.data.data[].synchronizing == false
                             deepmap!(enable_task_sync!, C)
-                            @test C.data.data[].task_sync == true
+                            @test C.data.data[].synchronizing == true
                         end
                     end
 
                     @testset "Multiple args" begin
                         args = (C, q, Δt, grid)
                         @testset "disable_task_sync!" begin
-                            @assert C.data.data[].task_sync == true
-                            @assert q.x.data.data[].task_sync == true
-                            @assert q.y.data.data[].task_sync == true
+                            @assert C.data.data[].synchronizing == true
+                            @assert q.x.data.data[].synchronizing == true
+                            @assert q.y.data.data[].synchronizing == true
                             deepmap!(disable_task_sync!, args)
-                            @test C.data.data[].task_sync == false
-                            @test q.x.data.data[].task_sync == false
-                            @test q.y.data.data[].task_sync == false
+                            @test C.data.data[].synchronizing == false
+                            @test q.x.data.data[].synchronizing == false
+                            @test q.y.data.data[].synchronizing == false
                         end
 
                         @testset "enable_task_sync!" begin
-                            @assert C.data.data[].task_sync == false
-                            @assert q.x.data.data[].task_sync == false
-                            @assert q.y.data.data[].task_sync == false
+                            @assert C.data.data[].synchronizing == false
+                            @assert q.x.data.data[].synchronizing == false
+                            @assert q.y.data.data[].synchronizing == false
                             deepmap!(enable_task_sync!, args)
-                            @test C.data.data[].task_sync == true
-                            @test q.x.data.data[].task_sync == true
-                            @test q.y.data.data[].task_sync == true
+                            @test C.data.data[].synchronizing == true
+                            @test q.x.data.data[].synchronizing == true
+                            @test q.y.data.data[].synchronizing == true
                         end
                     end
                 end
