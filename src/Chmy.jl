@@ -51,15 +51,15 @@ export
     xcenters, ycenters, zcenters,
 
     # GridOperators
-    left, right, δ, ∂,
+    left, right, δ, ∂, ∂²,
     InterpolationRule, Linear, HarmonicLinear,
     itp, lerp, hlerp,
     divg, vmag,
     AbstractMask, FieldMask, FieldMask1D, FieldMask2D, FieldMask3D, at,
 
-    leftx, rightx, δx, ∂x,
-    lefty, righty, δy, ∂y,
-    leftz, rightz, δz, ∂z,
+    leftx, rightx, δx, ∂x, ∂²x,
+    lefty, righty, δy, ∂y, ∂²y,
+    leftz, rightz, δz, ∂z, ∂²z,
 
     leftx_masked, rightx_masked, δx_masked, ∂x_masked,
     lefty_masked, righty_masked, δy_masked, ∂y_masked,

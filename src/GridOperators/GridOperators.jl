@@ -1,6 +1,6 @@
 module GridOperators
 
-export left, right, δ, ∂
+export left, right, δ, ∂, ∂²
 
 export InterpolationRule, Linear, HarmonicLinear
 export itp, lerp, hlerp

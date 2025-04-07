@@ -23,6 +23,12 @@ end
     ∂(f, loc, from, grid, dim, I...)
 end
 
+@add_cartesian function ∂²(f::AbstractField, grid, dim, I::Vararg{Integer,N}) where {N}
+    loc  = location(f)
+    from = location(f)
+    ∂²(f, loc, from, grid, dim, I...)
+end
+
 # covariant derivatives
 @propagate_inbounds @generated function divg(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}
     quote
