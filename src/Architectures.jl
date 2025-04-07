@@ -65,7 +65,7 @@ get_device(arch::SingleDeviceArchitecture) = arch.device
 """
     activate!(arch::SingleDeviceArchitecture; priority=:normal)
 
-Activate the given architecture on the specified device and set the priority of the 
+Activate the given architecture on the specified device and set the priority of the
 backend. For the priority accepted values are `:normal`, `:low` and `:high`.
 """
 function activate!(arch::SingleDeviceArchitecture; priority=:normal)
@@ -81,5 +81,9 @@ heuristic_groupsize(::CPU, ::Val{N}) where {N} = 256
 Base.unsafe_wrap(::CPU, ptr::Ptr, dims) = unsafe_wrap(Array, ptr, dims)
 
 pointertype(::CPU, T::DataType) = Ptr{T}
+
+# because of https://github.com/JuliaGPU/CUDA.jl/pull/2335
+disable_task_sync!(::Any) = nothing
+enable_task_sync!(::Any)  = nothing
 
 end
