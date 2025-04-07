@@ -3,8 +3,10 @@ using Chmy, KernelAbstractions
 @kernel function d2!(V1, C2, C4, C1, g::StructuredGrid, O)
     I = @index(Global, NTuple)
     I = I + O
+    Il = I .- (1,)
+    Ir = I .+ (1,)
     V1[I...] = ∂x(C1, g, I...)
-    C2[I...] = ((right(C1, (Center(),), (Center(),), Dim(1), I...) - C1[I...]) * iΔ(g, Center(), Dim(1), I...) - ((C1[I...] - left(C1, (Center(),), (Center(),), Dim(1), I...)) * iΔ(g, Center(), Dim(1), I...))) * iΔ(g, Center(), Dim(1), I...)
+    C2[I...] = ((right(C1, (Center(),), (Center(),), Dim(1), I...) - C1[I...]) * iΔ(g, Vertex(), Dim(1), Ir...) - ((C1[I...] - left(C1, (Center(),), (Center(),), Dim(1), Il...)) * iΔ(g, Vertex(), Dim(1), I...))) * iΔ(g, Center(), Dim(1), I...)
     C4[I...] = ∂²x(C1, g, I...)
 end
 
