@@ -3,9 +3,10 @@ for (dim, coord) in enumerate((:x, :y, :z))
     _r = Symbol(:right, coord)
     _δ = Symbol(:δ, coord)
     _∂ = Symbol(:∂, coord)
+    _∂² = Symbol(:∂², coord)
 
     @eval begin
-        export $_δ, $_∂, $_l, $_r
+        export $_δ, $_∂, $_∂², $_l, $_r
 
         """
             $($_l)(f, ω, I)
@@ -41,6 +42,15 @@ for (dim, coord) in enumerate((:x, :y, :z))
         """
         @add_cartesian function $_∂(f::AbstractField, ω::AbstractMask, grid, I::Vararg{Integer,N}) where {N}
             ∂(f, ω, grid, Dim($dim), I...)
+        end
+
+        """
+        $($_∂²)(f, ω, grid, I)
+
+        Directional partial second derivative in $($(string(coord))) direction, masked with `ω`.
+        """
+        @add_cartesian function $_∂²(f::AbstractField, ω::AbstractMask, grid, I::Vararg{Integer,N}) where {N}
+            ∂²(f, ω, grid, Dim($dim), I...)
         end
     end
 end

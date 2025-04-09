@@ -21,3 +21,7 @@ end
 @add_cartesian δ(f, loc, from, ω::AbstractMask, dim, I::Vararg{Integer,N}) where {N} = right(f, loc, from, ω, dim, I...) - left(f, loc, from, ω, dim, I...)
 
 @add_cartesian ∂(f, loc, from, ω::AbstractMask, grid, dim, I::Vararg{Integer,N}) where {N} = δ(f, loc, from, ω, dim, I...) * iΔ(grid, loc, dim, I...)
+
+@add_cartesian ∂²(f, loc, from, ω::AbstractMask, grid, dim::Dim{D}, I::Vararg{Integer,N}) where {N,D} = (∂(f, ω, grid, dim, ir(flipped(loc, dim)[D], from[D], dim, I...)...) -
+                                                                                                         ∂(f, ω, grid, dim, il(flipped(loc, dim)[D], from[D], dim, I...)...)) *
+                                                                                                        iΔ(grid, loc, dim, I...)
