@@ -108,6 +108,7 @@ The function `subdomain` will be the input of `BoundaryFunction`. `BoundaryFunct
 
 ```julia
 # parameters for the boundaries
+# values of the Dirichlet BC
 a = 0
 b = 10
 c = 20
