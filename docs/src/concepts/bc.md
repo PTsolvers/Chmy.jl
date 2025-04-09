@@ -1,8 +1,8 @@
 # Boundary Conditions
 
-Using [Chmy.jl](https://github.com/PTsolvers/Chmy.jl), we aim to study partial differential equations (PDEs) arising from physical or engineering problems. Additional initial and/or boundary conditions are necessary for the model problem to be well-posed, ensuring the existence and uniqueness of a stable solution.
+Using [Chmy.jl](https://github.com/PTsolvers/Chmy.jl), we aim to study partial differential equations (PDEs) arising from physical or engineering problems. Additional initial and/or boundary conditions are necessary for the model problem to be well-posed, ensuring the existence and uniqueness of a stable solution. The strategy used in this package to apply boundary conditions is based on ghost points.
 
-We provide a small overview for boundary conditions that one often encounters. In the following, we consider the unknown function $u : \Omega \mapsto \mathbb{R}$ defined on some  bounded computational domain $\Omega \subset \mathbb{R}^d$ in a $d$-dimensional space. With the domain boundary denoted by $\partial \Omega$, we have some function $g : \partial \Omega \mapsto \mathbb{R}$ prescribed on the boundary.
+We provide a small overview for boundary conditions that one often encounters. In the following, we consider the unknown function $u : \Omega \mapsto \mathbb{R}$ defined on some bounded computational domain $\Omega \subset \mathbb{R}^d$ in a $d$-dimensional space. With the domain boundary denoted by $\partial \Omega$, we have some function $g : \partial \Omega \mapsto \mathbb{R}$ prescribed on the boundary.
 
 | Type    | Form | Example |
 |:------------|:------------|:---------|
@@ -65,3 +65,61 @@ To launch a kernel that satisfies these boundary conditions in Chmy.jl, you can 
 ```julia
 bc!(arch, grid, field => (x = Neumann(), y = (Dirichlet(b), Dirichlet(a))))
 ```
+
+### More Complex Boundary Conditions
+
+In some cases, one may need to apply more complex boundary conditions, with a dependency in space or using conditions for instance. This can be done using `BoundaryFunction`. We provide in this subsection a usage example of this feature.
+
+Taking the previous example, let's define two subdomains at the bottom boundary, with two different Dirichlet boundary conditions.
+
+In this case, the boundary will have the value $u = b$ for $x < 0$, and $u = c$ for $x > 0$.
+
+First, let's call Chmy and KernelAbstractions, and initialize our variables:
+
+```julia
+using Chmy
+using KernelAbstractions
+
+# load backend
+backend = CPU()
+arch = Arch(backend)
+
+# define grid
+grid   = UniformGrid(arch; origin=(-1, -1), extent=(2, 2), dims=(100,100))
+launch = Launcher(arch, grid)
+
+# empty field for the example
+field = Field(backend, grid, Center())
+```
+
+We can then define `subdomain`, which would be the function applying the boundary condition at the bottom of the model on our variable `field`.
+
+```julia
+function subdomain(x, b, c, half_domain)
+    if x < half_domain
+        return b
+    else
+        return c
+    end
+end
+```
+
+The function `subdomain` will be the input of `BoundaryFunction`. `BoundaryFunction` can then be passed to the `bc!()` function, which will apply the boundary condition on the field.
+
+```julia
+# parameters for the boundaries
+# values of the Dirichlet BC
+a = 0
+b = 10
+c = 20
+half_domain = 0
+
+# define BoundaryFunction
+boundary_x = BoundaryFunction(subdomain; parameters = (b, c, half_domain))
+
+# apply the boundary condition
+bc = (field  => (x = (Dirichlet(boundary_x), Dirichlet(a)), y=Neumann()))
+bc!(arch, grid, bc)
+```
+
+The `parameters` argument is used to pass the parameters of the function `subdomain`.
