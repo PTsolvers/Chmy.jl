@@ -47,7 +47,7 @@ end
     return divg(V, ω, grid, Tuple(I)...)
 end
 
-@propagate_inbounds @generated function Δ(V::NamedTuple{names,<:NTuple{N,AbstractField}},
+@propagate_inbounds @generated function lapl(V::NamedTuple{names,<:NTuple{N,AbstractField}},
                                           ω::AbstractMask{T,N},
                                           grid::StructuredGrid{N},
                                           I::Vararg{Integer,N}) where {names,T,N}
@@ -57,9 +57,9 @@ end
     end
 end
 
-@propagate_inbounds function Δ(V::NamedTuple{names,<:NTuple{N,AbstractField}},
+@propagate_inbounds function lapl(V::NamedTuple{names,<:NTuple{N,AbstractField}},
                                ω::AbstractMask{T,N},
                                grid::StructuredGrid{N},
                                I::CartesianIndex{N}) where {names,T,N}
-    return Δ(V, ω, grid, Tuple(I)...)
+    return lapl(V, ω, grid, Tuple(I)...)
 end

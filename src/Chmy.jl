@@ -54,7 +54,7 @@ export
     left, right, δ, ∂, ∂²,
     InterpolationRule, Linear, HarmonicLinear,
     itp, lerp, hlerp,
-    divg, Δ, vmag,
+    divg, lapl, vmag,
     AbstractMask, FieldMask, FieldMask1D, FieldMask2D, FieldMask3D, at,
 
     leftx, rightx, δx, ∂x, ∂²x,

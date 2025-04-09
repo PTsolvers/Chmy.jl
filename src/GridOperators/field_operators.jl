@@ -41,15 +41,15 @@ end
     return divg(V, grid, Tuple(I)...)
 end
 
-@propagate_inbounds @generated function Δ(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}
+@propagate_inbounds @generated function lapl(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}
     quote
         @inline
         Base.Cartesian.@ncall $N (+) D -> ∂²(V[D], grid, Dim(D), I...)
     end
 end
 
-@propagate_inbounds function Δ(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::CartesianIndex{N}) where {names,N}
-    return Δ(V, grid, Tuple(I)...)
+@propagate_inbounds function lapl(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::CartesianIndex{N}) where {names,N}
+    return lapl(V, grid, Tuple(I)...)
 end
 
 @propagate_inbounds @generated function vmag(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}
