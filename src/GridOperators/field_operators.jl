@@ -36,6 +36,17 @@ end
 end
 
 # covariant derivatives
+"""
+    divg(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}
+
+Compute the divergence of a vector field `V` on a structured grid `grid`.
+This operation is performed along all dimensions of the grid.
+
+## Arguments
+- `V::NamedTuple{names,<:NTuple{N,AbstractField}}`: The vector field represented as a named tuple of fields.
+- `grid::StructuredGrid{N}`: The structured grid on which the operation is performed.
+- `I`: The indices specifying the location on the grid (Tuple or Cartesian indices).
+"""
 @propagate_inbounds @generated function divg(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}
     quote
         @inline
@@ -47,6 +58,17 @@ end
     return divg(V, grid, Tuple(I)...)
 end
 
+"""
+    lapl(F::AbstractField, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {N}
+
+Compute the Laplacian of a field `F` on a structured grid `grid`.
+This operation is performed along all dimensions of the grid.
+
+## Arguments
+- `F::AbstractField`: The field whose Laplacian is to be computed.
+- `grid::StructuredGrid{N}`: The structured grid on which the operation is performed.
+- `I`: The indices specifying the location on the grid (Tuple or Cartesian indices).
+"""
 @propagate_inbounds @generated function lapl(F::AbstractField, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {N}
     quote
         @inline
@@ -58,6 +80,18 @@ end
     return lapl(F, grid, Tuple(I)...)
 end
 
+"""
+    divg_grad(F::AbstractField, K::AbstractField, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {N}
+
+Compute the divergence of the diffusion flux of a field `F` weighted by a coefficient `K` on a structured grid `grid`.
+This operation is performed along all dimensions of the grid.
+
+## Arguments
+- `F::AbstractField`: The field whose gradient is to be computed.
+- `K::AbstractField`: The weighting field for the gradient.
+- `grid::StructuredGrid{N}`: The structured grid on which the operation is performed.
+- `I`: The indices specifying the location on the grid (Tuple or Cartesian indices).
+"""
 @propagate_inbounds @generated function divg_grad(F::AbstractField, K::AbstractField, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {N}
     quote
         @inline
@@ -69,6 +103,16 @@ end
     return divg_grad(F, K, grid, Tuple(I)...)
 end
 
+"""
+    vmag(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}
+
+Compute the magnitude of a vector field `V` at a given grid location `I` in a structured grid `grid`.
+
+## Arguments
+- `V::NamedTuple{names,<:NTuple{N,AbstractField}}`: A named tuple representing the vector field, where each component is an `AbstractField`.
+- `grid::StructuredGrid{N}`: The structured grid on which the vector field is defined.
+- `I`: The indices specifying the location on the grid (Tuple or Cartesian indices).
+"""
 @propagate_inbounds @generated function vmag(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}
     quote
         @inline
