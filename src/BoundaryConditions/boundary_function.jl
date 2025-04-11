@@ -1,6 +1,6 @@
 """
     abstract type BoundaryFunction{F}
-    
+
 Abstract type for boundary condition functions with function type `F`.
 """
 abstract type BoundaryFunction{F} end
@@ -43,9 +43,30 @@ end
     bc.value(grid, loc, dim, I...)
 end
 
-# Create a continuous or discrete boundary function
-# if discrete = true, the function has signature f(grid, loc, dim, inds...)
-# if reduce_dims = false, the boundary condition function accepts the same number of coordinates as the number of indices
+"""
+    BoundaryFunction(fun::Function; discrete=false, parameters=nothing, reduce_dims=true)
+
+Creates a boundary function that can either be continuous or discrete, depending on the `discrete` keyword argument.
+
+## Arguments
+- `fun::Function`: The function defining the boundary condition.
+- `discrete::Bool=false`: If `true`, the boundary function is discrete and has the signature `f(grid, loc, dim, inds...)`.
+- `parameters`: Optional parameters to be passed to the boundary function.
+- `reduce_dims::Bool=true`: If `true`, the boundary function reduces the number of dimensions it operates on. If `false`, the function accepts the same number of coordinates as the number of indices.
+
+## Usage
+The example below shows how to use the boundary function to initialise a pure shear configuration in 2D.
+```julia
+ebg = 1.0
+psh_x(x) = -x * ebg
+psh_y(y) =  y * ebg
+x_bc = BoundaryFunction(psh_x; reduce_dims=true)
+y_bc = BoundaryFunction(psh_y; reduce_dims=true)
+bc_V = (V.x => (x=Dirichlet(x_bc), y=Neumann()),
+        V.y => (x=Neumann(), y=Dirichlet(y_bc)))
+bc!(arch, grid, bc_V...)
+```
+"""
 function BoundaryFunction(fun::Function; discrete=false, parameters=nothing, reduce_dims=true)
     RF = reduce_dims ? ReducedDimensions : FullDimensions
     discrete ? DiscreteBoundaryFunction{RF}(fun, parameters) : ContinuousBoundaryFunction{RF}(fun, parameters)
