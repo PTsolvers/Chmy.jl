@@ -93,7 +93,7 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
                 launch(arch, grid, divg_grad2! => (C1, C2, V, χc, grid))
 
                 KernelAbstractions.synchronize(backend)
-                @test interior(C2) ≈ interior(C1)
+                @test all(Array(interior(C2)) .≈ Array(interior(C1)))
             end
 
             @testset "χ Vertex()" begin
@@ -103,7 +103,7 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
                 launch(arch, grid, divg_grad2! => (C1, C2, V, χv, grid))
 
                 KernelAbstractions.synchronize(backend)
-                @test interior(C2) ≈ interior(C1)
+                @test all(Array(interior(C2)) .≈ Array(interior(C1)))
             end
         end
 
