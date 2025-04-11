@@ -4,9 +4,10 @@ for (dim, coord) in enumerate((:x, :y, :z))
     _δ = Symbol(:δ, coord)
     _∂ = Symbol(:∂, coord)
     _∂² = Symbol(:∂², coord)
+    _∂k∂ = Symbol(:∂k∂, coord)
 
     @eval begin
-        export $_δ, $_∂, $_∂², $_l, $_r
+        export $_δ, $_∂, $_∂², $_∂k∂, $_l, $_r
 
         """
             $($_l)(f, I)
@@ -51,6 +52,15 @@ for (dim, coord) in enumerate((:x, :y, :z))
         """
         @add_cartesian function $_∂²(f::AbstractField, grid, I::Vararg{Integer,N}) where {N}
             ∂²(f, grid, Dim($dim), I...)
+        end
+
+        """
+            $($_∂k∂)(f, k, grid, I)
+
+        Directional divergence of gradient times coefficient `k` in $($(string(coord))) direction.
+        """
+        @add_cartesian function $_∂k∂(f::AbstractField, k::AbstractField, grid, I::Vararg{Integer,N}) where {N}
+            ∂k∂(f, k, grid, Dim($dim), I...)
         end
     end
 end

@@ -29,6 +29,12 @@ end
     return ∂²(f, loc, from, grid, dim, I...)
 end
 
+@add_cartesian function ∂k∂(f::AbstractField, k::AbstractField, grid, dim, I::Vararg{Integer,N}) where {N}
+    loc  = location(f)
+    from = location(f)
+    return ∂k∂(f, k, loc, from, grid, dim, I...)
+end
+
 # covariant derivatives
 @propagate_inbounds @generated function divg(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}
     quote
@@ -41,15 +47,26 @@ end
     return divg(V, grid, Tuple(I)...)
 end
 
-@propagate_inbounds @generated function lapl(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}
+@propagate_inbounds @generated function lapl(F::AbstractField, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {N}
     quote
         @inline
-        Base.Cartesian.@ncall $N (+) D -> ∂²(V[D], grid, Dim(D), I...)
+        Base.Cartesian.@ncall $N (+) D -> ∂²(F, grid, Dim(D), I...)
     end
 end
 
-@propagate_inbounds function lapl(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::CartesianIndex{N}) where {names,N}
-    return lapl(V, grid, Tuple(I)...)
+@propagate_inbounds function lapl(F::AbstractField, grid::StructuredGrid{N}, I::CartesianIndex{N}) where {N}
+    return lapl(F, grid, Tuple(I)...)
+end
+
+@propagate_inbounds @generated function divg_grad(F::AbstractField, K::AbstractField, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {N}
+    quote
+        @inline
+        Base.Cartesian.@ncall $N (+) D -> ∂k∂(F, K, grid, Dim(D), I...)
+    end
+end
+
+@propagate_inbounds function divg_grad(F::AbstractField, K::AbstractField, grid::StructuredGrid{N}, I::CartesianIndex{N}) where {N}
+    return divg_grad(F, K, grid, Tuple(I)...)
 end
 
 @propagate_inbounds @generated function vmag(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,N}

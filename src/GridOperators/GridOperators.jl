@@ -5,7 +5,7 @@ export left, right, δ, ∂, ∂²
 export InterpolationRule, Linear, HarmonicLinear
 export itp, lerp, hlerp
 
-export divg, lapl, vmag
+export divg, divg_grad, lapl, vmag
 
 export AbstractMask, FieldMask, FieldMask1D, FieldMask2D, FieldMask3D, at
 

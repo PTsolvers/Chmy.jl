@@ -54,12 +54,12 @@ export
     left, right, δ, ∂, ∂²,
     InterpolationRule, Linear, HarmonicLinear,
     itp, lerp, hlerp,
-    divg, lapl, vmag,
+    divg, divg_grad, lapl, vmag,
     AbstractMask, FieldMask, FieldMask1D, FieldMask2D, FieldMask3D, at,
 
-    leftx, rightx, δx, ∂x, ∂²x,
-    lefty, righty, δy, ∂y, ∂²y,
-    leftz, rightz, δz, ∂z, ∂²z,
+    leftx, rightx, δx, ∂x, ∂²x, ∂k∂x,
+    lefty, righty, δy, ∂y, ∂²y, ∂k∂y,
+    leftz, rightz, δz, ∂z, ∂²z, ∂k∂z,
 
     leftx_masked, rightx_masked, δx_masked, ∂x_masked, ∂²x_masked,
     lefty_masked, righty_masked, δy_masked, ∂y_masked, ∂²y_masked,
