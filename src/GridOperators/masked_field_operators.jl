@@ -74,7 +74,7 @@ end
                                                   K::AbstractField,
                                                   ω::AbstractMask{T,N},
                                                   grid::StructuredGrid{N},
-                                                  I::Vararg{Integer,N}) where {N}
+                                                  I::Vararg{Integer,N}) where {T,N}
     quote
         @inline
         Base.Cartesian.@ncall $N (+) D -> ∂k∂(F, K, ω, grid, Dim(D), I...)
@@ -85,6 +85,6 @@ end
                                        K::AbstractField,
                                        ω::AbstractMask{T,N},
                                        grid::StructuredGrid{N},
-                                       I::CartesianIndex{N}) where {N}
+                                       I::CartesianIndex{N}) where {T,N}
     return divg_grad(F, K, ω, grid, Tuple(I)...)
 end
