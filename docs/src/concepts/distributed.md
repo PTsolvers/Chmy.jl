@@ -25,5 +25,9 @@ By using the fast interconnect, processes across different nodes can communicate
 
 Expanding upon our understanding of message passing in HPC clusters, we now turn our focus to its application within GPU-enhanced environments in Chmy.jl. Our distributed architecture builds upon the abstraction of having GPU clusters that build on the same GPU architecture. Note that in general, GPU clusters may be equipped with hardware from different vendors, incorporating different types of GPUs to exploit their unique capabilities for specific tasks.
 
-!!! warning "GPU-Aware MPI Required for Distributed Module on GPU backend"
-    The `Distributed` module currently only supports [GPU-aware MPI](https://juliaparallel.org/MPI.jl/stable/usage/#CUDA-aware-MPI-support) when a GPU backend is selected for multi-GPU computations. For the `Distributed` module to function properly, any GPU-aware MPI library installation shall be used. Otherwise, a segmentation fault will occur.
+The `Distributed` architecture currently defaults to [GPU-aware MPI](https://juliaparallel.org/MPI.jl/stable/usage/#CUDA-aware-MPI-support) when the `CUDABackend` or `ROCBackend` GPU backends are selected for multi-GPU computations. For the `Distributed` architecture to function properly on those backends, a GPU-aware MPI library installation shall be used. Otherwise, a segmentation fault will occur.
+
+The `Distributed` architecture can also be initialised to use CPU buffers making it compatible with non GPU-aware MPI library installations. This is the default behaviour for the `CPU` and `MetalBackend` backends. Setting the keyword argument `gpu_aware` allows to modified the default behaviour upon architecture initialisation.
+
+!!! warning "GPU-Aware MPI and Distributed Architecture"
+    Using non GPU-aware MPI may require pinned (or page locked) memory buffers, a feature which is currently not implemented, and may result in slight performance reduction.
