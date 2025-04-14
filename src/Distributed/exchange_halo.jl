@@ -21,7 +21,9 @@ function exchange_halo!(side::Side{S}, dim::Dim{D},
     tle = task_local_exchanger()
 
     reset_allocators!(tle)
-    init!(tle, Architectures.get_backend(arch), dim, side, fields)
+
+    distributed_arch = Architectures.is_gpu_aware(arch) ? Architectures.get_backend(arch) : CPU()
+    init!(tle, distributed_arch, dim, side, fields)
 
     # initiate non-blocking MPI receive and device-to-device copy to the send buffer
     for idx in eachindex(fields)

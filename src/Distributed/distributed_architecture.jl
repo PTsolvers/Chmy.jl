@@ -6,10 +6,11 @@ A struct representing a distributed architecture.
 struct DistributedArchitecture{ChildArch,Topo} <: Architecture
     child_arch::ChildArch
     topology::Topo
+    gpu_aware::Bool
 end
 
 """
-    Architectures.Arch(backend::Backend, comm::MPI.Comm, dims; device_id=nothing)
+    Architectures.Arch(backend::Backend, comm::MPI.Comm, dims; device_id=nothing, gpu_aware=true)
 
 Create a distributed Architecture using backend `backend` and `comm`.
 For GPU backends, device will be selected automatically based on a process id within a node, unless specified by `device_id`.
@@ -21,13 +22,15 @@ For GPU backends, device will be selected automatically based on a process id wi
 
 # Keyword Arguments
 - `device_id`: The ID of the device to use. If not provided, the shared rank of the topology plus one is used.
+- `gpu_aware`: Whether the MPI implementation is GPU-aware. If not provided, defaults to `true`. Only applies to compatible backends.
 """
-function Architectures.Arch(backend::Backend, comm::MPI.Comm, dims; device_id=nothing)
+function Architectures.Arch(backend::Backend, comm::MPI.Comm, dims; device_id=nothing, gpu_aware=true)
     topology   = CartesianTopology(comm, dims)
     dev_id     = isnothing(device_id) ? shared_rank(topology) + 1 : device_id
     dev        = get_device(backend, dev_id)
     child_arch = SingleDeviceArchitecture(backend, dev)
-    return DistributedArchitecture(child_arch, topology)
+    gpu_aware  = gpu_aware_compat(backend) ? gpu_aware : false
+    return DistributedArchitecture(child_arch, topology, gpu_aware)
 end
 
 """
@@ -55,8 +58,15 @@ Architectures.get_device(arch::DistributedArchitecture) = get_device(arch.child_
 """
     activate!(arch::DistributedArchitecture; kwargs...)
 
-Activate the given DistributedArchitecture by delegating to the child architecture, 
-and pass through any keyword arguments. For example, the priority can be set with 
+Activate the given DistributedArchitecture by delegating to the child architecture,
+and pass through any keyword arguments. For example, the priority can be set with
 accepted values being `:normal`, `:low`, and `:high`.
 """
 Architectures.activate!(arch::DistributedArchitecture; kwargs...) = activate!(arch.child_arch; kwargs...)
+
+"""
+    is_gpu_aware(arch::DistributedArchitecture)
+
+Returns whether the DistributedArchitecture is GPU-aware.
+"""
+is_gpu_aware(arch::DistributedArchitecture) = arch.gpu_aware

@@ -2,6 +2,7 @@ module Architectures
 
 export Architecture, SingleDeviceArchitecture
 export Arch, get_backend, get_device, activate!, set_device!, heuristic_groupsize, pointertype
+export gpu_aware_compat
 
 using Chmy
 using KernelAbstractions
@@ -85,5 +86,7 @@ pointertype(::CPU, T::DataType) = Ptr{T}
 # because of https://github.com/JuliaGPU/CUDA.jl/pull/2335
 disable_task_sync!(::Any) = nothing
 enable_task_sync!(::Any)  = nothing
+
+gpu_aware_compat(::CPU) = false
 
 end
