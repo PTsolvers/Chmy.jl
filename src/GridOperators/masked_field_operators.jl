@@ -37,16 +37,16 @@ end
 
 # covariant derivatives
 """
-    divg(V::NamedTuple{names,<:NTuple{N,AbstractField}}, ω::AbstractMask{T,N}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {names,T,N}
+    divg(V, ω, grid, I)
 
 Compute the divergence of a vector field `V` on a structured grid `grid`, using the mask `ω` to handle masked regions.
 This operation is performed along all dimensions of the grid.
 
 ## Arguments:
-- `V::NamedTuple{names,<:NTuple{N,AbstractField}}`: The vector field represented as a named tuple of fields.
-- `ω::AbstractMask`: The mask for the grid.
-- `grid::StructuredGrid{N}`: The structured grid on which the operation is performed.
-- `I`: The indices specifying the location on the grid (Tuple or Cartesian indices).
+- `V`: The vector field represented as a named tuple of fields.
+- `ω`: The mask for the grid.
+- `grid`: The structured grid on which the operation is performed.
+- `I...`: The indices specifying the location on the grid.
 """
 @propagate_inbounds @generated function divg(V::NamedTuple{names,<:NTuple{N,AbstractField}},
                                              ω::AbstractMask{T,N},
@@ -66,16 +66,16 @@ end
 end
 
 """
-    lapl(F::AbstractField, ω::AbstractMask{T,N}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {T,N}
+    lapl(F, ω, grid, I...)
 
 Compute the Laplacian of a field `F` on a structured grid `grid`.
 This operation is performed along all dimensions of the grid.
 
 ## Arguments
-- `F::AbstractField`: The field whose Laplacian is to be computed.
-- `ω::AbstractMask`: The mask for the grid.
-- `grid::StructuredGrid{N}`: The structured grid on which the operation is performed.
-- `I`: The indices specifying the location on the grid (Tuple or Cartesian indices).
+- `F`: The field whose Laplacian is to be computed.
+- `ω`: The mask for the grid.
+- `grid`: The structured grid on which the operation is performed.
+- `I...`: The indices specifying the location on the grid.
 """
 @propagate_inbounds @generated function lapl(F::AbstractField,
                                              ω::AbstractMask{T,N},
@@ -95,17 +95,17 @@ end
 end
 
 """
-    divg_grad(F::AbstractField, K::AbstractField, ω::AbstractMask{T,N}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {T,N}
+    divg_grad(F, K, ω, grid, I...)
 
 Compute the divergence of the diffusion flux of a field `F` weighted by a coefficient `K` on a structured grid `grid`.
 This operation is performed along all dimensions of the grid.
 
 ## Arguments
-- `F::AbstractField`: The field whose gradient is to be computed.
-- `K::AbstractField`: The weighting field for the gradient.
-- `ω::AbstractMask`: The mask for the grid.
-- `grid::StructuredGrid{N}`: The structured grid on which the operation is performed.
-- `I`: The indices specifying the location on the grid (Tuple or Cartesian indices).
+- `F`: The field whose gradient is to be computed.
+- `K`: The weighting field for the gradient.
+- `ω`: The mask for the grid.
+- `grid`: The structured grid on which the operation is performed.
+- `I...`: The indices specifying the location on the grid.
 """
 @propagate_inbounds @generated function divg_grad(F::AbstractField,
                                                   K::AbstractField,
