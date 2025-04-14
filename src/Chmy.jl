@@ -51,19 +51,19 @@ export
     xcenters, ycenters, zcenters,
 
     # GridOperators
-    left, right, δ, ∂,
+    left, right, δ, ∂, ∂², ∂k∂,
     InterpolationRule, Linear, HarmonicLinear,
     itp, lerp, hlerp,
-    divg, vmag,
+    divg, divg_grad, lapl, vmag,
     AbstractMask, FieldMask, FieldMask1D, FieldMask2D, FieldMask3D, at,
 
-    leftx, rightx, δx, ∂x,
-    lefty, righty, δy, ∂y,
-    leftz, rightz, δz, ∂z,
+    leftx, rightx, δx, ∂x, ∂²x, ∂k∂x,
+    lefty, righty, δy, ∂y, ∂²y, ∂k∂y,
+    leftz, rightz, δz, ∂z, ∂²z, ∂k∂z,
 
-    leftx_masked, rightx_masked, δx_masked, ∂x_masked,
-    lefty_masked, righty_masked, δy_masked, ∂y_masked,
-    leftz_masked, rightz_masked, δz_masked, ∂z_masked,
+    leftx_masked, rightx_masked, δx_masked, ∂x_masked, ∂²x_masked, ∂k∂x_masked,
+    lefty_masked, righty_masked, δy_masked, ∂y_masked, ∂²y_masked, ∂k∂y_masked,
+    leftz_masked, rightz_masked, δz_masked, ∂z_masked, ∂²z_masked, ∂k∂z_masked,
 
     # KernelLaunch
     Launcher,

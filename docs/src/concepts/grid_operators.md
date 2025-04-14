@@ -7,32 +7,42 @@ Chmy.jl currently supports various finite difference operators for fields define
 | $\frac{\partial}{\partial x} P$ | ` ∂x(P, g, I)` |
 | $\frac{\partial}{\partial y} P$ | ` ∂y(P, g, I)` |
 | $\frac{\partial}{\partial z} P$ | ` ∂z(P, g, I)` |
-| $\nabla P$ | ` divg(P, g, I)` |
+| $\frac{\partial^2}{\partial x^2} P$ | ` ∂²x(P, g, I)` |
+| $\frac{\partial^2}{\partial y^2} P$ | ` ∂²y(P, g, I)` |
+| $\frac{\partial^2}{\partial z^2} P$ | ` ∂²z(P, g, I)` |
+| $\nabla P$ | `divg(P, g, I)` |
+| $\Delta P$ | `lapl(P, g, I)` |
+| $\nabla \cdot χ \nabla P$ | `divg_grad(P, χ, g, I)` |
 
 ## Computing the Divergence of a Vector Field
 
-To illustrate the usage of grid operators, we compute the divergence of an vector field $V$ using the `divg` function. We first allocate memory for required fields.
+To illustrate the usage of grid operators, we compute the divergence of a vector field $V$, the Laplacian of a scalar field $P$ and the divergence-gradient of a scalar field $C$ weighted by the coefficient $χ$ using the `divg`, `lapl` and `divg_grad` functions, respectively. We first allocate memory for required fields.
 
 ```julia
-V  = VectorField(backend, grid)
+P  = Field(backend, grid, Center())
+C  = Field(backend, grid, Center())
+χ  = Field(backend, grid, Center()) # works also for Vertex()
 ∇V = Field(backend, grid, Center())
+V  = VectorField(backend, grid)
 # use set! to set up the initial vector field...
 ```
 
 The kernel that computes the divergence needs to have the grid information passed as for other finite difference operators.
 
 ```julia
-@kernel inbounds = true function update_∇!(V, ∇V, g::StructuredGrid, O)
+@kernel inbounds = true function update!(∇V, V, P, C, χ, g::StructuredGrid, O)
     I = @index(Global, Cartesian)
     I = I + O
     ∇V[I] = divg(V, g, I)
+    P[I]  = lapl(P, g, I)
+    C[I]  = divg_grad(C, χ, g, I)
 end
 ```
 
 The kernel can then be launched when required as we detailed in section [Kernels](./kernels.md).
 
 ```julia
-launch(arch, grid, update_∇! => (V, ∇V, grid))
+launch(arch, grid, update! => (∇V, V, P, C, χ, grid))
 ```
 
 ## Masking
@@ -125,4 +135,3 @@ and can be launched with some launcher defined using `launch = Launcher(arch, gr
 ```julia
 launch(arch, grid, interpolate_ρ! => (ρ, ρx, ρy, grid))
 ```
-

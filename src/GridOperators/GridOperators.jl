@@ -1,11 +1,11 @@
 module GridOperators
 
-export left, right, δ, ∂
+export left, right, δ, ∂, ∂², ∂k∂
 
 export InterpolationRule, Linear, HarmonicLinear
 export itp, lerp, hlerp
 
-export divg, vmag
+export divg, divg_grad, lapl, vmag
 
 export AbstractMask, FieldMask, FieldMask1D, FieldMask2D, FieldMask3D, at
 
