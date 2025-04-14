@@ -5,8 +5,9 @@
 @add_cartesian ∂(f, loc, from, grid, dim, I::Vararg{Integer,N}) where {N} = δ(f, loc, from, dim, I...) * iΔ(grid, loc, dim, I...)
 
 @add_cartesian function ∂²(f, loc, from, grid, dim::Dim{D}, I::Vararg{Integer,N}) where {N,D}
-    Ir = ir(flipped(loc, dim)[D], from[D], dim, I...)
-    Il = il(flipped(loc, dim)[D], from[D], dim, I...)
+    floc = flipped(loc, dim)
+    Ir = ir(floc[D], from[D], dim, I...)
+    Il = il(floc[D], from[D], dim, I...)
     return (∂(f, grid, dim, Ir...) - ∂(f, grid, dim, Il...)) * iΔ(grid, loc, dim, I...)
 end
 
