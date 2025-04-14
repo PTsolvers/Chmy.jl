@@ -53,6 +53,7 @@ for backend in TEST_BACKENDS
                     @test is_gpu_aware(arch) == false
                 end
             end
+            MPI.Finalize()
         end
     end
 end
