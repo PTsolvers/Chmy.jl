@@ -20,7 +20,7 @@ export
     # Distributed
     CartesianTopology, global_rank, shared_rank, node_name, cart_comm, shared_comm,
     dims, cart_coords, neighbors, neighbor, has_neighbor, global_size, node_size,
-    DistributedArchitecture, topology,
+    DistributedArchitecture, topology, is_gpu_aware,
     exchange_halo!, gather!,
 
     # DoubleBuffer

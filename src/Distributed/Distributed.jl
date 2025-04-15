@@ -10,7 +10,7 @@ module Distributed
 
 export CartesianTopology, global_rank, shared_rank, node_name, cart_comm, shared_comm
 export dims, cart_coords, neighbors, neighbor, has_neighbor, global_size, node_size
-export DistributedArchitecture, topology
+export DistributedArchitecture, topology, is_gpu_aware
 export exchange_halo!, gather!
 
 using Chmy
@@ -18,6 +18,8 @@ using Chmy.Grids
 using Chmy.Fields
 using Chmy.Architectures
 using Chmy.BoundaryConditions
+
+import Chmy.Architectures: disable_task_sync!, gpu_aware_compat
 
 using MPI
 using KernelAbstractions

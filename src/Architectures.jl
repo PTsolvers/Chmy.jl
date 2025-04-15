@@ -86,4 +86,6 @@ pointertype(::CPU, T::DataType) = Ptr{T}
 disable_task_sync!(::Any) = nothing
 enable_task_sync!(::Any)  = nothing
 
+gpu_aware_compat(::CPU) = false
+
 end
