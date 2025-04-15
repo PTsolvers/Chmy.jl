@@ -40,6 +40,13 @@ Get the virtual MPI topology of a distributed architecture
 """
 topology(arch::DistributedArchitecture) = arch.topology
 
+"""
+    is_gpu_aware(arch::DistributedArchitecture)
+
+Whether the DistributedArchitecture is GPU-aware.
+"""
+is_gpu_aware(arch::DistributedArchitecture) = arch.gpu_aware
+
 # Implement Architecture API
 """
     get_backend(arch::DistributedArchitecture)
@@ -63,10 +70,3 @@ and pass through any keyword arguments. For example, the priority can be set wit
 accepted values being `:normal`, `:low`, and `:high`.
 """
 Architectures.activate!(arch::DistributedArchitecture; kwargs...) = activate!(arch.child_arch; kwargs...)
-
-"""
-    is_gpu_aware(arch::DistributedArchitecture)
-
-Returns whether the DistributedArchitecture is GPU-aware.
-"""
-is_gpu_aware(arch::DistributedArchitecture) = arch.gpu_aware

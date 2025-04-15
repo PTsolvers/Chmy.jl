@@ -2,7 +2,6 @@ module Architectures
 
 export Architecture, SingleDeviceArchitecture
 export Arch, get_backend, get_device, activate!, set_device!, heuristic_groupsize, pointertype
-export gpu_aware_compat
 
 using Chmy
 using KernelAbstractions
