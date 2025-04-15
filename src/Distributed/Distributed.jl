@@ -19,7 +19,7 @@ using Chmy.Fields
 using Chmy.Architectures
 using Chmy.BoundaryConditions
 
-import Chmy.Architectures: gpu_aware_compat
+import Chmy.Architectures: disable_task_sync!, gpu_aware_compat
 
 using MPI
 using KernelAbstractions
