@@ -4,7 +4,7 @@ using AMDGPU, KernelAbstractions
 
 import Chmy.Architectures: heuristic_groupsize, set_device!, get_device, pointertype, gpu_aware_compat
 
-Base.unsafe_wrap(::ROCBackend, ptr::Ptr, dims) = unsafe_wrap(ROCArray, ptr, dims; lock=false)
+Base.unsafe_wrap(::ROCBackend, ptr::Ptr, dims) = unsafe_wrap(ROCArray, ptr, dims; own=true)
 
 pointertype(::ROCBackend, T::DataType) = Ptr{T}
 
