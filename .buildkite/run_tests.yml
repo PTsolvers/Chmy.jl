@@ -5,7 +5,7 @@ steps:
         version:
           - "1.10"
           - "1.11"
-          - "^1.12.0-rc"
+          - "1.12-nightly"
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"
@@ -34,7 +34,7 @@ steps:
         version:
           - "1.10"
           - "1.11"
-          - "^1.12.0-rc"
+          - "1.12-nightly"
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"
@@ -65,7 +65,7 @@ steps:
         version:
           - "1.10"
           - "1.11"
-          - "^1.12.0-rc"
+          - "1.12-nightly"
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"
