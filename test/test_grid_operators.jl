@@ -79,7 +79,7 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
                 V.z[I...] = lerp(χ, location(V.z), g, I...) * ∂z(Ci, g, I...)
             end
 
-            @kernel function divg_grad2!(C1, C2, V, χ, g::StructuredGrid, O)
+            @kernel function divg_grad2!(C1, C2, V, Ci, χ, g::StructuredGrid, O)
                 I = @index(Global, NTuple)
                 I = I + O
                 C1[I...] = ∂x(V.x, g, I...) + ∂y(V.y, g, I...) + ∂z(V.z, g, I...)
@@ -87,20 +87,24 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             end
 
             @testset "χ Center()" begin
+                set!(C1, T(0.0))
+                set!(C2, T(0.0))
                 set!(χc, grid, (x, y, z) -> exp(-x^2 - y^2 - z^2))
 
                 launch(arch, grid, divg_grad1! => (V, Ci, χc, grid))
-                launch(arch, grid, divg_grad2! => (C1, C2, V, χc, grid))
+                launch(arch, grid, divg_grad2! => (C1, C2, V, Ci, χc, grid))
 
                 KernelAbstractions.synchronize(backend)
                 @test all(Array(interior(C2)) .≈ Array(interior(C1)))
             end
 
             @testset "χ Vertex()" begin
+                set!(C1, T(0.0))
+                set!(C2, T(0.0))
                 set!(χv, grid, (x, y, z) -> exp(-x^2 - y^2 - z^2))
 
                 launch(arch, grid, divg_grad1! => (V, Ci, χv, grid))
-                launch(arch, grid, divg_grad2! => (C1, C2, V, χv, grid))
+                launch(arch, grid, divg_grad2! => (C1, C2, V, Ci, χv, grid))
 
                 KernelAbstractions.synchronize(backend)
                 @test all(Array(interior(C2)) .≈ Array(interior(C1)))
@@ -124,7 +128,6 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             launch(arch, grid, lapl! => (C1, V, grid))
 
             KernelAbstractions.synchronize(backend)
-            # @show interior(C1)
             @test all(round.(Array(interior(C1)), sigdigits=5) .≈ 3.4641)
         end
     end
