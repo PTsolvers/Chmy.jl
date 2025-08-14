@@ -1,13 +1,13 @@
 using Chmy
 using KernelAbstractions
 using Printf
-using JSON
+# using JSON
 # using CairoMakie
 
-using AMDGPU
-AMDGPU.allowscalar(false)
-# using CUDA
-# CUDA.allowscalar(false)
+# using AMDGPU
+# AMDGPU.allowscalar(false)
+using CUDA
+CUDA.allowscalar(false)
 
 using MPI
 MPI.Init()
@@ -86,8 +86,8 @@ end
 end
 
 @views function main(backend=CPU(); nxyz_l=(126, 126, 126))
-    # arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0); device_id=1)
-    arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0))
+    arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0); device_id=1)
+    # arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0))
     topo = topology(arch)
     me   = global_rank(topo)
     # geometry
@@ -237,12 +237,13 @@ end
     return
 end
 
-input = open(JSON.parse, joinpath(@__DIR__, "params.json"))
-params = NamedTuple(Symbol.(keys(input)) .=> values(input))
-res = params.res
-# res = 640
+# input = open(JSON.parse, joinpath(@__DIR__, "params.json"))
+# params = NamedTuple(Symbol.(keys(input)) .=> values(input))
+# res = params.res
+res = 512
 
-main(ROCBackend(); nxyz_l=(res, res, res) .- 2)
+# main(ROCBackend(); nxyz_l=(res, res, res) .- 2)
+main(CUDAackend(); nxyz_l=(res, res, res) .- 2)
 # main(; nxyz_l=(254, 254, 254))
 
 MPI.Finalize()

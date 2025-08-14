@@ -17,3 +17,17 @@ unit_test:
     SLURM_NTASKS_PER_NODE: 1
     SLURM_GPUS_PER_TASK: 1
     SLURM_TIMELIMIT: "00:15:00"
+
+perf_test:
+  extends: .baremetal-runner-daint-gh200
+  script:
+    - echo "Preparing the test environment (single rank)"
+    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.instantiate()'
+    - srun -n 1 --uenv julia/25.5:v1 --view=juliaup julia --project -e 'using Pkg; Pkg.add("CUDA")'
+    - echo "Running the reference test (multiple ranks)"
+    - srun --uenv julia/25.5:v1 --view=juliaup julia --project examples/stokes_3d_inc_ve_T_mpi_perf.jl
+  variables:
+    SLURM_JOB_NUM_NODES: 2
+    SLURM_NTASKS_PER_NODE: 4
+    SLURM_GPUS_PER_TASK: 1
+    SLURM_TIMELIMIT: "00:10:00"
