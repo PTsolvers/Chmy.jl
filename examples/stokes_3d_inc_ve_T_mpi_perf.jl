@@ -243,7 +243,7 @@ end
 res = 512
 
 # main(ROCBackend(); nxyz_l=(res, res, res) .- 2)
-main(CUDAackend(); nxyz_l=(res, res, res) .- 2)
+main(CUDABackend(); nxyz_l=(res, res, res) .- 2)
 # main(; nxyz_l=(254, 254, 254))
 
 MPI.Finalize()
