@@ -5,14 +5,14 @@ unit_test:
   extends: .uenv-runner-daint-gh200
   image: julia/25.5:v1
   script:
-  - export MPICH_GPU_SUPPORT_ENABLED=1
-  - julia -e 'println("Instantiating project");
-              using Pkg;
-              Pkg.activate(pwd())'
-  - julia -e 'println("Running tests");
-              using Pkg;
-              Pkg.activate(pwd());
-              Pkg.test("Chmy"; test_args=["--backend=CUDA"])'
+    - export MPICH_GPU_SUPPORT_ENABLED=1
+    - julia -e 'println("Instantiating project");
+                using Pkg;
+                Pkg.activate(pwd())'
+    - julia -e 'println("Running tests");
+                using Pkg;
+                Pkg.activate(pwd());
+                Pkg.test("Chmy"; test_args=["--backend=CUDA"])'
   variables:
     WITH_UENV_VIEW: 'juliaup'
     SLURM_JOB_NUM_NODES: 1
