@@ -11,6 +11,7 @@ unit_test:
                 Pkg.activate(pwd())'
     - julia -e 'println("Running tests");
                 using Pkg;
+                Pkg.activate(pwd());
                 Pkg.test("Chmy"; test_args=["--backends=CUDA"])'
   variables:
     WITH_UENV_VIEW: 'juliaup'
