@@ -6,9 +6,9 @@ unit_test:
   image: julia/25.5:v1
   script:
     - export MPICH_GPU_SUPPORT_ENABLED=1
-    # - julia -e 'println("Instantiating project");
-    #             using Pkg;
-    #             Pkg.activate(pwd())'
+    - julia -e 'println("Instantiating project");
+                using Pkg;
+                Pkg.activate(pwd())'
     - julia -e 'println("Running tests");
                 using Pkg;
                 Pkg.test("Chmy"; test_args=["--backends=CUDA"])'
