@@ -9,7 +9,6 @@ unit_test:
   - julia -e 'println("Instantiating project");
               using Pkg;
               Pkg.activate(pwd())'
-              # Pkg.develop(; path=pwd())'
   - julia -e 'println("Running tests");
               using Pkg;
               Pkg.activate(pwd());
