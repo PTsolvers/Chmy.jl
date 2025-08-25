@@ -1,3 +1,4 @@
+# NOTE: This file is currently run as multi-GPU test in the CSCS CI on ALPS. Consider making a copy before applying any changes.
 using Chmy
 using KernelAbstractions
 using Printf
