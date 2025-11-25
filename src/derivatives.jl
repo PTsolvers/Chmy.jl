@@ -26,3 +26,17 @@ function stencil_rule(::CentralDifference, args::Tuple{STerm}, loc::Tuple{Space}
     f, l, i = only(args), only(loc), only(inds)
     return 0.5 * (f[l][i+1] - f[l][i-1])
 end
+
+struct StaggeredCentralDifference <: AbstractDerivative end
+
+function stencil_rule(::StaggeredCentralDifference, args::Tuple{STerm}, loc::Tuple{Point}, inds::Tuple{STerm})
+    f, i = only(args), only(inds)
+    l = Segment()
+    return 0.5 * (f[l][i+1] + f[l][i])
+end
+
+function stencil_rule(::StaggeredCentralDifference, args::Tuple{STerm}, loc::Tuple{Segment}, inds::Tuple{STerm})
+    f, i = only(args), only(inds)
+    l = Point()
+    return 0.5 * (f[l][i] + f[l][i-1])
+end
