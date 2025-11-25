@@ -6,13 +6,3 @@ node_modules
 
 Manifest.toml
 LocalPreferences.toml
-
-.DS_Store
-.vscode
-
-run_*
-runP_*
-runT_*
-runPGC_*
-out_*
-prof*

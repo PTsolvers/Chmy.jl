@@ -3,9 +3,6 @@ using Chmy
 
 using Pkg
 
-# distributed
-using MPI
-
 EXCLUDE_TESTS = []
 
 istest(f) = startswith(f, "test_") && endswith(f, ".jl")

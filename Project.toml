@@ -1,31 +1,16 @@
 name = "Chmy"
 uuid = "33a72cf0-4690-46d7-b987-06506c2248b9"
-authors = ["Ivan Utkin <iutkin@ethz.ch>, Ludovic Raess <ludovic.rass@gmail.com>, and contributors"]
-version = "0.1.25"
+version = "0.2.0"
+authors = ["Ivan Utkin <iutkin@ethz.ch> and contributors"]
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
-MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
-
-[weakdeps]
-AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
-CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
-
-[extensions]
-ChmyAMDGPUExt = "AMDGPU"
-ChmyCUDAExt = "CUDA"
-ChmyMetalExt = "Metal"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
-AMDGPU = "2"
-Adapt = "4"
-CUDA = "5.7.2"
-KernelAbstractions = "0.9"
-MPI = "0.20"
-MacroTools = "0.5"
-Metal = "1"
 julia = "1.10"
+Adapt = "4"
+KernelAbstractions = "0.9"
+StaticArrays = "1.9"
