@@ -1,0 +1,16 @@
+abstract type Space <: STerm end
+
+struct Segment <: Space end
+struct Point <: Space end
+
+scale(::Segment)  = 1
+offset(::Segment) = -1
+
+scale(::Point)  = 1
+offset(::Point) = 0
+
+function Base.getindex(sub::SExpr{Ind}, loc::Vararg{Space})
+    inds = indices(sub)
+    arg  = argument(sub)
+    return SExpr(Ind(), SExpr(Loc(), arg, loc...), inds...)
+end
