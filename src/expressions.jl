@@ -13,13 +13,8 @@ struct Loc <: SExprHead end
 struct SUniform{Value} <: STerm end
 SUniform(value) = SUniform{value}()
 
-struct Tag{Name} <: STerm end
-Tag(name::Symbol) = Tag{name}()
-
-struct Component{Name,I} end
-Component(name::Symbol, inds::Vararg{Integer}) = Component{name,inds}()
-
-Tag(name::Component) = Tag{typeof(name)}()
+struct Tag{Name,Inds} <: STerm end
+Tag(name::Symbol, inds::Vararg{Integer}) = Tag{name,inds}()
 
 struct SRef{F} <: STerm end
 SRef(f::Symbol) = SRef{f}()

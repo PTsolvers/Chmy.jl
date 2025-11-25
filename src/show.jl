@@ -37,14 +37,14 @@ function Base.show(io::IO, ::MIME"text/plain", term::STerm)
     show_static(io, term, 0)
 end
 
-show_varname(io, name::Symbol) = printstyled(io, name; bold=true)
-
-function show_varname(io, ::Component{name,I}) where {name,I}
+function show_static(io, ::Tag{name,inds}, ::Int) where {name,inds}
     printstyled(io, name; bold=true)
-    print(io, '[', join(I, ", "), ']')
+    if length(inds) > 0
+        print(io, '[')
+        join(io, inds, ", ")
+        print(io, ']')
+    end
 end
-
-show_static(io, t::Tag, ::Int) = show_varname(io, variablename(t))
 
 show_static(io, term::STerm, ::Int) = print(io, variablename(term))
 
