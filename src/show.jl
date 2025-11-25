@@ -27,7 +27,7 @@ function variablename(::AbstractPartialDerivative{I}) where {I}
     return Symbol("∂", to_subscript(Val(I)))
 end
 
-Base.:show(io::IO, term::STerm) = show_static(io, term, 0)
+Base.show(io::IO, term::STerm) = show_static(io, term, 0)
 
 function Base.show(io::IO, ::MIME"text/plain", term::STerm)
     if isexpr(term)
