@@ -132,7 +132,7 @@ end
 function Base.show(io::IO, ::MIME"text/plain", v::Vec{N}) where {N}
     println(io, "$N-element Vec:")
     for i in 1:N
-        print(' ')
+        print(io, ' ')
         if v.components[i] isa STerm
             show_static(io, v.components[i], 0)
         else
