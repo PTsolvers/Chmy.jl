@@ -10,7 +10,6 @@ end
 variablename(::SUniform{Value}) where {Value} = Value
 variablename(sf::SFun) = nameof(sf.f)
 variablename(::SRef{F}) where {F} = F
-variablename(::Tag{Name}) where {Name} = Name isa Symbol ? Name : Name.instance
 variablename(s::Symbol) = s
 variablename(::Point) = :ᵖ
 variablename(::Segment) = :ˢ
