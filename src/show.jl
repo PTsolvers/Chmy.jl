@@ -130,14 +130,31 @@ function needs_parens(expr, prec)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", v::Vec{N}) where {N}
-    println(io, "$N-element Vec:")
+    print(io, "$N-element Vec:")
     for i in 1:N
-        print(io, ' ')
-        if v.components[i] isa STerm
-            show_static(io, v.components[i], 0)
-        else
-            show(io, v.components[i])
+        print(io, '\n', ' ')
+        show(io, v.components[i])
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", t::AbstractTensor{O,D}) where {O,D}
+    join(io, ntuple(_ -> D, Val(O)), '×')
+    sym = symmetry(t)
+    if sym <: IdentityGroup
+        print(io, " AsymmetricTensor:")
+    elseif sym <: SymmetricGroup
+        print(io, " SymmetricTensor:")
+    else
+        error("unknown tensor symmetry")
+    end
+    for idx in CartesianIndices(ntuple(_ -> D, O))
+        inds = Tuple(idx)
+        if sym <: SymmetricGroup && !issorted(inds)
+            continue
         end
-        print(io, '\n')
+        print(io, '\n', ' ', '[')
+        join(io, inds, ", ")
+        print(io, "] => ")
+        show(io, t[inds...])
     end
 end
