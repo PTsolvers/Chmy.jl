@@ -89,9 +89,9 @@ function show_static(io, expr::SExpr, prec::Int)
         if !isexpr(arg) || isloc(arg)
             show_static(io, arg, 0)
         else
-            print('(')
+            print(io, '(')
             show_static(io, arg, 0)
-            print(')')
+            print(io, ')')
         end
         print(io, '[')
         show_list(io, indices(expr), ", ", 0)
@@ -99,9 +99,9 @@ function show_static(io, expr::SExpr, prec::Int)
     elseif isloc(expr)
         arg = argument(expr)
         if isexpr(arg)
-            print('(')
+            print(io, '(')
             show_static(io, arg, 0)
-            print(')')
+            print(io, ')')
         else
             show_static(io, arg, 0)
         end
