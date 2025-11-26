@@ -30,6 +30,10 @@ struct SFun{F} <: STerm
     end
 end
 
+function (f::SFun)(args::Vararg{STerm})
+    SExpr(Call(), f, args...)
+end
+
 struct SIndex{I} <: STerm end
 SIndex(I::Union{Symbol,Integer}) = SIndex{I}()
 

@@ -9,3 +9,5 @@ Base.ndims(::Grid{N}) where {N} = N
 dims(grid::Grid) = grid.dims
 
 dims(grid::Grid{N}, loc::Vararg{Space,N}) where {N} = map((n, l) -> scale(l) * n + offset(l), dims(grid), loc)
+
+indices(::Grid{N}) where {N} = ntuple(i -> SIndex(i), Val(N))

@@ -31,6 +31,9 @@ export AbstractTensor, AbstractPermutationGroup, IdentityGroup, SymmetricGroup, 
 export order, dimensions, symmetry, dcontract, ⊡
 include("tensors.jl")
 
+export Gradient, Divergence
+include("calculus.jl")
+
 include("show.jl")
 
 end # module Chmy

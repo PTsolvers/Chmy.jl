@@ -4,6 +4,8 @@ abstract type AbstractDerivative <: STerm end
 
 abstract type AbstractPartialDerivative{I} <: STerm end
 
+(pd::AbstractPartialDerivative)(arg::STerm) = SExpr(Call(), pd, arg)
+
 struct LiftedPartialDerivative{I,Op} <: AbstractPartialDerivative{I}
     op::Op
 end
@@ -41,11 +43,11 @@ struct StaggeredCentralDifference <: AbstractDerivative end
 function stencil_rule(::StaggeredCentralDifference, args::Tuple{STerm}, loc::Tuple{Point}, inds::Tuple{STerm})
     f, i = only(args), only(inds)
     l = Segment()
-    return 0.5 * (f[l][i] + f[l][i-1])
+    return 0.5 * (f[l][i] - f[l][i-1])
 end
 
 function stencil_rule(::StaggeredCentralDifference, args::Tuple{STerm}, loc::Tuple{Segment}, inds::Tuple{STerm})
     f, i = only(args), only(inds)
     l = Point()
-    return 0.5 * (f[l][i+1] + f[l][i])
+    return 0.5 * (f[l][i+1] - f[l][i])
 end
