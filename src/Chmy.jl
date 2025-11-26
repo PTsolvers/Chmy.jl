@@ -18,13 +18,13 @@ export AbstractRule, Passthrough, Postwalk, Fixpoint
 export stencil_rule, lower_stencil, lift
 include("rewriters.jl")
 
-export AbstractDerivative, AbstractPartialDerivative, CentralDifference
+export AbstractDerivative, AbstractPartialDerivative, CentralDifference, StaggeredCentralDifference, PartialDerivative
 include("derivatives.jl")
 
 export Binding, push, binding_types
 include("binding.jl")
 
-export compute
+export compute, to_expr
 include("compute.jl")
 
 export AbstractTensor, AbstractPermutationGroup, IdentityGroup, SymmetricGroup, SymmetricTensor, AsymmetricTensor, Vec
