@@ -10,15 +10,11 @@ begin
     import Pkg
 	Pkg.activate(mktempdir())
 	Pkg.add(["Revise", "PlutoLinks", "PlutoUI", "CairoMakie"])
-	Pkg.develop(path="..")
-	using PlutoLinks, PlutoUI, Revise
+	Pkg.add(url="https://github.com/PTsolvers/Chmy.jl", rev="iu/v0.2")
+	using PlutoLinks, PlutoUI, Revise, Chmy
 	import CairoMakie: Figure, Axis, Colorbar, DataAspect, heatmap!
 end
 
-
-# ╔═╡ 1b2341be-2d5b-428e-9e99-2f3d69313d32
-# ╠═╡ show_logs = false
-@revise using Chmy
 
 # ╔═╡ e7168060-8cc7-4965-8224-3f3c844289a9
 using LinearAlgebra
@@ -666,8 +662,7 @@ fig
 end
 
 # ╔═╡ Cell order:
-# ╠═34237eee-ca2e-11f0-9a35-39b494c55d7b
-# ╠═1b2341be-2d5b-428e-9e99-2f3d69313d32
+# ╟─34237eee-ca2e-11f0-9a35-39b494c55d7b
 # ╟─1e0cd8df-528c-4868-985a-393a10e539cd
 # ╟─a80768e2-0f6b-4d7f-8863-3528fa092291
 # ╟─2eec34ba-d46a-4687-bb80-3194e1179aef
