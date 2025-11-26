@@ -158,3 +158,17 @@ function Base.show(io::IO, ::MIME"text/plain", t::AbstractTensor{O,D}) where {O,
         show(io, t[inds...])
     end
 end
+
+function Base.show(io::IO, ::MIME"text/plain", b::Binding)
+    padlength = maximum(f -> textwidth(string(f)), b.exprs; init=0)
+    if !haskey(io, :compact)
+        io = IOContext(io, :compact => true)
+    end
+    print(io, "Binding:")
+    for (expr, value) in zip(b.exprs, b.data)
+        print(io, '\n', ' ')
+        print(io, rpad(string(expr), padlength))
+        print(io, " => ")
+        show(io, value)
+    end
+end
