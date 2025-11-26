@@ -92,19 +92,16 @@ function stencil_rule(op::Union{SRef,SFun}, args::Tuple{Vararg{STerm}}, loc::NTu
     return SExpr(Call(), op, map(x -> x[loc...][inds...], args)...)
 end
 
-struct InsertRule{I,N,Loc,Inds} <: AbstractRule
-    loc::Loc
+function stencil_rule(op::Union{SRef,SFun}, args::Tuple{Vararg{STerm}}, inds::NTuple{N,STerm}) where {N}
+    return SExpr(Call(), op, map(x -> x[inds...], args)...)
+end
+
+struct InsertRule{I,N,Inds} <: AbstractRule
     inds::Inds
 end
 
-function InsertRule(loc::NTuple{N,Space}, inds::NTuple{N,STerm}, ::Val{I}, ::Val{N}) where {I,N}
-    InsertRule{I,N,typeof(loc),typeof(inds)}(loc, inds)
-end
-
-function (rule::InsertRule{I,N})(term::SExpr{Loc}) where {I,N}
-    loc = only(location(term))
-    new_loc = ntuple(j -> j == I ? loc : rule.loc[j], Val(N))
-    return argument(term)[new_loc...]
+function InsertRule(inds::NTuple{N,STerm}, ::Val{I}, ::Val{N}) where {I,N}
+    InsertRule{I,N,typeof(inds)}(inds)
 end
 
 function (rule::InsertRule{I,N})(term::SExpr{Ind}) where {I,N}
@@ -113,9 +110,36 @@ function (rule::InsertRule{I,N})(term::SExpr{Ind}) where {I,N}
     return argument(term)[new_inds...]
 end
 
+function lift(op::STerm, args, inds::NTuple{N,STerm}, ::Val{I}) where {I,N}
+    expr = stencil_rule(op, args, (inds[I],))
+    rule = InsertRule(inds, Val(I), Val(N))
+    return Prewalk(rule)(expr)
+end
+
+struct InsertRuleLoc{I,N,Loc,Inds} <: AbstractRule
+    loc::Loc
+    inds::Inds
+end
+
+function InsertRuleLoc(loc::NTuple{N,Space}, inds::NTuple{N,STerm}, ::Val{I}, ::Val{N}) where {I,N}
+    InsertRuleLoc{I,N,typeof(loc),typeof(inds)}(loc, inds)
+end
+
+function (rule::InsertRuleLoc{I,N})(term::SExpr{Loc}) where {I,N}
+    loc = only(location(term))
+    new_loc = ntuple(j -> j == I ? loc : rule.loc[j], Val(N))
+    return argument(term)[new_loc...]
+end
+
+function (rule::InsertRuleLoc{I,N})(term::SExpr{Ind}) where {I,N}
+    ind = only(indices(term))
+    new_inds = ntuple(j -> j == I ? ind : rule.inds[j], Val(N))
+    return argument(term)[new_inds...]
+end
+
 function lift(op::STerm, args, loc::NTuple{N,Space}, inds::NTuple{N,STerm}, ::Val{I}) where {I,N}
     expr = stencil_rule(op, args, (loc[I],), (inds[I],))
-    rule = InsertRule(loc, inds, Val(I), Val(N))
+    rule = InsertRuleLoc(loc, inds, Val(I), Val(N))
     return Prewalk(rule)(expr)
 end
 
