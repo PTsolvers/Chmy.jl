@@ -105,6 +105,10 @@ end
     end
 end
 
+function LinearAlgebra.tr(t::Tensor{2,D}) where {D}
+    return +(ntuple(i -> t.components[canonical_index(typeof(t), i, i)], Val(D))...)
+end
+
 Base.:*(t1::Tensor{2,D}, t2::Tensor{2,D}) where {D} = LinearAlgebra.dot(t1, t2)
 
 Base.transpose(t::SymmetricTensor{2}) = t

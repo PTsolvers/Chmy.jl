@@ -12,6 +12,10 @@ function (g::Gradient{N})(f::STerm) where {N}
     return Vec{N}(ntuple(i -> g.∂[i](f), Val(N))...)
 end
 
+function (g::Gradient{N})(f::Vec{N}) where {N}
+    return AsymmetricTensor{2,N}((g.∂[j](f[i]) for i in 1:N, j in 1:N)...)
+end
+
 struct Divergence{N,P}
     ∂::P
 end
