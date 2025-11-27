@@ -34,7 +34,7 @@ function laplace_2d(nx, ny)
     # fluxes at left and right boundaries
     q_l = lower_stencil(q[1][s, p][inds[1]-1, inds[2]])
     q_r = lower_stencil(q[1][s, p][inds[1], inds[2]])
-    # side bounday conditions
+    # side boundary conditions
     bc_l = q_l => SUniform(0)
     bc_r = q_r => SUniform(0)
     bc_b = f_b => SUniform(+1)
