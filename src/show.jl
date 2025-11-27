@@ -172,3 +172,10 @@ function Base.show(io::IO, ::MIME"text/plain", b::Binding)
         show(io, value)
     end
 end
+
+Base.show(io::IO, rule::SubsRule) = print(io, rule.lhs, " => ", rule.rhs)
+
+function Base.show(io::IO, ::MIME"text/plain", rule::SubsRule)
+    print(io, "SubsRule:\n ")
+    show(io, rule)
+end

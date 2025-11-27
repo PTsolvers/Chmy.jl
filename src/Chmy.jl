@@ -15,7 +15,7 @@ export Grid, dims
 include("grids.jl")
 
 export AbstractRule, Passthrough, Prewalk, Postwalk, Fixpoint
-export stencil_rule, lower_stencil, lift
+export stencil_rule, lower_stencil, lift, subs
 include("rewriters.jl")
 
 export AbstractDerivative, AbstractPartialDerivative, CentralDifference, StaggeredCentralDifference, PartialDerivative

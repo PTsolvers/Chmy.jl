@@ -144,3 +144,14 @@ function lift(op::STerm, args, loc::NTuple{N,Space}, inds::NTuple{N,STerm}, ::Va
 end
 
 lower_stencil(expr::STerm) = Prewalk(LowerStencil())(expr)
+
+struct SubsRule{Lhs,Rhs} <: AbstractRule
+    lhs::Lhs
+    rhs::Rhs
+end
+
+SubsRule(kv::Pair) = SubsRule(kv.first, kv.second)
+
+(rule::SubsRule{Lhs})(::Lhs) where {Lhs<:STerm} = rule.rhs
+
+subs(expr::STerm, kv::Pair) = Postwalk(SubsRule(kv))(expr)
