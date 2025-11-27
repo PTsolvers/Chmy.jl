@@ -7,7 +7,8 @@
 # The solver uses Chmy's symbolic field algebra to define the diffusion operator
 # and automatically handles boundary conditions at sides and corners.
 
-using Chmy, CairoMakie
+using Chmy
+using CairoMakie: Figure, Axis, Colorbar, DataAspect, heatmap!
 
 function laplace_2d(nx, ny)
     # grid
@@ -15,7 +16,7 @@ function laplace_2d(nx, ny)
     inds = indices(grid)
 
     # operators
-    p, s = Chmy.Point(), Chmy.Segment()
+    p, s = Point(), Segment()
     D    = StaggeredCentralDifference()
     grad = Gradient{ndims(grid)}(D)
     divg = Divergence{ndims(grid)}(D)
