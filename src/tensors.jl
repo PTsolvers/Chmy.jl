@@ -105,7 +105,7 @@ end
     end
 end
 
-Base.:*(t1::Tensor{2,D}, t2::Tensor{2,D}) where {D} = dot(t1, t2)
+Base.:*(t1::Tensor{2,D}, t2::Tensor{2,D}) where {D} = LinearAlgebra.dot(t1, t2)
 
 Base.transpose(t::SymmetricTensor{2}) = t
 
