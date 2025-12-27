@@ -1,125 +1,277 @@
-abstract type AbstractTensor{O,D,S} end
+abstract type TensorKind end
 
-abstract type AbstractPermutationGroup{N} end
+struct NoKind <: TensorKind end
+struct SymKind <: TensorKind end
+struct AltKind <: TensorKind end
+struct DiagKind <: TensorKind end
+struct IdKind <: TensorKind end
 
-struct IdentityGroup{N} <: AbstractPermutationGroup{N} end
-struct SymmetricGroup{N} <: AbstractPermutationGroup{N} end
+struct STensor{R,K,N} <: STerm end
 
-order(::AbstractTensor{O}) where {O} = O
-dimensions(::AbstractTensor{O,D}) where {O,D} = D
-symmetry(::AbstractTensor{O,D,S}) where {O,D,S} = S
+tensorrank(::STensor{R}) where {R} = R
+tensorkind(::STensor{<:Any,K}) where {K} = K
 
-order(::Type{<:AbstractTensor{O}}) where {O} = O
-dimensions(::Type{<:AbstractTensor{O,D}}) where {O,D} = D
-symmetry(::Type{<:AbstractTensor{O,D,S}}) where {O,D,S} = S
+tensorrank(::SIndex) = 0
+tensorrank(::SUniform) = 0
+tensorkind(::SUniform) = NoKind
 
-struct Tensor{O,D,S,C} <: AbstractTensor{O,D,S}
+STensor{R,K}(name::Symbol) where {R,K} = STensor{R,K,name}()
+STensor{R}(name::Symbol) where {R} = STensor{R,NoKind,name}()
+
+const SSymTensor{R}  = STensor{R,SymKind}
+const SAltTensor{R}  = STensor{R,AltKind}
+const SDiagTensor{R} = STensor{R,DiagKind}
+
+struct SZeroTensor{R} <: STerm end
+SZeroTensor{0}() = SUniform(0)
+
+struct SIdTensor{R} <: STerm end
+SIdTensor{1}() = SUniform(1)
+
+tensorrank(::SZeroTensor{R}) where {R} = R
+
+const SScalar = STensor{0,NoKind}
+const SVector = STensor{1,NoKind}
+
+const IntegerOrSUniform = Union{Integer,SUniform}
+
+function Base.getindex(t::STensor{R}, inds::Vararg{IntegerOrSUniform,R}) where {R}
+    SExpr(Comp(), t, map(STerm, inds)...)
+end
+
+Base.getindex(s::SScalar) = s
+
+tensorrank(expr::SExpr{Call}) = tensorrank(operation(expr), arguments(expr)...)
+tensorrank(::SExpr{Comp}) = 0
+tensorrank(::SExpr{Loc}) = 0
+tensorrank(::SExpr{Ind}) = 0
+
+tensorrank(::SFun, args...) = 0
+tensorrank(::SRef, args...) = 0
+
+tensorrank(::SRef{:adjoint}, t) = tensorrank(t)
+tensorrank(::SRef{:broadcasted}, op, args...) = maximum(map(tensorrank, args))
+
+tensorrank(::SRef{:+}, args...) = tensorrank(args[1])
+tensorrank(::SRef{:*}, args...) = maximum(tensorrank, args)
+tensorrank(::SRef{:-}, a)       = tensorrank(a)
+tensorrank(::SRef{:-}, a, b)    = tensorrank(a)
+tensorrank(::SRef{:⋅}, a, b)    = tensorrank(a) + tensorrank(b) - 2
+tensorrank(::SRef{:×}, a, b)    = 1
+tensorrank(::SRef{:⊡}, a, b)    = tensorrank(a) + tensorrank(b) - 4
+tensorrank(::SRef{:⊗}, a, b)    = tensorrank(a) + tensorrank(b)
+
+tensorrank(::SRef{:sym}, t)    = tensorrank(t)
+tensorrank(::SRef{:asym}, t)   = tensorrank(t)
+tensorrank(::SRef{:adj}, t)    = tensorrank(t)
+tensorrank(::SRef{:gram}, t)   = 2
+tensorrank(::SRef{:cogram}, t) = 2
+
+tensorrank(::Gradient, t)   = tensorrank(t) + 1
+tensorrank(::Divergence, t) = tensorrank(t) - 1
+tensorrank(::Curl, t)       = 1
+
+struct Tensor{R,D,K,C}
     components::C
 end
 
+tensorrank(::Tensor{R}) where {R} = R
+dimensions(::Tensor{<:Any,D}) where {D} = D
+tensorkind(::Tensor{<:Any,<:Any,K}) where {K} = K
+
+tensorrank(::Type{Tensor{R}}) where {R} = R
+dimensions(::Type{Tensor{<:Any,D}}) where {D} = D
+tensorkind(::Type{Tensor{<:Any,<:Any,K}}) where {K} = K
+
 Base.length(t::Tensor) = length(t.components)
 
-const AsymmetricTensor{O,D} = Tensor{O,D,IdentityGroup{O}}
-const SymmetricTensor{O,D} = Tensor{O,D,SymmetricGroup{O}}
+ncomponents(t::Tensor) = ncomponents(typeof(t))
+ncomponents(tt::Type{Tensor}) = ncomponents(tensorkind(tt), Val(tensorrank(tt)), Val(dimensions(tt)))
 
-const Vec{D} = AsymmetricTensor{1,D}
+ncomponents(::Type{NoKind}, ::Val{R}, ::Val{D}) where {R,D} = D^R
+ncomponents(::Type{SymKind}, ::Val{R}, ::Val{D}) where {R,D} = binomial(D + R - 1, R)
+ncomponents(::Type{AltKind}, ::Val{R}, ::Val{D}) where {R,D} = binomial(D, R)
+ncomponents(::Type{DiagKind}, ::Val{R}, ::Val{D}) where {R,D} = D
 
-ncomponents(t::AbstractTensor) = ncomponents(typeof(t))
-ncomponents(tt::Type{<:AbstractTensor}) = ncomponents(symmetry(tt), Val(dimensions(tt)))
+const SymTensor{R,D}  = Tensor{R,D,SymKind}
+const AltTensor{R,D}  = Tensor{R,D,AltKind}
+const DiagTensor{R,D} = Tensor{R,D,DiagKind}
 
-ncomponents(::Type{SymmetricGroup{O}}, ::Val{D}) where {O,D} = binomial(D + O - 1, O)
-ncomponents(::Type{IdentityGroup{O}}, ::Val{D}) where {O,D} = D^O
+const Vec{D} = Tensor{1,D}
 
-function Tensor{O,D,S}(data::Vararg{Any,M}) where {O,D,S,M}
-    N = ncomponents(S, Val(D))
-    M == N || error("expected $N components to construct order-$O $(S) Tensor, got $M")
-    Tensor{O,D,S,typeof(data)}(data)
-end
+isstaticzero(::STerm) = false
+isstaticzero(::SUniform{V}) where {V} = iszero(V)
+isstaticzero(::SZeroTensor) = true
 
-Tensor{O,D}(data::Vararg{Any,M}) where {O,D,M} = Tensor{O,D,IdentityGroup{O}}(data...)
+isstaticone(::STerm) = false
+isstaticone(::SUniform{V}) where {V} = isone(V)
 
-Vec(data::Vararg{Any,M}) where {M} = Vec{M}(data...)
+isstaticzero(t::Tensor) = all(isstaticzero, t.components)
 
-Base.getindex(t::Tensor, i::Int) = t.components[i]
+linear_index(t::Tensor, I::Vararg{Int}) = linear_index(typeof(t), I...)
 
-Base.getindex(t::Tensor{O}, I::Vararg{Int,O}) where {O} = t.components[canonical_index(typeof(t), I...)]
+linear_index(::Type{<:Tensor{R,D,K}}, I::Vararg{Int,R}) where {R,D,K} = linear_index(K, Val(D), I...)
 
-canonical_index(tt::Type{<:AbstractTensor{O}}, I::Vararg{Int,O}) where {O} = canonical_index(symmetry(tt), Val(dimensions(tt)), I...)
-
-function canonical_index(::Type{SymmetricGroup{O}}, ::Val, I::Vararg{Int,O}) where {O}
-    J = sort(SVector(I))
+function linear_index(::Type{SymKind}, ::Val, I::Vararg{Int,O}) where {O}
+    J = sort(I)
     return 1 + sum(ntuple(k -> binomial(J[k] + k - 2, k), Val(O)))
 end
 
-function canonical_index(::Type{IdentityGroup{O}}, ::Val{D}, I::Vararg{Int,O}) where {O,D}
+function linear_index(::Type{AltKind}, ::Val, I::Vararg{Int,O}) where {O}
+    J = sort(I)
+    return 1 + sum(ntuple(k -> binomial(J[k] - 1, k), Val(O)))
+end
+
+function linear_index(::Type{NoKind}, ::Val{D}, I::Vararg{Int,O}) where {O,D}
     return LinearIndices(ntuple(_ -> D, Val(O)))[I...]
 end
 
-Base.:+(t::AbstractTensor) = t
-Base.:-(t::Tensor{O,D,S}) where {O,D,S} = Tensor{O,D,S}(map(-, t.components)...)
+function linear_index(::Type{DiagKind}, ::Val{D}, I::Vararg{Int,O}) where {O,D}
+    return I[1]
+end
 
-Base.:+(t1::Tensor{O,D,S}, t2::Tensor{O,D,S}) where {O,D,S} = Tensor{O,D,S}(map(+, t1.components, t2.components)...)
-Base.:-(t1::Tensor{O,D,S}, t2::Tensor{O,D,S}) where {O,D,S} = Tensor{O,D,S}(map(-, t1.components, t2.components)...)
+Base.getindex(t::Tensor{R,D,K}, I::Vararg{Int,R}) where {R,D,K} = t.components[linear_index(K, Val(D), I...)]
 
-const NumberOrTerm = Union{Number,STerm}
+function Base.getindex(t::DiagTensor{R,D}, I::Vararg{Int,R}) where {R,D}
+    all(==(I[1]), I) || return SUniform(0)
+    return t.components[I[1]]
+end
 
-Base.:*(s::NumberOrTerm, t::Tensor{O,D,S}) where {O,D,S} = Tensor{O,D,S}(map(x -> s * x, t.components)...)
-Base.:*(t::Tensor{O,D,S}, s::NumberOrTerm) where {O,D,S} = Tensor{O,D,S}(map(x -> x * s, t.components)...)
+function Base.getindex(t::AltTensor{R,D}, I::Vararg{Int,R}) where {R,D}
+    allunique(I) || return SUniform(0)
+    J = sort(I)
+    v = t.components[linear_index(AltKind, Val(D), J...)]
+    return iseven(inversion_count(I)) ? v : -v
+end
 
-Base.:/(t::Tensor{O,D,S}, s::NumberOrTerm) where {O,D,S} = Tensor{O,D,S}(map(x -> x / s, t.components)...)
-Base.://(t::Tensor{O,D,S}, s::NumberOrTerm) where {O,D,S} = Tensor{O,D,S}(map(x -> x // s, t.components)...)
+Vec(data::Vararg{STerm,M}) where {M} = Vec{M}(data...)
 
-@generated function dcontract(t1::Tensor{2,D}, t2::Tensor{2,D}) where {D}
-    idx1(i, j) = canonical_index(t1, i, j)
-    idx2(i, j) = canonical_index(t2, i, j)
-    ex_p = Tuple(:(t1.components[$(idx1(i, j))] * t2.components[$(idx2(i, j))]) for i in 1:D, j in 1:D)
-    ex_c = Expr(:call, :+, ex_p...)
-    quote
-        @inline
-        return $ex_c
+Tensor{O,D}(data::Vararg{STerm,M}) where {O,D,M} = Tensor{O,D,NoKind}(data...)
+
+function Tensor{R,D,K}(data::Vararg{STerm,M}) where {R,D,K,M}
+    N = ncomponents(K, Val(R), Val(D))
+    M == N || error("expected $N components to construct order-$R $(K) Tensor, got $M")
+    _construct_tensor(Tensor{R,D,K}, data)
+end
+
+function _construct_tensor(::Type{Tensor{R,D,DiagKind}}, data::NTuple{N,STerm}) where {R,D,N}
+    all(isstaticzero, data) && return SZeroTensor{R}()
+    all(isstaticone, data) && return SIdTensor{R}()
+    return Tensor{R,D,DiagKind,typeof(data)}(data)
+end
+
+function _construct_tensor(::Type{Tensor{R,D,AltKind}}, data::NTuple{N,STerm}) where {R,D,N}
+    all(isstaticzero, data) && return SZeroTensor{R}()
+    return Tensor{R,D,AltKind,typeof(data)}(data)
+end
+
+function _construct_tensor(::Type{Tensor{R,D,SymKind}}, data::NTuple{N,STerm}) where {R,D,N}
+    if _is_diagonal(Val(R), Val(D), data)
+        diag_comps = _diagonal_from_symmetric(Tensor{R,D}, data)
+        return _construct_tensor(Tensor{R,D,DiagKind}, diag_comps)
     end
+    return Tensor{R,D,SymKind,typeof(data)}(data)
 end
 
-const ⊡ = dcontract
-
-LinearAlgebra.dot(v1::Vec{D}, v2::Vec{D}) where {D} = +(ntuple(i -> v1[i] * v2[i], Val(D))...)
-
-@generated function LinearAlgebra.dot(t::Tensor{2,D}, v::Vec{D}) where {D}
-    idx(i, j) = canonical_index(t, i, j)
-    vc(i) = Expr(:call, :+, Tuple(:(t.components[$(idx(i, j))] * v.components[$j]) for j in 1:D)...)
-    ex = Expr(:call, :(Vec{$D}), Tuple(vc(i) for i in 1:D)...)
-    quote
-        @inline
-        return $ex
+function _construct_tensor(::Type{Tensor{R,D,NoKind}}, data::NTuple{N,STerm}) where {R,D,N}
+    if _is_symmetric(Val(R), Val(D), data)
+        sym_comps = _symmetric_components(Tensor{R,D}, data)
+        return _construct_tensor(Tensor{R,D,SymKind}, sym_comps)
     end
-end
 
-@generated function LinearAlgebra.dot(t1::Tensor{2,D}, t2::Tensor{2,D}) where {D}
-    idx1(i, j) = canonical_index(t1, i, j)
-    idx2(i, j) = canonical_index(t2, i, j)
-    vc(i, j) = Expr(:call, :+, Tuple(:(t1.components[$(idx1(i, k))] * t2.components[$(idx2(k, j))]) for k in 1:D)...)
-    ex = Expr(:call, :(Tensor{2,$D}), Tuple(vc(i, j) for i in 1:D, j in 1:D)...)
-    quote
-        @inline
-        return $ex
+    if _is_alternating(Val(R), Val(D), data)
+        alt_comps = _alternating_components(Tensor{R,D}, data)
+        return _construct_tensor(Tensor{R,D,AltKind}, alt_comps)
     end
+
+    return Tensor{R,D,NoKind,typeof(data)}(data)
 end
 
-function LinearAlgebra.tr(t::Tensor{2,D}) where {D}
-    return +(ntuple(i -> t.components[canonical_index(typeof(t), i, i)], Val(D))...)
-end
+@generated function _is_symmetric(::Val{R}, ::Val{D}, v::NTuple{N,STerm}) where {R,D,N}
+    check = Expr(:&&)
 
-Base.:*(t1::Tensor{2,D}, t2::Tensor{2,D}) where {D} = LinearAlgebra.dot(t1, t2)
+    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+        I = Tuple(idx)
+        J = sort(I)
 
-Base.transpose(t::SymmetricTensor{2}) = t
+        I == J && continue
 
-@generated function Base.transpose(t::AsymmetricTensor{2,D}) where {D}
-    idx(i, j) = canonical_index(t, i, j)
-    ex = Expr(:call, :(Tensor{2,$D}), Tuple(:(t.components[$(idx(j, i))]) for i in 1:D, j in 1:D)...)
-    quote
-        @inline
-        return $ex
+        i = linear_index(NoKind, Val(D), I...)
+        j = linear_index(NoKind, Val(D), J...)
+
+        push!(check.args, :(v[$i] === v[$j]))
     end
+
+    return check
 end
 
-Base.adjoint(S::AbstractTensor) = transpose(S)
+@generated function _is_alternating(::Val{R}, ::Val{D}, v::NTuple{N,STerm}) where {R,D,N}
+    check = Expr(:&&)
+
+    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+        I = Tuple(idx)
+        J = sort(I)
+
+        i = linear_index(NoKind, Val(D), I...)
+
+        if !allunique(J)
+            push!(check.args, :(isstaticzero(v[$i])))
+            continue
+        end
+
+        j = linear_index(NoKind, Val(D), J...)
+
+        if i == j
+            I != J && push!(check.args, :(isstaticzero(v[$i])))
+            continue
+        end
+
+        if iseven(inversion_count(I))
+            push!(check.args, :(v[$i] === v[$j]))
+        else
+            push!(check.args, :(v[$i] === -v[$j]))
+        end
+    end
+
+    return check
+end
+
+@generated function _is_diagonal(::Val{R}, ::Val{D}, v::NTuple{N,STerm}) where {R,D,N}
+    check = Expr(:&&)
+    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+        I = Tuple(idx)
+        if issorted(I) && !allequal(I)
+            i = linear_index(SymKind, Val(D), I...)
+            push!(check.args, :(isstaticzero(v[$i])))
+        end
+    end
+    return check
+end
+
+@generated function _diagonal_from_symmetric(::Type{Tensor{R,D}}, v::NTuple{N,STerm}) where {R,D,N}
+    expr = Expr(:tuple)
+    for idx in 1:D
+        I = ntuple(_ -> idx, Val(R))
+        i = linear_index(SymKind, Val(D), I...)
+        push!(expr.args, :(v[$i]))
+    end
+    return expr
+end
+
+@generated function _symmetric_components(::Type{Tensor{R,D}}, v::NTuple{N,STerm}) where {R,D,N}
+    expr = Expr(:tuple)
+    foreach_nondecreasing(Val(D), Val(R)) do I
+        i = linear_index(NoKind, Val(D), I...)
+        push!(expr.args, :(v[$i]))
+    end
+    return expr
+end
+
+@generated function _alternating_components(::Type{Tensor{R,D}}, v::NTuple{N,STerm}) where {R,D,N}
+    expr = Expr(:tuple)
+    foreach_increasing(Val(D), Val(R)) do I
+        i = linear_index(NoKind, Val(D), I...)
+        push!(expr.args, :(v[$i]))
+    end
+    return expr
+end

@@ -71,7 +71,7 @@ Base.@assume_effects :foldable function (::LowerStencil)(t::SExpr{Ind})
 end
 
 function _lower_loc(t::STerm, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where {N}
-    isexpr(t) || return t[loc...][inds...]
+    (!isexpr(t) || iscomp(t)) && return t[loc...][inds...]
     if iscall(t)
         return stencil_rule(operation(t), arguments(t), loc, inds)
     else
@@ -80,7 +80,7 @@ function _lower_loc(t::STerm, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where
 end
 
 function _lower_ind(t::STerm, inds::NTuple{N,STerm}) where {N}
-    isexpr(t) || return t[inds...]
+    (!isexpr(t) || iscomp(t)) && return t[inds...]
     if iscall(t)
         return stencil_rule(operation(t), arguments(t), inds)
     else
@@ -155,3 +155,13 @@ SubsRule(kv::Pair) = SubsRule(kv.first, kv.second)
 (rule::SubsRule{Lhs})(::Lhs) where {Lhs<:STerm} = rule.rhs
 
 subs(expr::STerm, kv::Pair) = Postwalk(SubsRule(kv))(expr)
+
+struct LowerTensor{N} <: AbstractRule end
+
+Base.@assume_effects :foldable function (r::LowerTensor{N})(term::STensor{R}) where {N,R}
+    
+end
+
+Base.@assume_effects :foldable function (r::LowerTensor{N})(term::STerm) where {N}
+    
+end

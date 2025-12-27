@@ -8,12 +8,17 @@ function to_subscript(::Val{i}) where {i}
 end
 
 variablename(::SUniform{Value}) where {Value} = Value
-variablename(sf::SFun) = nameof(sf.f)
+
+variablename(sf::SFun)            = nameof(sf.f)
 variablename(::SRef{F}) where {F} = F
-variablename(s::Symbol) = s
-variablename(::Point) = :ᵖ
+
+variablename(::Point)   = :ᵖ
 variablename(::Segment) = :ˢ
+
 variablename(::AbstractDerivative) = :𝒟
+variablename(::Gradient)           = :grad
+variablename(::Divergence)         = :divg
+variablename(::Curl)               = :curl
 
 function variablename(::SIndex{I}) where {I}
     if I isa Symbol
@@ -36,18 +41,14 @@ function Base.show(io::IO, ::MIME"text/plain", term::STerm)
     show_static(io, term, 0)
 end
 
-function show_static(io, ::Tag{name,inds}, ::Int) where {name,inds}
-    printstyled(io, name; bold=true)
-    if length(inds) > 0
-        print(io, '[')
-        join(io, inds, ", ")
-        print(io, ']')
-    end
-end
-
 show_static(io, term::STerm, ::Int) = print(io, variablename(term))
 
 show_static(io, si::SIndex, ::Int) = printstyled(io, variablename(si); italic=true)
+
+show_static(io, ::STensor{<:Any,<:Any,N}, ::Int) where {N} = printstyled(io, N; bold=true)
+
+show_static(io, ::SZeroTensor, ::Int) = printstyled(io, '𝒪'; bold=true)
+show_static(io, ::SIdTensor, ::Int) = printstyled(io, 'ℐ'; bold=true)
 
 function show_static(io, expr::SExpr, prec::Int)
     if iscall(expr)
@@ -66,6 +67,7 @@ function show_static(io, expr::SExpr, prec::Int)
                 if opname == :* &&
                    length(args) == 2 &&
                    args[1] isa SUniform &&
+                   !(args[2] isa SUniform) &&
                    !isexpr(args[2]) &&
                    variablename(args[1]) isa Union{AbstractFloat,Integer}
                     sep = ""
@@ -77,15 +79,30 @@ function show_static(io, expr::SExpr, prec::Int)
                 show_list(io, args, sep, op_prec)
                 parens && print(io, ')')
             end
+        elseif opname == :adjoint
+            if isexpr(args[1]) && iscall(args[1])
+                print(io, '(')
+                show_static(io, args[1], 0)
+                print(io, ')')
+            else
+                show_static(io, args[1], 0)
+            end
+            print(io, ''')
         else
             print(io, opname)
             print(io, '(')
             show_list(io, args, ", ", op_prec)
             print(io, ')')
         end
+    elseif iscomp(expr)
+        arg = argument(expr)
+        show_static(io, arg, 0)
+        print(io, '[')
+        show_list(io, indices(expr), ", ", 0)
+        print(io, ']')
     elseif isind(expr)
         arg = argument(expr)
-        if !isexpr(arg) || isloc(arg)
+        if !isexpr(arg) || !iscall(arg)
             show_static(io, arg, 0)
         else
             print(io, '(')
@@ -97,12 +114,12 @@ function show_static(io, expr::SExpr, prec::Int)
         print(io, ']')
     elseif isloc(expr)
         arg = argument(expr)
-        if isexpr(arg)
+        if !isexpr(arg) || !iscall(arg)
+            show_static(io, arg, 0)
+        else
             print(io, '(')
             show_static(io, arg, 0)
             print(io, ')')
-        else
-            show_static(io, arg, 0)
         end
         for s in location(expr)
             print(io, variablename(s))
@@ -121,6 +138,7 @@ end
 
 function needs_parens(expr, prec)
     iscall(expr) || return false
+    arity(expr) == 1 && return false
     op = operation(expr)
     op_prec = Base.operator_precedence(variablename(op))
     if op_prec == 0 || prec == 0
@@ -137,25 +155,49 @@ function Base.show(io::IO, ::MIME"text/plain", v::Vec{N}) where {N}
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", t::AbstractTensor{O,D}) where {O,D}
-    join(io, ntuple(_ -> D, Val(O)), '×')
-    sym = symmetry(t)
-    if sym <: IdentityGroup
-        print(io, " AsymmetricTensor:")
-    elseif sym <: SymmetricGroup
-        print(io, " SymmetricTensor:")
-    else
-        error("unknown tensor symmetry")
-    end
-    for idx in CartesianIndices(ntuple(_ -> D, O))
+function Base.show(io::IO, ::MIME"text/plain", t::Tensor{R,D}) where {R,D}
+    join(io, ntuple(_ -> D, Val(R)), '×')
+    print(io, " Tensor:")
+    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
         inds = Tuple(idx)
-        if sym <: SymmetricGroup && !issorted(inds)
-            continue
-        end
         print(io, '\n', ' ', '[')
         join(io, inds, ", ")
         print(io, "] => ")
         show(io, t[inds...])
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", t::SymTensor{R,D}) where {R,D}
+    join(io, ntuple(_ -> D, Val(R)), '×')
+    print(io, " SymTensor:")
+    foreach_nondecreasing(Val(D), Val(R)) do I
+        print(io, '\n', ' ', '[')
+        join(io, I, ", ")
+        print(io, "] => ")
+        show(io, t[I...])
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", t::AltTensor{R,D}) where {R,D}
+    join(io, ntuple(_ -> D, Val(R)), '×')
+    print(io, " AltTensor:")
+    foreach_increasing(Val(D), Val(R)) do I
+        print(io, '\n', ' ', '[')
+        join(io, I, ", ")
+        print(io, "] => ")
+        show(io, t[I...])
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", t::DiagTensor{R,D}) where {R,D}
+    join(io, ntuple(_ -> D, Val(R)), '×')
+    print(io, " DiagTensor:")
+    for i in 1:D
+        I = ntuple(_ -> i, Val(R))
+        print(io, '\n', ' ', '[')
+        join(io, I, ", ")
+        print(io, "] => ")
+        show(io, t[I...])
     end
 end
 

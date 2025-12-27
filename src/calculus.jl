@@ -1,31 +1,19 @@
-struct Gradient{N,P}
-    ∂::P
+abstract type DifferentialOperator <: STerm end
+
+(op::DifferentialOperator)(args::Vararg{STerm}) = SExpr(Call(), op, args...)
+
+abstract type AbstractGradient <: DifferentialOperator end
+abstract type AbstractDivergence <: DifferentialOperator end
+abstract type AbstractCurl <: DifferentialOperator end
+
+struct Gradient{Op} <: AbstractGradient
+    op::Op
 end
 
-Gradient(∂::Vararg{AbstractPartialDerivative,N}) where {N} = Gradient{N,typeof(∂)}(∂)
-function Gradient{N}(∂::STerm) where {N}
-    ∂s = ntuple(i -> LiftedPartialDerivative{i}(∂), Val(N))
-    Gradient{N,typeof(∂s)}(∂s)
+struct Divergence{Op} <: AbstractDivergence
+    op::Op
 end
 
-function (g::Gradient{N})(f::STerm) where {N}
-    return Vec{N}(ntuple(i -> g.∂[i](f), Val(N))...)
-end
-
-function (g::Gradient{N})(f::Vec{N}) where {N}
-    return AsymmetricTensor{2,N}((g.∂[j](f[i]) for i in 1:N, j in 1:N)...)
-end
-
-struct Divergence{N,P}
-    ∂::P
-end
-
-Divergence(∂::Vararg{AbstractPartialDerivative,N}) where {N} = Divergence{N,typeof(∂)}(∂)
-function Divergence{N}(∂::STerm) where {N}
-    ∂s = ntuple(i -> LiftedPartialDerivative{i}(∂), Val(N))
-    Divergence{N,typeof(∂s)}(∂s)
-end
-
-function (d::Divergence{N})(v::Vec{N}) where {N}
-    return +(ntuple(i -> d.∂[i](v[i]), Val(N))...)
+struct Curl{Op} <: AbstractCurl
+    op::Op
 end

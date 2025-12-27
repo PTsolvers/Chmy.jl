@@ -1,9 +1,11 @@
 module Chmy
 
-using KernelAbstractions, StaticArrays
+using KernelAbstractions
 import LinearAlgebra
 
-export STerm, SExprHead, Call, Ind, Loc, SUniform, Tag, SRef, SFun, SIndex, SExpr
+include("utils.jl")
+
+export STerm, SExprHead, Call, Comp, Loc, Ind, SUniform, SRef, SFun, SIndex, SExpr
 export isexpr, iscall, isind, isloc, head, children, operation, arguments, argument, indices, location
 include("expressions.jl")
 
@@ -14,25 +16,32 @@ include("spaces.jl")
 export Grid, dims
 include("grids.jl")
 
+export AbstractDerivative, AbstractPartialDerivative, CentralDifference, StaggeredCentralDifference, PartialDerivative
+include("derivatives.jl")
+
+export DifferentialOperator, AbstractGradient, AbstractDivergence, AbstractCurl
+export Gradient, Divergence, Curl
+include("calculus.jl")
+
+export STensor, SScalar, SVector
+export SSymTensor, SAltTensor, SDiagTensor, SZeroTensor, SIdTensor
+export Tensor, SymTensor, AltTensor, DiagTensor, Vec
+export tensorrank, tensorkind
+export isalternating, issymmetric, isdiag
+include("tensors.jl")
+
+export ⊡, ⊗, sym, asym, adj, gram, cogram
+include("operators.jl")
+
 export AbstractRule, Passthrough, Prewalk, Postwalk, Fixpoint
 export stencil_rule, lower_stencil, lift, subs
 include("rewriters.jl")
-
-export AbstractDerivative, AbstractPartialDerivative, CentralDifference, StaggeredCentralDifference, PartialDerivative
-include("derivatives.jl")
 
 export Binding, push, binding_types
 include("binding.jl")
 
 export compute, to_expr
 include("compute.jl")
-
-export AbstractTensor, AbstractPermutationGroup, IdentityGroup, SymmetricGroup, SymmetricTensor, AsymmetricTensor, Vec
-export order, dimensions, symmetry, dcontract, ⊡
-include("tensors.jl")
-
-export Gradient, Divergence
-include("calculus.jl")
 
 include("show.jl")
 
