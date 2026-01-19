@@ -336,6 +336,12 @@ end
     end
 end
 
+function LinearAlgebra.:×(v1::Vec{3}, v2::Vec{3})
+    return Vec{3}(v1[2] * v2[3] - v1[3] * v2[2],
+                  v1[3] * v2[1] - v1[1] * v2[3],
+                  v1[1] * v2[2] - v1[2] * v2[1])
+end
+
 function LinearAlgebra.tr(t::Tensor{2,D}) where {D}
     return +(ntuple(i -> t[i, i], Val(D))...)
 end
