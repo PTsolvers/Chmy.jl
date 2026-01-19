@@ -176,11 +176,31 @@ function LinearAlgebra.inv(t::STerm)
     SExpr(Call(), SRef(:inv), t)
 end
 
-for op in (:×, :⋅)
-    @eval function LinearAlgebra.$op(a::STerm, b::STerm)
-        _check_tensor_ranks(SRef($(Meta.quot(op))), a, b)
-        SExpr(Call(), SRef($(Meta.quot(op))), a, b)
+function LinearAlgebra.:×(a::STerm, b::STerm)
+    _check_tensor_ranks(SRef(:×), a, b)
+    SExpr(Call(), SRef(:×), a, b)
+end
+
+function _isopof(op, x, y)
+    if isexpr(x) && operation(x) === op && first(arguments(x)) === y
+        return true
+    else
+        return false
     end
+end
+
+_isinvof(a, b) = _isopof(SRef(:inv), a, b)
+_isadjof(a, b) = _isopof(SRef(:adj), a, b)
+
+function LinearAlgebra.:⋅(a::STerm, b::STerm)
+    _check_tensor_ranks(SRef(:⋅), a, b)
+    isidentity(a) && return b
+    isidentity(b) && return a
+    R = tensorrank(a) + tensorrank(b) - 2
+    (_isinvof(a, b) || _isinvof(b, a)) && return SIdTensor{R}()
+    _isadjof(a, b) && return LinearAlgebra.det(b) * SIdTensor{R}()
+    _isadjof(b, a) && return LinearAlgebra.det(a) * SIdTensor{R}()
+    SExpr(Call(), SRef(:⋅), a, b)
 end
 
 function adj(t::STerm)

@@ -4,7 +4,6 @@ struct NoKind <: TensorKind end
 struct SymKind <: TensorKind end
 struct AltKind <: TensorKind end
 struct DiagKind <: TensorKind end
-struct IdKind <: TensorKind end
 
 struct STensor{R,K,N} <: STerm end
 
@@ -26,9 +25,10 @@ struct SZeroTensor{R} <: STerm end
 SZeroTensor{0}() = SUniform(0)
 
 struct SIdTensor{R} <: STerm end
-SIdTensor{1}() = SUniform(1)
+SIdTensor{0}() = SUniform(1)
 
 tensorrank(::SZeroTensor{R}) where {R} = R
+tensorrank(::SIdTensor{R}) where {R} = R
 
 const SScalar = STensor{0,NoKind}
 const SVec = STensor{1,NoKind}
@@ -52,8 +52,8 @@ tensorrank(::SRef, args...) = 0
 tensorrank(::SRef{:adjoint}, t) = tensorrank(t)
 tensorrank(::SRef{:broadcasted}, op, args...) = maximum(map(tensorrank, args))
 
-tensorrank(::SRef{:+}, args...) = tensorrank(args[1])
-tensorrank(::SRef{:*}, args...) = maximum(tensorrank, args)
+tensorrank(::SRef{:+}, args...) = tensorrank(last(args))
+tensorrank(::SRef{:*}, args...) = tensorrank(last(args))
 tensorrank(::SRef{:-}, a)       = tensorrank(a)
 tensorrank(::SRef{:-}, a, b)    = tensorrank(a)
 tensorrank(::SRef{:⋅}, a, b)    = tensorrank(a) + tensorrank(b) - 2
@@ -64,8 +64,10 @@ tensorrank(::SRef{:⊗}, a, b)    = tensorrank(a) + tensorrank(b)
 tensorrank(::SRef{:sym}, t)    = tensorrank(t)
 tensorrank(::SRef{:asym}, t)   = tensorrank(t)
 tensorrank(::SRef{:adj}, t)    = tensorrank(t)
+tensorrank(::SRef{:inv}, t)    = tensorrank(t)
 tensorrank(::SRef{:gram}, t)   = 2
 tensorrank(::SRef{:cogram}, t) = 2
+tensorrank(::SRef{:diag}, t)   = 1
 
 tensorrank(::Gradient, t)   = tensorrank(t) + 1
 tensorrank(::Divergence, t) = tensorrank(t) - 1
@@ -106,6 +108,9 @@ isstaticzero(::SZeroTensor) = true
 isstaticone(::STerm) = false
 isstaticone(::SUniform{V}) where {V} = isone(V)
 
+isidentity(::STerm) = false
+isidentity(::SIdTensor) = true
+
 isstaticzero(t::Tensor) = all(isstaticzero, t.components)
 
 linear_index(t::Tensor, I::Vararg{Int}) = linear_index(typeof(t), I...)
@@ -143,6 +148,10 @@ function Base.getindex(t::AltTensor{R,D}, I::Vararg{Int,R}) where {R,D}
     v = t.components[linear_index(AltKind, Val(D), J...)]
     return iseven(inversion_count(I)) ? v : -v
 end
+
+Base.getindex(::SZeroTensor{R}, I::Vararg{Int,R}) where {R} = SUniform(0)
+
+Base.getindex(::SIdTensor{R}, I::Vararg{Int,R}) where {R} = all(==(I[1]), I) ? SUniform(1) : SUniform(0)
 
 Vec(data::Vararg{STerm,M}) where {M} = Vec{M}(data...)
 
