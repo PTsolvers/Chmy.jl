@@ -342,6 +342,19 @@ function LinearAlgebra.:×(v1::Vec{3}, v2::Vec{3})
                   v1[1] * v2[2] - v1[2] * v2[1])
 end
 
+@generated function ⊗(v1::Vec{D}, v2::Vec{D}) where {D}
+    ex = Expr(:call, :(Tensor{2,$D}))
+    for j in 1:D
+        for i in 1:D
+            push!(ex.args, :(v1.components[$i] * v2.components[$j]))
+        end
+    end
+    quote
+        @inline
+        return $ex
+    end
+end
+
 function LinearAlgebra.tr(t::Tensor{2,D}) where {D}
     return +(ntuple(i -> t[i, i], Val(D))...)
 end
