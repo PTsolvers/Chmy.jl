@@ -1,7 +1,7 @@
 module Chmy
 
 using KernelAbstractions
-import LinearAlgebra
+import LinearAlgebra: ⋅, ×, tr, det, diag, transpose
 
 include("utils.jl")
 
@@ -29,6 +29,9 @@ export Tensor, SymTensor, AltTensor, DiagTensor, Vec
 export tensorrank, tensorkind
 export isalternating, issymmetric, isdiag
 include("tensors.jl")
+
+# re-exported from LinearAlgebra
+export ⋅, ×, tr, det, diag, transpose
 
 export ⊡, ⊗, sym, asym, adj, gram, cogram
 include("operators.jl")

@@ -161,22 +161,22 @@ end
 ⊗(a::STerm, b::STerm) = SExpr(Call(), SRef(:⊗), a, b)
 
 # methods from LinearAlgebra
-LinearAlgebra.transpose(t::STerm) = t'
+transpose(t::STerm) = t'
 
 for op in (:det, :tr, :diag)
-    @eval function LinearAlgebra.$op(t::STerm)
+    @eval function $op(t::STerm)
         _check_tensor_ranks(SRef($(Meta.quot(op))), t)
         tensorrank(t) == 0 && return t
         SExpr(Call(), SRef($(Meta.quot(op))), t)
     end
 end
 
-function LinearAlgebra.inv(t::STerm)
+function inv(t::STerm)
     _check_tensor_ranks(SRef(:inv), t)
     SExpr(Call(), SRef(:inv), t)
 end
 
-function LinearAlgebra.:×(a::STerm, b::STerm)
+function ×(a::STerm, b::STerm)
     _check_tensor_ranks(SRef(:×), a, b)
     SExpr(Call(), SRef(:×), a, b)
 end
@@ -192,7 +192,7 @@ end
 _isinvof(a, b) = _isopof(SRef(:inv), a, b)
 _isadjof(a, b) = _isopof(SRef(:adj), a, b)
 
-function LinearAlgebra.:⋅(a::STerm, b::STerm)
+function ⋅(a::STerm, b::STerm)
     _check_tensor_ranks(SRef(:⋅), a, b)
     isidentity(a) && return b
     isidentity(b) && return a
@@ -333,9 +333,9 @@ Base.:÷(t::Tensor{O,D,S}, s::NumberOrTerm) where {O,D,S} = Tensor{O,D,S}(map(x 
     end
 end
 
-LinearAlgebra.:⋅(v1::Vec{D}, v2::Vec{D}) where {D} = +(ntuple(i -> v1[i] * v2[i], Val(D))...)
+⋅(v1::Vec{D}, v2::Vec{D}) where {D} = +(ntuple(i -> v1[i] * v2[i], Val(D))...)
 
-@generated function LinearAlgebra.:⋅(t::Tensor{2,D}, v::Vec{D}) where {D}
+@generated function ⋅(t::Tensor{2,D}, v::Vec{D}) where {D}
     idx(i, j) = linear_index(t, i, j)
     vc(i) = Expr(:call, :+, Tuple(:(t.components[$(idx(i, j))] * v.components[$j]) for j in 1:D)...)
     ex = Expr(:call, :(Vec{$D}), Tuple(vc(i) for i in 1:D)...)
@@ -345,7 +345,7 @@ LinearAlgebra.:⋅(v1::Vec{D}, v2::Vec{D}) where {D} = +(ntuple(i -> v1[i] * v2[
     end
 end
 
-@generated function LinearAlgebra.:⋅(t1::Tensor{2,D}, t2::Tensor{2,D}) where {D}
+@generated function ⋅(t1::Tensor{2,D}, t2::Tensor{2,D}) where {D}
     idx1(i, j) = linear_index(t1, i, j)
     idx2(i, j) = linear_index(t2, i, j)
     vc(i, j) = Expr(:call, :+, Tuple(:(t1.components[$(idx1(i, k))] * t2.components[$(idx2(k, j))]) for k in 1:D)...)
@@ -356,7 +356,7 @@ end
     end
 end
 
-function LinearAlgebra.:×(v1::Vec{3}, v2::Vec{3})
+function ×(v1::Vec{3}, v2::Vec{3})
     return Vec{3}(v1[2] * v2[3] - v1[3] * v2[2],
                   v1[3] * v2[1] - v1[1] * v2[3],
                   v1[1] * v2[2] - v1[2] * v2[1])
@@ -375,7 +375,7 @@ end
     end
 end
 
-function LinearAlgebra.tr(t::Tensor{2,D}) where {D}
+function tr(t::Tensor{2,D}) where {D}
     return +(ntuple(i -> t[i, i], Val(D))...)
 end
 
@@ -394,19 +394,19 @@ end
 
 Base.adjoint(S::Tensor) = transpose(S)
 
-LinearAlgebra.det(t::Tensor{2,2}) = t[1, 1] * t[2, 2] - t[1, 2] * t[2, 1]
-LinearAlgebra.det(t::SymTensor{2,2}) = t[1, 1] * t[2, 2] - t[1, 2]^2
-LinearAlgebra.det(t::AltTensor{2,2}) = t[1, 2]^2
+det(t::Tensor{2,2}) = t[1, 1] * t[2, 2] - t[1, 2] * t[2, 1]
+det(t::SymTensor{2,2}) = t[1, 1] * t[2, 2] - t[1, 2]^2
+det(t::AltTensor{2,2}) = t[1, 2]^2
 
-function LinearAlgebra.det(t::Tensor{2,3})
+function det(t::Tensor{2,3})
     t[1, 1] * (t[2, 2] * t[3, 3] - t[2, 3] * t[3, 2]) +
     t[1, 2] * (t[2, 3] * t[3, 1] - t[2, 1] * t[3, 3]) +
     t[1, 3] * (t[2, 1] * t[3, 2] - t[2, 2] * t[3, 1])
 end
 
-LinearAlgebra.det(::AltTensor{2,3}) = SUniform(0)
+det(::AltTensor{2,3}) = SUniform(0)
 
-LinearAlgebra.diag(t::Tensor{2,D}) where {D} = Vec(ntuple(i -> t[i, i], Val(D))...)
+diag(t::Tensor{2,D}) where {D} = Vec(ntuple(i -> t[i, i], Val(D))...)
 
 adj(t::Tensor{2,2}) = Tensor{2,2}(t[2, 2], -t[1, 2], -t[2, 1], t[1, 1])
 adj(t::SymTensor{2,2}) = SymTensor{2,2}(t[1, 1], -t[1, 2], t[2, 2])
