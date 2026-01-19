@@ -23,7 +23,7 @@ export DifferentialOperator, AbstractGradient, AbstractDivergence, AbstractCurl
 export Gradient, Divergence, Curl
 include("calculus.jl")
 
-export STensor, SScalar, SVector
+export STensor, SScalar, SVec
 export SSymTensor, SAltTensor, SDiagTensor, SZeroTensor, SIdTensor
 export Tensor, SymTensor, AltTensor, DiagTensor, Vec
 export tensorrank, tensorkind

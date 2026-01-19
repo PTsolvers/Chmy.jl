@@ -31,7 +31,7 @@ SIdTensor{1}() = SUniform(1)
 tensorrank(::SZeroTensor{R}) where {R} = R
 
 const SScalar = STensor{0,NoKind}
-const SVector = STensor{1,NoKind}
+const SVec = STensor{1,NoKind}
 
 const IntegerOrSUniform = Union{Integer,SUniform}
 
