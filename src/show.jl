@@ -47,8 +47,8 @@ show_static(io, si::SIndex, ::Int) = printstyled(io, variablename(si); italic=tr
 
 show_static(io, ::STensor{R,<:Any,N}, ::Int) where {R,N} = printstyled(io, N; bold=true, underline=(R > 0))
 
-show_static(io, ::SZeroTensor, ::Int) = printstyled(io, '𝒪'; bold=true)
-show_static(io, ::SIdTensor, ::Int) = printstyled(io, 'ℐ'; bold=true)
+show_static(io, ::SZeroTensor, ::Int) = printstyled(io, '𝒪'; bold=true, underline=true)
+show_static(io, ::SIdTensor, ::Int) = printstyled(io, 'ℐ'; bold=true, underline=true)
 
 function show_static(io, expr::SExpr, prec::Int)
     if iscall(expr)
