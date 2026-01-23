@@ -451,7 +451,7 @@ function adj(t::AltTensor{2,3})
                           c13, c23, c33)
 end
 
-Base.inv(t::Tensor) = adj(t) / LinearAlgebra.det(t)
+Base.inv(t::Tensor) = adj(t) / det(t)
 
 sym(t::SymTensor) = t
 
