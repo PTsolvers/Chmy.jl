@@ -364,10 +364,8 @@ end
 
 @generated function ⊗(v1::Vec{D}, v2::Vec{D}) where {D}
     ex = Expr(:call, :(Tensor{2,$D}))
-    for j in 1:D
-        for i in 1:D
-            push!(ex.args, :(v1.components[$i] * v2.components[$j]))
-        end
+    for j in 1:D, i in 1:D
+        push!(ex.args, :(v1.components[$i] * v2.components[$j]))
     end
     quote
         @inline
@@ -458,10 +456,8 @@ sym(t::SymTensor) = t
 @generated function sym(t::Tensor{2,D}) where {D}
     idx(i, j) = linear_index(t, i, j)
     ex = Expr(:call, :(SymTensor{2,$D}))
-    for j in 1:D
-        for i in j:D
-            push!(ex.args, :((t.components[$(idx(i, j))] + t.components[$(idx(j, i))]) // 2))
-        end
+    for j in 1:D, i in j:D
+        push!(ex.args, :((t.components[$(idx(i, j))] + t.components[$(idx(j, i))]) // 2))
     end
     quote
         @inline
@@ -472,10 +468,8 @@ end
 @generated function asym(t::Tensor{2,D}) where {D}
     idx(i, j) = linear_index(t, i, j)
     ex = Expr(:call, :(AltTensor{2,$D}))
-    for j in 1:D
-        for i in j+1:D
-            push!(ex.args, :((t.components[$(idx(i, j))] - t.components[$(idx(j, i))]) // 2))
-        end
+    for j in 1:D, i in j+1:D
+        push!(ex.args, :((t.components[$(idx(i, j))] - t.components[$(idx(j, i))]) // 2))
     end
     quote
         @inline
@@ -486,14 +480,12 @@ end
 @generated function gram(t::Tensor{2,D}) where {D}
     idx(i, j) = linear_index(t, i, j)
     ex = Expr(:call, :(SymTensor{2,$D}))
-    for j in 1:D
-        for i in j:D
-            comp = Expr(:call, :+)
-            for k in 1:D
-                push!(comp.args, :(t.components[$(idx(i, k))] * t.components[$(idx(j, k))]))
-            end
-            push!(ex.args, comp)
+    for j in 1:D, i in j:D
+        comp = Expr(:call, :+)
+        for k in 1:D
+            push!(comp.args, :(t.components[$(idx(i, k))] * t.components[$(idx(j, k))]))
         end
+        push!(ex.args, comp)
     end
     quote
         @inline
@@ -504,14 +496,12 @@ end
 @generated function cogram(t::Tensor{2,D}) where {D}
     idx(i, j) = linear_index(t, i, j)
     ex = Expr(:call, :(SymTensor{2,$D}))
-    for j in 1:D
-        for i in j:D
-            comp = Expr(:call, :+)
-            for k in 1:D
-                push!(comp.args, :(t.components[$(idx(k, i))] * t.components[$(idx(k, j))]))
-            end
-            push!(ex.args, comp)
+    for j in 1:D, i in j:D
+        comp = Expr(:call, :+)
+        for k in 1:D
+            push!(comp.args, :(t.components[$(idx(k, i))] * t.components[$(idx(k, j))]))
         end
+        push!(ex.args, comp)
     end
     quote
         @inline
