@@ -11,6 +11,8 @@ end
     end
 end
 
+to_expr(expr::STerm, bnd) = expr
+
 to_expr(::SRef{F}, bnd) where {F} = F
 to_expr(sf::SFun, bnd) = sf.f
 
@@ -25,7 +27,7 @@ function to_expr(expr::SExpr{Ind}, bnd)
     arg = argument(expr)
     inds = indices(expr)
     idx = _expr_idx(bnd, arg)
-    isnothing(idx) && error("no data bound to expression $expr")
+    isnothing(idx) && return expr
     dtype = bnd.data[idx]
     if dtype <: Number
         return :(b.data[$idx])
