@@ -171,7 +171,7 @@ for op in (:det, :tr, :diag)
     end
 end
 
-function inv(t::STerm)
+function Base.inv(t::STerm)
     _check_tensor_ranks(SRef(:inv), t)
     SExpr(Call(), SRef(:inv), t)
 end
@@ -198,8 +198,8 @@ function ⋅(a::STerm, b::STerm)
     isidentity(b) && return a
     R = tensorrank(a) + tensorrank(b) - 2
     (_isinvof(a, b) || _isinvof(b, a)) && return SIdTensor{R}()
-    _isadjof(a, b) && return LinearAlgebra.det(b) * SIdTensor{R}()
-    _isadjof(b, a) && return LinearAlgebra.det(a) * SIdTensor{R}()
+    _isadjof(a, b) && return det(b) * SIdTensor{R}()
+    _isadjof(b, a) && return det(a) * SIdTensor{R}()
     SExpr(Call(), SRef(:⋅), a, b)
 end
 
