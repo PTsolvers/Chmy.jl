@@ -15,6 +15,21 @@ struct Ind <: SExprHead end
 struct SUniform{Value} <: STerm end
 SUniform(value) = SUniform{value}()
 
+function SUniform(value::Real)
+    isbits(value) || error("value must be isbits")
+    if isinteger(value)
+        value = Int(value)
+    end
+    sgn = value >= zero(value)
+    value = abs(value)
+    if isone(value)
+        value = 1
+    end
+    return sgn ? SUniform{value}() : -SUniform{value}()
+end
+
+value(::SUniform{Value}) where {Value} = Value
+
 struct SRef{F} <: STerm end
 SRef(f::Symbol) = SRef{f}()
 
@@ -74,3 +89,6 @@ Base.getindex(s::SUniform, ::Vararg{STerm}) = s
 # conversion to STerm
 STerm(v::STerm) = v
 STerm(v) = isbits(v) ? SUniform(v) : error("value must be isbits")
+
+# TermInterfaces.jl maketerm implementation
+maketerm(::Type{SExpr}, head, children, ::Nothing) = SExpr(head, children...)
