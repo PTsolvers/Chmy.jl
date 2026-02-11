@@ -452,7 +452,6 @@ end
 Base.inv(t::Tensor) = adj(t) / det(t)
 
 sym(t::SymTensor) = t
-
 @generated function sym(t::Tensor{2,D}) where {D}
     idx(i, j) = linear_index(t, i, j)
     ex = Expr(:call, :(SymTensor{2,$D}))

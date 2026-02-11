@@ -23,7 +23,6 @@ end
 struct PartialDerivative{Op}
     op::Op
 end
-
 (p::PartialDerivative)(arg::STerm, i::Integer) = SExpr(Call(), LiftedPartialDerivative{i}(p.op), arg)
 
 struct CentralDifference <: AbstractDerivative end

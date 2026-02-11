@@ -11,6 +11,7 @@ tensorrank(::STensor{R}) where {R} = R
 tensorkind(::STensor{<:Any,K}) where {K} = K
 
 tensorrank(::SIndex) = 0
+
 tensorrank(::SUniform) = 0
 tensorkind(::SUniform) = NoKind
 

@@ -155,13 +155,3 @@ SubsRule(kv::Pair) = SubsRule(kv.first, kv.second)
 (rule::SubsRule{Lhs})(::Lhs) where {Lhs<:STerm} = rule.rhs
 
 subs(expr::STerm, kv::Pair) = Postwalk(SubsRule(kv))(expr)
-
-struct LowerTensor{N} <: AbstractRule end
-
-Base.@assume_effects :foldable function (r::LowerTensor{N})(term::STensor{R}) where {N,R}
-    
-end
-
-Base.@assume_effects :foldable function (r::LowerTensor{N})(term::STerm) where {N}
-    
-end
