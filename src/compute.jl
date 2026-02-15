@@ -1,6 +1,7 @@
 Base.@propagate_inbounds function compute(expr::STerm, binding::Binding, inds::Vararg{Integer,N}) where {N}
     compute_expr(expr, binding, inds)
 end
+compute(expr::STerm) = compute(expr, Binding())
 
 @generated function compute_expr(expr, b, I)
     expri = expr.instance

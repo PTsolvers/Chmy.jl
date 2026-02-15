@@ -49,7 +49,7 @@ function (f::SFun)(args::Vararg{STerm})
 end
 
 struct SIndex{I} <: STerm end
-SIndex(I::Union{Symbol,Integer}) = SIndex{I}()
+SIndex(I::Integer) = SIndex{I}()
 
 struct SExpr{H,C} <: STerm
     head::H

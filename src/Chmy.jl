@@ -6,7 +6,7 @@ import LinearAlgebra: ⋅, ×, tr, det, diag, transpose
 include("utils.jl")
 
 export STerm, SExprHead, Call, Comp, Loc, Ind, SUniform, SRef, SFun, SIndex, SExpr
-export isexpr, iscall, isind, isloc, head, children, operation, arguments, argument, indices, location
+export isexpr, iscall, isind, isloc, head, children, operation, arguments, argument, arity, indices, location
 include("expressions.jl")
 
 export Space, Segment, Point
@@ -45,6 +45,9 @@ include("binding.jl")
 
 export compute, to_expr
 include("compute.jl")
+
+export canonicalize, seval
+include("canonicalize.jl")
 
 include("show.jl")
 

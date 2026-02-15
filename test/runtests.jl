@@ -1,3 +1,4 @@
 using Test
 using Chmy
-using LinearAlgebra
+
+include("test_canonicalize.jl")

@@ -20,13 +20,7 @@ variablename(::Gradient)           = :grad
 variablename(::Divergence)         = :divg
 variablename(::Curl)               = :curl
 
-function variablename(::SIndex{I}) where {I}
-    if I isa Symbol
-        return I
-    else
-        return Symbol(:i, to_subscript(Val(I)))
-    end
-end
+variablename(::SIndex{I}) where {I} = Symbol(:i, to_subscript(Val(I)))
 
 function variablename(::AbstractPartialDerivative{I}) where {I}
     return Symbol("∂", to_subscript(Val(I)))
