@@ -13,33 +13,13 @@ end
 
 seval(expr::STerm) = Postwalk(SEvalRule())(expr)
 
-_is_uniform_literal(::STerm) = false
-_is_uniform_literal(::SUniform) = true
-
-function _is_uniform_literal(expr::SExpr{Call})
-    operation(expr) === SRef(:-) || return false
-    arity(expr) == 1 || return false
-    return only(arguments(expr)) isa SUniform
-end
-
-_uniform_literal_value(x::SUniform) = value(x)
-_uniform_literal_value(expr::SExpr{Call}) = -value(only(arguments(expr)))
-
-_is_uniform_zero(term::STerm) = _is_uniform_literal(term) && iszero(_uniform_literal_value(term))
-_is_uniform_one(term::STerm) = _is_uniform_literal(term) && isone(_uniform_literal_value(term))
-
-function _is_uniform_negative(term::STerm)
-    _is_uniform_literal(term) || return false
-    v = _uniform_literal_value(term)
-    return v isa Real && v < zero(v)
-end
+_is_uniform_literal(term::STerm) = (term isa SUniform || iscall(term)) && isstatic(term)
+_uniform_literal_value(term::STerm) = compute(term)::Real
 
 function _is_uniform_integer(term::STerm)
     _is_uniform_literal(term) || return false
     return _uniform_literal_value(term) isa Integer
 end
-
-_abs_uniform(term::STerm) = SUniform(abs(_uniform_literal_value(term)))
 
 _term_rank(::SIndex) = 1
 _term_rank(::STensor) = 2
@@ -104,7 +84,7 @@ function _isless_lex(x::STerm, y::STerm)
     ry = _term_rank(y)
     rx == ry || return rx < ry
 
-    if x isa SExpr && y isa SExpr
+    if isexpr(x) && isexpr(y)
         return _isless_expr(x, y)
     elseif x isa SAtom && y isa SAtom
         return _isless_atom(x, y)
@@ -120,9 +100,9 @@ function _cmp_power(x::STerm, y::STerm)
     if _is_uniform_literal(x) && _is_uniform_literal(y)
         return _cmp_ordered(_uniform_literal_value(x), _uniform_literal_value(y))
     end
-    if x isa SExpr && _is_uniform_integer(y)
+    if isexpr(x) && _is_uniform_integer(y)
         return 1
-    elseif y isa SExpr && _is_uniform_integer(x)
+    elseif isexpr(y) && _is_uniform_integer(x)
         return -1
     end
     if _isless_lex(x, y)
@@ -143,6 +123,8 @@ _numeric_factor_score(v) = abs(log(abs(v)))
 
 function _isless_uniform_factor(x::SUniform, y::SUniform)
     x === y && return false
+    vx = value(x)
+    vy = value(y)
     iszero(vx) && return true
     iszero(vy) && return false
 
@@ -169,18 +151,30 @@ function _isless_product_factor(x::STerm, y::STerm)
     return _isless_lex(_strip_power_base(x), _strip_power_base(y))
 end
 
-function _pow_uniform(base::STerm, exp::STerm)
-    b = _uniform_literal_value(base)
-    p = _uniform_literal_value(exp)
-    if p isa Integer
-        if b isa Integer && p < 0
-            return SUniform(Rational(b)^p)
-        end
-        return SUniform(b^p)
-    else
-        return SUniform(b^p)
+const SPower = Union{STerm,Real}
+
+function _pow_real(base::Real, power::Real)
+    if base isa Integer && power isa Integer && power < 0
+        return Rational(base)^power
     end
+    return base^power
 end
+
+_normalize_product_power(power::Real) = power
+function _normalize_product_power(power::STerm)
+    reduced = _canonicalize_power_term(seval(power))
+    return _is_uniform_literal(reduced) ? _uniform_literal_value(reduced) : reduced
+end
+
+function _mul_power(x::SPower, y::SPower)
+    if x isa Real && y isa Real
+        return x * y
+    end
+    return _normalize_product_power(seval(x * y))
+end
+
+_neg_power(power::Real) = -power
+_neg_power(power::STerm) = _normalize_product_power(seval(-power))
 
 function _sort_product_terms_impl(expr::SExpr{Call})
     operation(expr) === SRef(:*) || return expr
@@ -216,10 +210,17 @@ function _add_exponent!(exps::AbstractDict{STerm,STerm}, base::STerm, power::STe
     return
 end
 
-function _collect_product_factors!(exps::AbstractDict{STerm,STerm}, coef::Base.RefValue{STerm}, term::STerm, power::STerm=SUniform(1))
-    _is_uniform_zero(power) && return
+function _add_product_exponent!(exps::AbstractDict{STerm,SPower}, base::STerm, power::SPower)
+    merged = haskey(exps, base) ? exps[base] + power : power
+    exps[base] = _normalize_product_power(merged)
+    return
+end
 
-    if term isa SExpr{Call}
+function _collect_product_factors!(exps::AbstractDict{STerm,SPower}, coef::Base.RefValue{Real}, term::STerm, power::SPower=1)
+    power = _normalize_product_power(power)
+    power isa Real && iszero(power) && return
+
+    if iscall(term)
         op = operation(term)
         if op === SRef(:*)
             for arg in arguments(term)
@@ -229,35 +230,34 @@ function _collect_product_factors!(exps::AbstractDict{STerm,STerm}, coef::Base.R
         elseif op === SRef(:/)
             num, den = arguments(term)
             _collect_product_factors!(exps, coef, num, power)
-            _collect_product_factors!(exps, coef, den, _normalize_power(seval(-power)))
+            _collect_product_factors!(exps, coef, den, _neg_power(power))
             return
         elseif op === SRef(:inv)
-            _collect_product_factors!(exps, coef, only(arguments(term)), _normalize_power(seval(-power)))
+            _collect_product_factors!(exps, coef, only(arguments(term)), _neg_power(power))
             return
-        elseif op === SRef(:-) && arity(term) == 1 && _is_uniform_integer(power)
-            p = _uniform_literal_value(power)
-            isodd(p) && (coef[] = seval(coef[] * SUniform(-1)))
+        elseif op === SRef(:-) && arity(term) == 1 && power isa Integer
+            isodd(power) && (coef[] = -coef[])
             _collect_product_factors!(exps, coef, only(arguments(term)), power)
             return
         elseif op === SRef(:^)
             base, exp = arguments(term)
-            _collect_product_factors!(exps, coef, base, _normalize_power(seval(power * exp)))
+            _collect_product_factors!(exps, coef, base, _mul_power(power, exp))
             return
         end
     end
 
-    if _is_uniform_literal(term) && _is_uniform_literal(power)
-        coef[] = seval(coef[] * _pow_uniform(term, power))
+    if _is_uniform_literal(term) && power isa Real
+        coef[] *= _pow_real(_uniform_literal_value(term), power)
         return
     end
 
-    _add_exponent!(exps, term, power)
+    _add_product_exponent!(exps, term, power)
     return
 end
 
-function _factor_with_power(base::STerm, power::STerm)
-    power = _normalize_power(power)
-    _is_uniform_one(power) && return base
+function _factor_with_power(base::STerm, power::SPower)
+    power = _normalize_product_power(power)
+    power isa Real && isone(power) && return base
     return base^power
 end
 
@@ -266,35 +266,31 @@ function _sorted_product_expression(factors::Vector{STerm})
     return sort_product_terms(*(factors...))
 end
 
-function _reconstruct_product(exps::AbstractDict{STerm,STerm}, coefficient::STerm)
-    _is_uniform_zero(coefficient) && return SUniform(0)
+function _reconstruct_product(exps::AbstractDict{STerm,SPower}, coefficient::Real)
+    iszero(coefficient) && return SUniform(0)
 
     numerator = STerm[]
     denominator = STerm[]
 
     for (base, power) in exps
-        _is_uniform_zero(power) && continue
-        if _is_uniform_negative(power)
-            apow = _abs_uniform(power)
-            _is_uniform_zero(apow) || push!(denominator, _factor_with_power(base, apow))
+        if power isa Real && iszero(power)
+            continue
+        elseif power isa Real && power < 0
+            apow = -power
+            iszero(apow) || push!(denominator, _factor_with_power(base, apow))
         else
             push!(numerator, _factor_with_power(base, power))
         end
     end
 
-    negcoef = false
-    if _is_uniform_literal(coefficient)
-        negcoef = _is_uniform_negative(coefficient)
-        cabs = negcoef ? _abs_uniform(coefficient) : coefficient
-        _is_uniform_one(cabs) || push!(numerator, cabs)
-    else
-        push!(numerator, coefficient)
-    end
+    negcoef = coefficient < zero(coefficient)
+    cabs = negcoef ? abs(coefficient) : coefficient
+    isone(cabs) || push!(numerator, SUniform(cabs))
 
     num_expr = _sorted_product_expression(numerator)
     den_expr = _sorted_product_expression(denominator)
 
-    result = _is_uniform_one(den_expr) ? num_expr : num_expr / den_expr
+    result = den_expr === SUniform(1) ? num_expr : num_expr / den_expr
     return negcoef ? -result : result
 end
 
@@ -304,23 +300,23 @@ function canonicalize_product(expr::SExpr{Call})
     op = operation(expr)
     (op === SRef(:*) || op === SRef(:/) || op === SRef(:inv)) || return expr
 
-    exps = IdDict{STerm,STerm}()
-    coef = Ref{STerm}(SUniform(1))
-    _collect_product_factors!(exps, coef, expr, SUniform(1))
+    exps = IdDict{STerm,SPower}()
+    coef = Ref{Real}(1)
+    _collect_product_factors!(exps, coef, expr, 1)
     return _reconstruct_product(exps, coef[])
 end
 
 function _split_term_coefficient(term::STerm)
     if _is_uniform_literal(term)
-        return term, SUniform(1)
+        return _uniform_literal_value(term), SUniform(1)
     end
 
-    if term isa SExpr{Call} && operation(term) === SRef(:*)
-        coef = SUniform(1)
+    if iscall(term) && operation(term) === SRef(:*)
+        coef = 1
         rest = STerm[]
         for arg in arguments(term)
             if _is_uniform_literal(arg)
-                coef = seval(coef * arg)
+                coef *= _uniform_literal_value(arg)
             else
                 push!(rest, arg)
             end
@@ -335,11 +331,11 @@ function _split_term_coefficient(term::STerm)
         end
     end
 
-    return SUniform(1), term
+    return 1, term
 end
 
-function _collect_sum_terms!(coeffs::AbstractDict{STerm,STerm}, term::STerm, sign::STerm=SUniform(1))
-    if term isa SExpr{Call}
+function _collect_sum_terms!(coeffs::AbstractDict{STerm,Real}, term::STerm, sign::Real=1)
+    if iscall(term)
         op = operation(term)
         if op === SRef(:+)
             for arg in arguments(term)
@@ -348,26 +344,26 @@ function _collect_sum_terms!(coeffs::AbstractDict{STerm,STerm}, term::STerm, sig
             return
         elseif op === SRef(:-)
             if arity(term) == 1
-                _collect_sum_terms!(coeffs, only(arguments(term)), seval(-sign))
+                _collect_sum_terms!(coeffs, only(arguments(term)), -sign)
             else
                 a, b = arguments(term)
                 _collect_sum_terms!(coeffs, a, sign)
-                _collect_sum_terms!(coeffs, b, seval(-sign))
+                _collect_sum_terms!(coeffs, b, -sign)
             end
             return
         end
     end
 
     coef, mono = _split_term_coefficient(term)
-    contrib = seval(sign * coef)
-    coeffs[mono] = haskey(coeffs, mono) ? seval(coeffs[mono] + contrib) : contrib
+    contrib = sign * coef
+    coeffs[mono] = haskey(coeffs, mono) ? coeffs[mono] + contrib : contrib
     return
 end
 
 function _collect_monomial_powers!(exps::AbstractDict{STerm,STerm}, term::STerm, power::STerm=SUniform(1))
-    _is_uniform_zero(power) && return
+    iszero(power) && return
 
-    if term isa SExpr{Call}
+    if iscall(term)
         op = operation(term)
         if op === SRef(:*)
             for arg in arguments(term)
@@ -402,7 +398,7 @@ function _monomial_pairs(term::STerm)
 
     pairs = Pair{STerm,STerm}[]
     for (factor, power) in exps
-        _is_uniform_zero(power) && continue
+        iszero(power) && continue
         push!(pairs, factor => power)
     end
 
@@ -474,7 +470,7 @@ function _isless_sum_term(x::STerm, y::STerm)
     elseif xconst && yconst
         cx, _ = _split_term_coefficient(x)
         cy, _ = _split_term_coefficient(y)
-        return _cmp_power(cx, cy) < 0
+        return _cmp_ordered(cx, cy) < 0
     end
 
     mx = _monomial_pairs(x)
@@ -507,19 +503,19 @@ sort_sum_terms(expr::STerm) = expr
 function _sorted_sum_vector(terms::Vector{STerm})
     isempty(terms) && return STerm[]
     sorted = sort_sum_terms(+(terms...))
-    if sorted isa SExpr{Call} && operation(sorted) === SRef(:+)
+    if iscall(sorted) && operation(sorted) === SRef(:+)
         return collect(arguments(sorted))
     else
         return STerm[sorted]
     end
 end
 
-function _compose_coeff_monomial(coef::STerm, mono::STerm)
-    mono === SUniform(1) && return coef
-    _is_uniform_one(coef) && return mono
+function _compose_coeff_monomial(coef::Real, mono::STerm)
+    mono === SUniform(1) && return SUniform(coef)
+    isone(coef) && return mono
 
-    term = coef * mono
-    if term isa SExpr{Call}
+    term = SUniform(coef) * mono
+    if iscall(term)
         op = operation(term)
         if op === SRef(:*) || op === SRef(:/) || op === SRef(:inv)
             return canonicalize_product(term)
@@ -528,12 +524,8 @@ function _compose_coeff_monomial(coef::STerm, mono::STerm)
     return term
 end
 
-function _reconstruct_sum(coeffs::AbstractDict{STerm,STerm})
-    entries = Pair{STerm,STerm}[]
-    for (mono, coeff) in coeffs
-        _is_uniform_zero(coeff) && continue
-        push!(entries, mono => coeff)
-    end
+function _reconstruct_sum(coeffs::AbstractDict{STerm,Real})
+    entries = collect(filter(!iszero ∘ last, coeffs))
 
     isempty(entries) && return SUniform(0)
 
@@ -544,13 +536,8 @@ function _reconstruct_sum(coeffs::AbstractDict{STerm,STerm})
     for entry in entries
         mono = first(entry)
         coeff = last(entry)
-        if _is_uniform_negative(coeff)
-            push!(terms, _compose_coeff_monomial(_abs_uniform(coeff), mono))
-            push!(isneg, true)
-        else
-            push!(terms, _compose_coeff_monomial(coeff, mono))
-            push!(isneg, false)
-        end
+        push!(terms, _compose_coeff_monomial(abs(coeff), mono))
+        push!(isneg, coeff < zero(coeff))
     end
 
     first_negative = findfirst(isneg)
@@ -596,8 +583,8 @@ function canonicalize_sum(expr::SExpr{Call})
     op = operation(expr)
     (op === SRef(:+) || op === SRef(:-)) || return expr
 
-    coeffs = IdDict{STerm,STerm}()
-    _collect_sum_terms!(coeffs, expr, SUniform(1))
+    coeffs = IdDict{STerm,Real}()
+    _collect_sum_terms!(coeffs, expr, 1)
     return _reconstruct_sum(coeffs)
 end
 

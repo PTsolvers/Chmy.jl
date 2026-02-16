@@ -110,6 +110,9 @@ isstaticzero(::SZeroTensor) = true
 isstaticone(::STerm) = false
 isstaticone(::SUniform{V}) where {V} = isone(V)
 
+Base.iszero(s::SUniform) = isstaticzero(s)
+Base.isone(s::SUniform) = isstaticone(s)
+
 isidentity(::STerm) = false
 isidentity(::SIdTensor) = true
 

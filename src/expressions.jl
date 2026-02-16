@@ -1,6 +1,13 @@
 abstract type STerm end
 
 isexpr(::STerm) = false
+iscall(::STerm) = false
+iscomp(::STerm) = false
+isind(::STerm)  = false
+isloc(::STerm)  = false
+
+Base.iszero(::STerm) = false
+Base.isone(::STerm) = false
 
 abstract type SExprHead end
 
