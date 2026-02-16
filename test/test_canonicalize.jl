@@ -23,6 +23,8 @@
     @testset "product canonicalization" begin
         @test canonicalize(y * x) === *(x, y)
         @test canonicalize(a * a) === a^SUniform(2)
+        @test canonicalize(a * (-a)) === -(a^SUniform(2))
+        @test canonicalize((-a) * (-a)) === a^SUniform(2)
         @test canonicalize(2 * b * 3 * a) === *(SUniform(6), a, b)
 
         expr = x * (x * y) / (inv(y) * (SUniform(1 // 2) * x)^(-SUniform(1)))

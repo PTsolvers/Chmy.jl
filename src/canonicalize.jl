@@ -234,6 +234,11 @@ function _collect_product_factors!(exps::AbstractDict{STerm,STerm}, coef::Base.R
         elseif op === SRef(:inv)
             _collect_product_factors!(exps, coef, only(arguments(term)), _normalize_power(seval(-power)))
             return
+        elseif op === SRef(:-) && arity(term) == 1 && _is_uniform_integer(power)
+            p = _uniform_literal_value(power)
+            isodd(p) && (coef[] = seval(coef[] * SUniform(-1)))
+            _collect_product_factors!(exps, coef, only(arguments(term)), power)
+            return
         elseif op === SRef(:^)
             base, exp = arguments(term)
             _collect_product_factors!(exps, coef, base, _normalize_power(seval(power * exp)))
