@@ -553,8 +553,8 @@ function _reconstruct_sum(coeffs::AbstractDict{STerm,STerm})
         end
     end
 
-    first_negative = findfirst(identity, isneg)
-    last_positive = findlast(x -> !x, isneg)
+    first_negative = findfirst(isneg)
+    last_positive = findlast(!, isneg)
 
     if isnothing(first_negative)
         return +(terms...)
