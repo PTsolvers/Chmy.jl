@@ -6,7 +6,7 @@ import LinearAlgebra: ⋅, ×, tr, det, diag, transpose
 include("utils.jl")
 
 export STerm, SExprHead, Call, Comp, Loc, Ind, SUniform, SRef, SFun, SIndex, SExpr
-export isexpr, iscall, isind, isloc, head, children, operation, arguments, argument, arity, indices, location
+export isexpr, iscall, isind, isloc, head, children, operation, arguments, argument, arity, indices, location, value
 include("expressions.jl")
 
 export Space, Segment, Point
@@ -26,7 +26,7 @@ include("calculus.jl")
 export STensor, SScalar, SVec
 export SSymTensor, SAltTensor, SDiagTensor, SZeroTensor, SIdTensor
 export Tensor, SymTensor, AltTensor, DiagTensor, Vec
-export tensorrank, tensorkind
+export tensorrank, tensorkind, name
 export isalternating, issymmetric, isdiag
 include("tensors.jl")
 

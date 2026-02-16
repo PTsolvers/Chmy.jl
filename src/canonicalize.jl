@@ -13,11 +13,6 @@ end
 
 seval(expr::STerm) = Postwalk(SEvalRule())(expr)
 
-_same_term(x::STerm, y::STerm) = x === y
-
-_tensor_name(::STensor{R,K,N}) where {R,K,N} = N
-_uniform_value(::SUniform{V}) where {V} = V
-
 _is_uniform_literal(::STerm) = false
 _is_uniform_literal(::SUniform) = true
 
@@ -27,8 +22,8 @@ function _is_uniform_literal(expr::SExpr{Call})
     return only(arguments(expr)) isa SUniform
 end
 
-_uniform_literal_value(x::SUniform) = _uniform_value(x)
-_uniform_literal_value(expr::SExpr{Call}) = -_uniform_value(only(arguments(expr)))
+_uniform_literal_value(x::SUniform) = value(x)
+_uniform_literal_value(expr::SExpr{Call}) = -value(only(arguments(expr)))
 
 _is_uniform_zero(term::STerm) = _is_uniform_literal(term) && iszero(_uniform_literal_value(term))
 _is_uniform_one(term::STerm) = _is_uniform_literal(term) && isone(_uniform_literal_value(term))
@@ -46,8 +41,6 @@ end
 
 _abs_uniform(term::STerm) = SUniform(abs(_uniform_literal_value(term)))
 
-_cmp_ordered(x, y) = x == y ? 0 : (isless(x, y) ? -1 : 1)
-
 _term_rank(::SIndex) = 1
 _term_rank(::STensor) = 2
 _term_rank(::SRef) = 3
@@ -62,78 +55,68 @@ _head_rank(::Ind) = 3
 _head_rank(::Loc) = 4
 _head_rank(expr::SExpr) = _head_rank(head(expr))
 
-_cmp_sindex(::SIndex{I}, ::SIndex{J}) where {I,J} = _cmp_ordered(I, J)
+const SAtom = Union{SIndex,STensor,SRef,SFun,SUniform}
 
-function _cmp_stensor(x::STensor, y::STensor)
-    cmp = _cmp_ordered(_tensor_name(x), _tensor_name(y))
-    cmp == 0 || return cmp
+_atom_rank(::SIndex) = 1
+_atom_rank(::STensor) = 2
+_atom_rank(::SRef) = 3
+_atom_rank(::SFun) = 4
+_atom_rank(::SUniform) = 5
+
+_isless_atom(x::SAtom, y::SAtom) = _atom_rank(x) < _atom_rank(y)
+_isless_atom(::SIndex{I}, ::SIndex{J}) where {I,J} = I < J
+_isless_atom(::SRef{F1}, ::SRef{F2}) where {F1,F2} = isless(F1, F2)
+_isless_atom(x::SFun, y::SFun) = isless(name(x.f), name(y.f))
+_isless_atom(x::SUniform, y::SUniform) = isless(value(x), value(y))
+function _isless_atom(x::STensor, y::STensor)
+    nx = name(x)
+    ny = name(y)
+    nx == ny || return isless(nx, ny)
     if x !== y
         throw(ArgumentError("tensors with the same name must have the same rank and kind"))
     end
-    return 0
+    return false
 end
 
-_cmp_sref(::SRef{F1}, ::SRef{F2}) where {F1,F2} = _cmp_ordered(F1, F2)
-
-function _cmp_sfun(x::SFun, y::SFun)
-    cmp = _cmp_ordered(Base.nameof(x.f), Base.nameof(y.f))
-    cmp == 0 || return cmp
-    cmp = _cmp_ordered(Base.nameof(parentmodule(x.f)), Base.nameof(parentmodule(y.f)))
-    cmp == 0 || return cmp
-    return _cmp_ordered(Base.typename(typeof(x.f)).name, Base.typename(typeof(y.f)).name)
-end
-
-function _cmp_suniform(x::SUniform, y::SUniform)
-    return _cmp_ordered(_uniform_value(x), _uniform_value(y))
-end
-
-function _cmp_atoms(x::STerm, y::STerm)
-    if x isa SIndex && y isa SIndex
-        return _cmp_sindex(x, y)
-    elseif x isa STensor && y isa STensor
-        return _cmp_stensor(x, y)
-    elseif x isa SRef && y isa SRef
-        return _cmp_sref(x, y)
-    elseif x isa SFun && y isa SFun
-        return _cmp_sfun(x, y)
-    elseif x isa SUniform && y isa SUniform
-        return _cmp_suniform(x, y)
-    else
-        return _cmp_ordered(Base.typename(typeof(x)).name, Base.typename(typeof(y)).name)
+_isless_term_tuple(::Tuple{}, ::Tuple{}) = false
+_isless_term_tuple(::Tuple{}, ::Tuple{Any,Vararg}) = true
+_isless_term_tuple(::Tuple{Any,Vararg}, ::Tuple{}) = false
+function _isless_term_tuple(xs::Tuple{X,Vararg}, ys::Tuple{Y,Vararg}) where {X,Y}
+    xh = first(xs)
+    yh = first(ys)
+    if xh === yh
+        return _isless_term_tuple(Base.tail(xs), Base.tail(ys))
     end
+    return _isless_lex(xh, yh)
 end
 
-function _cmp_term_tuples(xs::Tuple, ys::Tuple)
-    n = min(length(xs), length(ys))
-    for i in 1:n
-        cmp = _cmp_lex(xs[i], ys[i])
-        cmp == 0 || return cmp
-    end
-    return _cmp_ordered(length(xs), length(ys))
+function _isless_expr(x::SExpr, y::SExpr)
+    hx = _head_rank(x)
+    hy = _head_rank(y)
+    hx == hy || return hx < hy
+    return _isless_term_tuple(children(x), children(y))
 end
 
-function _cmp_expr(x::SExpr, y::SExpr)
-    hcmp = _cmp_ordered(_head_rank(x), _head_rank(y))
-    hcmp == 0 || return hcmp
-    return _cmp_term_tuples(children(x), children(y))
-end
+function _isless_lex(x::STerm, y::STerm)
+    x === y && return false
 
-function _cmp_lex(x::STerm, y::STerm)
-    _same_term(x, y) && return 0
     rx = _term_rank(x)
     ry = _term_rank(y)
-    rx == ry || return rx < ry ? -1 : 1
+    rx == ry || return rx < ry
+
     if x isa SExpr && y isa SExpr
-        return _cmp_expr(x, y)
+        return _isless_expr(x, y)
+    elseif x isa SAtom && y isa SAtom
+        return _isless_atom(x, y)
     else
-        return _cmp_atoms(x, y)
+        return _isless_atom(x, y)
     end
 end
 
-_isless_lex(x::STerm, y::STerm) = _cmp_lex(x, y) < 0
+_cmp_ordered(x, y) = x == y ? 0 : (isless(x, y) ? -1 : 1)
 
 function _cmp_power(x::STerm, y::STerm)
-    _same_term(x, y) && return 0
+    x === y && return 0
     if _is_uniform_literal(x) && _is_uniform_literal(y)
         return _cmp_ordered(_uniform_literal_value(x), _uniform_literal_value(y))
     end
@@ -142,32 +125,30 @@ function _cmp_power(x::STerm, y::STerm)
     elseif y isa SExpr && _is_uniform_integer(x)
         return -1
     end
-    return _cmp_lex(x, y)
+    if _isless_lex(x, y)
+        return -1
+    elseif _isless_lex(y, x)
+        return 1
+    end
+    return 0
 end
 
 _strip_power_base(term::STerm) = term
-
 function _strip_power_base(term::SExpr{Call})
     operation(term) === SRef(:^) || return term
     return first(arguments(term))
 end
 
-function _numeric_factor_score(v)
-    iszero(v) && return -Inf
-    return abs(log(float(abs(v))))
-end
+_numeric_factor_score(v) = abs(log(abs(v)))
 
 function _isless_uniform_factor(x::SUniform, y::SUniform)
-    _same_term(x, y) && return false
-    vx = _uniform_value(x)
-    vy = _uniform_value(y)
-    vx == vy && return false
+    x === y && return false
     iszero(vx) && return true
     iszero(vy) && return false
 
     sx = _numeric_factor_score(vx)
     sy = _numeric_factor_score(vy)
-    sx == sy || return sx < sy
+    sx == sy || return isless(sx, sy)
 
     ax = abs(vx)
     ay = abs(vy)
@@ -177,7 +158,7 @@ function _isless_uniform_factor(x::SUniform, y::SUniform)
 end
 
 function _isless_product_factor(x::STerm, y::STerm)
-    _same_term(x, y) && return false
+    x === y && return false
 
     if x isa SUniform
         return y isa SUniform ? _isless_uniform_factor(x, y) : true
@@ -194,15 +175,12 @@ function _pow_uniform(base::STerm, exp::STerm)
     if p isa Integer
         if b isa Integer && p < 0
             return SUniform(Rational(b)^p)
-        else
-            return SUniform(b^p)
         end
+        return SUniform(b^p)
     else
         return SUniform(b^p)
     end
 end
-
-_sort_product_terms_impl(expr::STerm) = expr
 
 function _sort_product_terms_impl(expr::SExpr{Call})
     operation(expr) === SRef(:*) || return expr
@@ -211,16 +189,14 @@ function _sort_product_terms_impl(expr::SExpr{Call})
     return *(args...)
 end
 
+sort_product_terms(expr::STerm) = expr
 @generated function sort_product_terms(expr::SExpr{Call})
     expri = expr.instance
     sorted = _sort_product_terms_impl(expri)
     return :($sorted)
 end
 
-sort_product_terms(expr::STerm) = expr
-
 _canonicalize_power_term(term::STerm) = seval(term)
-
 function _canonicalize_power_term(term::SExpr{Call})
     op = operation(term)
     if op === SRef(:+) || op === SRef(:-)
@@ -286,9 +262,7 @@ function _sorted_product_expression(factors::Vector{STerm})
 end
 
 function _reconstruct_product(exps::AbstractDict{STerm,STerm}, coefficient::STerm)
-    if _is_uniform_zero(coefficient)
-        return SUniform(0)
-    end
+    _is_uniform_zero(coefficient) && return SUniform(0)
 
     numerator = STerm[]
     denominator = STerm[]
@@ -441,7 +415,7 @@ end
 
 function _monomial_exponent(monomial, factor::STerm)
     for pair in monomial
-        _same_term(first(pair), factor) && return last(pair)
+        first(pair) === factor && return last(pair)
     end
     return SUniform(0)
 end
@@ -459,7 +433,7 @@ function _monomial_union_factors(mx, my)
 
     uniq = STerm[]
     for factor in factors
-        if isempty(uniq) || !_same_term(uniq[end], factor)
+        if isempty(uniq) || (uniq[end] !== factor)
             push!(uniq, factor)
         end
     end
@@ -486,7 +460,7 @@ function _is_constant_term(term::STerm)
 end
 
 function _isless_sum_term(x::STerm, y::STerm)
-    _same_term(x, y) && return false
+    x === y && return false
 
     xconst = _is_constant_term(x)
     yconst = _is_constant_term(y)

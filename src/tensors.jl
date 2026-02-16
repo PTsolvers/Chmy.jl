@@ -9,6 +9,7 @@ struct STensor{R,K,N} <: STerm end
 
 tensorrank(::STensor{R}) where {R} = R
 tensorkind(::STensor{<:Any,K}) where {K} = K
+name(::STensor{<:Any,<:Any,N}) where {N} = N
 
 tensorrank(::SIndex) = 0
 
