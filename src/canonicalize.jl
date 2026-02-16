@@ -46,7 +46,7 @@ _atom_rank(::SUniform) = 5
 _isless_atom(x::SAtom, y::SAtom) = _atom_rank(x) < _atom_rank(y)
 _isless_atom(::SIndex{I}, ::SIndex{J}) where {I,J} = I < J
 _isless_atom(::SRef{F1}, ::SRef{F2}) where {F1,F2} = isless(F1, F2)
-_isless_atom(x::SFun, y::SFun) = isless(name(x.f), name(y.f))
+_isless_atom(x::SFun, y::SFun) = isless(nameof(x.f), nameof(y.f))
 _isless_atom(x::SUniform, y::SUniform) = isless(value(x), value(y))
 function _isless_atom(x::STensor, y::STensor)
     nx = name(x)
