@@ -153,6 +153,40 @@ end
 
 const SPower = Union{STerm,Real}
 
+mutable struct Monomial
+    neg::Bool
+    coeff::Real
+    powers::IdDict{STerm,SPower}
+end
+
+function Monomial(coeff::Real=1)
+    return Monomial(coeff < zero(coeff), abs(coeff), IdDict{STerm,SPower}())
+end
+
+function Monomial(coeff::Real, powers::AbstractDict{STerm,<:Any})
+    out = IdDict{STerm,SPower}()
+    for (factor, power) in powers
+        out[factor] = power
+    end
+    return Monomial(coeff < zero(coeff), abs(coeff), out)
+end
+
+_signed_coeff(monomial::Monomial) = monomial.neg ? -monomial.coeff : monomial.coeff
+
+function _set_signed_coeff!(monomial::Monomial, coeff::Real)
+    monomial.neg = coeff < zero(coeff)
+    monomial.coeff = abs(coeff)
+    return
+end
+
+function _scale_coeff!(monomial::Monomial, factor::Real)
+    _set_signed_coeff!(monomial, _signed_coeff(monomial) * factor)
+    return
+end
+
+_power_term(power::Real) = SUniform(power)
+_power_term(power::STerm) = power
+
 function _pow_real(base::Real, power::Real)
     if base isa Integer && power isa Integer && power < 0
         return Rational(base)^power
@@ -164,13 +198,6 @@ _normalize_product_power(power::Real) = power
 function _normalize_product_power(power::STerm)
     reduced = _canonicalize_power_term(seval(power))
     return _is_uniform_literal(reduced) ? _uniform_literal_value(reduced) : reduced
-end
-
-function _mul_power(x::SPower, y::SPower)
-    if x isa Real && y isa Real
-        return x * y
-    end
-    return _normalize_product_power(seval(x * y))
 end
 
 _neg_power(power::Real) = -power
@@ -204,19 +231,18 @@ end
 
 _normalize_power(power::STerm) = _canonicalize_power_term(seval(power))
 
-function _add_exponent!(exps::AbstractDict{STerm,STerm}, base::STerm, power::STerm)
-    merged = haskey(exps, base) ? seval(exps[base] + power) : power
-    exps[base] = _normalize_power(merged)
+function _add_monomial_power!(monomial::Monomial, base::STerm, power::SPower)
+    merged = haskey(monomial.powers, base) ? monomial.powers[base] + power : power
+    norm = _normalize_product_power(merged)
+    if iszero(norm)
+        pop!(monomial.powers, base, nothing)
+    else
+        monomial.powers[base] = norm
+    end
     return
 end
 
-function _add_product_exponent!(exps::AbstractDict{STerm,SPower}, base::STerm, power::SPower)
-    merged = haskey(exps, base) ? exps[base] + power : power
-    exps[base] = _normalize_product_power(merged)
-    return
-end
-
-function _collect_product_factors!(exps::AbstractDict{STerm,SPower}, coef::Base.RefValue{Real}, term::STerm, power::SPower=1)
+function _collect_monomial!(monomial::Monomial, term::STerm, power::SPower=1)
     power = _normalize_product_power(power)
     power isa Real && iszero(power) && return
 
@@ -224,36 +250,44 @@ function _collect_product_factors!(exps::AbstractDict{STerm,SPower}, coef::Base.
         op = operation(term)
         if op === SRef(:*)
             for arg in arguments(term)
-                _collect_product_factors!(exps, coef, arg, power)
+                _collect_monomial!(monomial, arg, power)
             end
             return
         elseif op === SRef(:/)
             num, den = arguments(term)
-            _collect_product_factors!(exps, coef, num, power)
-            _collect_product_factors!(exps, coef, den, _neg_power(power))
+            _collect_monomial!(monomial, num, power)
+            _collect_monomial!(monomial, den, _neg_power(power))
             return
         elseif op === SRef(:inv)
-            _collect_product_factors!(exps, coef, only(arguments(term)), _neg_power(power))
+            _collect_monomial!(monomial, only(arguments(term)), _neg_power(power))
             return
         elseif op === SRef(:-) && arity(term) == 1 && power isa Integer
-            isodd(power) && (coef[] = -coef[])
-            _collect_product_factors!(exps, coef, only(arguments(term)), power)
+            isodd(power) && (monomial.neg = !monomial.neg)
+            _collect_monomial!(monomial, only(arguments(term)), power)
             return
         elseif op === SRef(:^)
             base, exp = arguments(term)
-            _collect_product_factors!(exps, coef, base, _mul_power(power, exp))
+            _collect_monomial!(monomial, base, _normalize_product_power(seval(power * exp)))
             return
         end
     end
 
     if _is_uniform_literal(term) && power isa Real
-        coef[] *= _pow_real(_uniform_literal_value(term), power)
+        _scale_coeff!(monomial, _pow_real(_uniform_literal_value(term), power))
         return
     end
 
-    _add_product_exponent!(exps, term, power)
+    _add_monomial_power!(monomial, term, power)
     return
 end
+
+function Monomial(term::STerm)
+    monomial = Monomial(1)
+    _collect_monomial!(monomial, term, 1)
+    return monomial
+end
+
+_unit_monomial(monomial::Monomial) = Monomial(1, monomial.powers)
 
 function _factor_with_power(base::STerm, power::SPower)
     power = _normalize_product_power(power)
@@ -266,13 +300,13 @@ function _sorted_product_expression(factors::Vector{STerm})
     return sort_product_terms(*(factors...))
 end
 
-function _reconstruct_product(exps::AbstractDict{STerm,SPower}, coefficient::Real)
-    iszero(coefficient) && return SUniform(0)
+function canonical_abs_product(monomial::Monomial)
+    iszero(monomial.coeff) && return SUniform(0)
 
     numerator = STerm[]
     denominator = STerm[]
 
-    for (base, power) in exps
+    for (base, power) in monomial.powers
         if power isa Real && iszero(power)
             continue
         elseif power isa Real && power < 0
@@ -283,15 +317,20 @@ function _reconstruct_product(exps::AbstractDict{STerm,SPower}, coefficient::Rea
         end
     end
 
-    negcoef = coefficient < zero(coefficient)
-    cabs = negcoef ? abs(coefficient) : coefficient
-    isone(cabs) || push!(numerator, SUniform(cabs))
+    isone(monomial.coeff) || push!(numerator, SUniform(monomial.coeff))
 
     num_expr = _sorted_product_expression(numerator)
     den_expr = _sorted_product_expression(denominator)
 
-    result = den_expr === SUniform(1) ? num_expr : num_expr / den_expr
-    return negcoef ? -result : result
+    return isone(den_expr) ? num_expr : num_expr / den_expr
+end
+
+function canonical_product(monomial::Monomial)
+    abs_expr = canonical_abs_product(monomial)
+    if iszero(monomial.coeff)
+        return abs_expr
+    end
+    return monomial.neg ? -abs_expr : abs_expr
 end
 
 canonicalize_product(term::STerm) = term
@@ -300,134 +339,69 @@ function canonicalize_product(expr::SExpr{Call})
     op = operation(expr)
     (op === SRef(:*) || op === SRef(:/) || op === SRef(:inv)) || return expr
 
-    exps = IdDict{STerm,SPower}()
-    coef = Ref{Real}(1)
-    _collect_product_factors!(exps, coef, expr, 1)
-    return _reconstruct_product(exps, coef[])
+    return canonical_product(Monomial(expr))
 end
 
-function _split_term_coefficient(term::STerm)
-    if _is_uniform_literal(term)
-        return _uniform_literal_value(term), SUniform(1)
+_isconstant(monomial::Monomial) = isempty(monomial.powers)
+
+function _add_sum_monomial!(monomials::Vector{Monomial}, index::IdDict{STerm,Int}, monomial::Monomial, sign::Real)
+    unit = _unit_monomial(monomial)
+    key = canonical_abs_product(unit)
+    contrib = sign * _signed_coeff(monomial)
+    if haskey(index, key)
+        i = index[key]
+        _set_signed_coeff!(monomials[i], _signed_coeff(monomials[i]) + contrib)
+    else
+        push!(monomials, Monomial(contrib, unit.powers))
+        index[key] = length(monomials)
     end
-
-    if iscall(term) && operation(term) === SRef(:*)
-        coef = 1
-        rest = STerm[]
-        for arg in arguments(term)
-            if _is_uniform_literal(arg)
-                coef *= _uniform_literal_value(arg)
-            else
-                push!(rest, arg)
-            end
-        end
-
-        if isempty(rest)
-            return coef, SUniform(1)
-        elseif length(rest) == 1
-            return coef, only(rest)
-        else
-            return coef, canonicalize_product(*(rest...))
-        end
-    end
-
-    return 1, term
+    return
 end
 
-function _collect_sum_terms!(coeffs::AbstractDict{STerm,Real}, term::STerm, sign::Real=1)
+function _collect_sum_terms!(monomials::Vector{Monomial}, index::IdDict{STerm,Int}, term::STerm, sign::Real=1)
     if iscall(term)
         op = operation(term)
         if op === SRef(:+)
             for arg in arguments(term)
-                _collect_sum_terms!(coeffs, arg, sign)
+                _collect_sum_terms!(monomials, index, arg, sign)
             end
             return
         elseif op === SRef(:-)
             if arity(term) == 1
-                _collect_sum_terms!(coeffs, only(arguments(term)), -sign)
+                _collect_sum_terms!(monomials, index, only(arguments(term)), -sign)
             else
                 a, b = arguments(term)
-                _collect_sum_terms!(coeffs, a, sign)
-                _collect_sum_terms!(coeffs, b, -sign)
+                _collect_sum_terms!(monomials, index, a, sign)
+                _collect_sum_terms!(monomials, index, b, -sign)
             end
             return
         end
     end
 
-    coef, mono = _split_term_coefficient(term)
-    contrib = sign * coef
-    coeffs[mono] = haskey(coeffs, mono) ? coeffs[mono] + contrib : contrib
+    _add_sum_monomial!(monomials, index, Monomial(term), sign)
     return
 end
 
-function _collect_monomial_powers!(exps::AbstractDict{STerm,STerm}, term::STerm, power::STerm=SUniform(1))
-    iszero(power) && return
-
-    if iscall(term)
-        op = operation(term)
-        if op === SRef(:*)
-            for arg in arguments(term)
-                _collect_monomial_powers!(exps, arg, power)
-            end
-            return
-        elseif op === SRef(:/)
-            num, den = arguments(term)
-            _collect_monomial_powers!(exps, num, power)
-            _collect_monomial_powers!(exps, den, seval(-power))
-            return
-        elseif op === SRef(:inv)
-            _collect_monomial_powers!(exps, only(arguments(term)), seval(-power))
-            return
-        elseif op === SRef(:^)
-            base, exp = arguments(term)
-            _collect_monomial_powers!(exps, base, seval(power * exp))
-            return
-        end
-    end
-
-    _add_exponent!(exps, term, power)
-    return
-end
-
-function _monomial_pairs(term::STerm)
-    _, mono = _split_term_coefficient(term)
-    mono === SUniform(1) && return Pair{STerm,STerm}[]
-
-    exps = IdDict{STerm,STerm}()
-    _collect_monomial_powers!(exps, mono, SUniform(1))
-
-    pairs = Pair{STerm,STerm}[]
-    for (factor, power) in exps
-        iszero(power) && continue
-        push!(pairs, factor => power)
-    end
-
-    sort!(pairs; lt=(a, b) -> _isless_lex(first(a), first(b)))
-    return pairs
-end
-
-function _monomial_degree(monomial)
+function _monomial_degree(monomial::Monomial)
     degree = SUniform(0)
-    for pair in monomial
-        degree = seval(degree + last(pair))
+    for power in values(monomial.powers)
+        degree = seval(degree + power)
     end
     return degree
 end
 
-function _monomial_exponent(monomial, factor::STerm)
-    for pair in monomial
-        first(pair) === factor && return last(pair)
-    end
-    return SUniform(0)
+function _monomial_exponent(monomial::Monomial, factor::STerm)
+    haskey(monomial.powers, factor) || return SUniform(0)
+    return _power_term(monomial.powers[factor])
 end
 
-function _monomial_union_factors(mx, my)
+function _monomial_union_factors(mx::Monomial, my::Monomial)
     factors = STerm[]
-    for pair in mx
-        push!(factors, first(pair))
+    for factor in keys(mx.powers)
+        push!(factors, factor)
     end
-    for pair in my
-        push!(factors, first(pair))
+    for factor in keys(my.powers)
+        push!(factors, factor)
     end
 
     sort!(factors; lt=_isless_lex)
@@ -441,7 +415,7 @@ function _monomial_union_factors(mx, my)
     return uniq
 end
 
-function _cmp_monomial_desc(mx, my)
+function _cmp_monomial_desc(mx::Monomial, my::Monomial)
     dcmp = _cmp_power(_monomial_degree(mx), _monomial_degree(my))
     dcmp == 0 || return dcmp
 
@@ -455,89 +429,35 @@ function _cmp_monomial_desc(mx, my)
     return 0
 end
 
-function _is_constant_term(term::STerm)
-    _, mono = _split_term_coefficient(term)
-    return mono === SUniform(1)
-end
-
-function _isless_sum_term(x::STerm, y::STerm)
-    x === y && return false
-
-    xconst = _is_constant_term(x)
-    yconst = _is_constant_term(y)
+function _isless_sum(mx::Monomial, my::Monomial)
+    xconst = _isconstant(mx)
+    yconst = _isconstant(my)
     if xconst != yconst
         return !xconst
     elseif xconst && yconst
-        cx, _ = _split_term_coefficient(x)
-        cy, _ = _split_term_coefficient(y)
-        return _cmp_ordered(cx, cy) < 0
+        return false
     end
 
-    mx = _monomial_pairs(x)
-    my = _monomial_pairs(y)
     cmp = _cmp_monomial_desc(mx, my)
     if cmp != 0
         return cmp > 0
     end
 
-    return _isless_lex(x, y)
+    return _isless_lex(canonical_abs_product(mx), canonical_abs_product(my))
 end
 
-_sort_sum_terms_impl(expr::STerm) = expr
+function _reconstruct_sum(monomials::Vector{Monomial})
+    filter!(monomial -> !iszero(monomial.coeff), monomials)
 
-function _sort_sum_terms_impl(expr::SExpr{Call})
-    operation(expr) === SRef(:+) || return expr
-    args = collect(arguments(expr))
-    sort!(args; lt=_isless_sum_term)
-    return +(args...)
-end
+    isempty(monomials) && return SUniform(0)
 
-@generated function sort_sum_terms(expr::SExpr{Call})
-    expri = expr.instance
-    sorted = _sort_sum_terms_impl(expri)
-    return :($sorted)
-end
-
-sort_sum_terms(expr::STerm) = expr
-
-function _sorted_sum_vector(terms::Vector{STerm})
-    isempty(terms) && return STerm[]
-    sorted = sort_sum_terms(+(terms...))
-    if iscall(sorted) && operation(sorted) === SRef(:+)
-        return collect(arguments(sorted))
-    else
-        return STerm[sorted]
-    end
-end
-
-function _compose_coeff_monomial(coef::Real, mono::STerm)
-    mono === SUniform(1) && return SUniform(coef)
-    isone(coef) && return mono
-
-    term = SUniform(coef) * mono
-    if iscall(term)
-        op = operation(term)
-        if op === SRef(:*) || op === SRef(:/) || op === SRef(:inv)
-            return canonicalize_product(term)
-        end
-    end
-    return term
-end
-
-function _reconstruct_sum(coeffs::AbstractDict{STerm,Real})
-    entries = collect(filter(!iszero ∘ last, coeffs))
-
-    isempty(entries) && return SUniform(0)
-
-    sort!(entries; lt=(a, b) -> _isless_sum_term(first(a), first(b)))
+    sort!(monomials; lt=_isless_sum)
 
     terms = STerm[]
     isneg = Bool[]
-    for entry in entries
-        mono = first(entry)
-        coeff = last(entry)
-        push!(terms, _compose_coeff_monomial(abs(coeff), mono))
-        push!(isneg, coeff < zero(coeff))
+    for monomial in monomials
+        push!(terms, canonical_abs_product(monomial))
+        push!(isneg, monomial.neg)
     end
 
     first_negative = findfirst(isneg)
@@ -583,9 +503,10 @@ function canonicalize_sum(expr::SExpr{Call})
     op = operation(expr)
     (op === SRef(:+) || op === SRef(:-)) || return expr
 
-    coeffs = IdDict{STerm,Real}()
-    _collect_sum_terms!(coeffs, expr, 1)
-    return _reconstruct_sum(coeffs)
+    monomials = Monomial[]
+    index = IdDict{STerm,Int}()
+    _collect_sum_terms!(monomials, index, expr, 1)
+    return _reconstruct_sum(monomials)
 end
 
 struct CanonicalizeRule <: AbstractRule end
