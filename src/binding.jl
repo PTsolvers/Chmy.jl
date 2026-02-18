@@ -11,9 +11,13 @@ end
 
 _expr_idx(bnd::Binding, expr) = findfirst(Base.Fix2(===, expr), bnd.exprs)
 
+Base.length(bnd::Binding) = length(bnd.exprs)
+
 Base.getindex(bnd::Binding, expr) = bnd.data[_expr_idx(bnd, expr)]
 
 Base.haskey(bnd::Binding, expr) = !isnothing(_expr_idx(bnd, expr))
+
+Base.get(bnd::Binding, expr, default) = haskey(bnd, expr) ? bnd[expr] : default
 
 function push(bnd::Binding, kv::Pair)
     if !haskey(bnd, kv.first)

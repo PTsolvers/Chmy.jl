@@ -103,19 +103,10 @@ const DiagTensor{R,D} = Tensor{R,D,DiagKind}
 
 const Vec{D} = Tensor{1,D}
 
-isstaticzero(::STerm) = false
-isstaticzero(::SUniform{V}) where {V} = iszero(V)
-isstaticzero(::SZeroTensor) = true
-
-isstaticone(::STerm) = false
-isstaticone(::SUniform{V}) where {V} = isone(V)
-
-Base.iszero(s::SUniform) = isstaticzero(s)
-Base.isone(s::SUniform) = isstaticone(s)
-
 isidentity(::STerm) = false
 isidentity(::SIdTensor) = true
 
+isstaticzero(::SZeroTensor) = true
 isstaticzero(t::Tensor) = all(isstaticzero, t.components)
 
 linear_index(t::Tensor, I::Vararg{Int}) = linear_index(typeof(t), I...)

@@ -5,7 +5,7 @@ using Chmy
 
 makedocs(
     sitename = "Chmy.jl",
-    authors="Ivan Utkin, Ludovic Räss and contributors",
+    authors="Ivan Utkin and contributors",
     format = DocumenterVitepress.MarkdownVitepress(
         repo = "github.com/PTsolvers/Chmy.jl",
         devbranch = "main",

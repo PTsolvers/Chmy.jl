@@ -6,8 +6,8 @@ iscomp(::STerm) = false
 isind(::STerm)  = false
 isloc(::STerm)  = false
 
-Base.iszero(::STerm) = false
-Base.isone(::STerm) = false
+isstaticzero(::STerm) = false
+isstaticone(::STerm) = false
 
 abstract type SExprHead end
 
@@ -35,7 +35,16 @@ function SUniform(value::Real)
     return sgn ? SUniform{value}() : -SUniform{value}()
 end
 
+SUniform(::StaticCoeff{Value}) where {Value} = SUniform(Value)
+
+isstaticuniform(s::STerm) = s isa SUniform
+
 value(::SUniform{Value}) where {Value} = Value
+
+isstaticzero(s::SUniform) = iszero(value(s))
+isstaticone(s::SUniform) = isone(value(s))
+
+isstaticinteger(s::SUniform) = isinteger(value(s))
 
 struct SRef{F} <: STerm end
 SRef(f::Symbol) = SRef{f}()

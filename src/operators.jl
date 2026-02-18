@@ -233,7 +233,6 @@ end
 Base.:-(arg::STerm) = SExpr(Call(), SRef(:-), arg)
 Base.:-(arg::SUniform{0}) = arg
 Base.:-(arg::SZeroTensor) = arg
-
 function Base.:-(arg::SExpr{Call})
     if operation(arg) === SRef(:-) && length(arguments(arg)) == 1
         return first(arguments(arg))
@@ -241,6 +240,8 @@ function Base.:-(arg::SExpr{Call})
         return SExpr(Call(), SRef(:-), arg)
     end
 end
+
+isunaryminus(expr::STerm) = iscall(expr) && operation(expr) === SRef(:-) && arity(expr) == 1
 
 for op in (:sqrt, :abs,
            :sin, :cos, :tan,
