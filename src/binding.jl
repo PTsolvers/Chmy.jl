@@ -19,6 +19,9 @@ Base.haskey(bnd::Binding, expr) = !isnothing(_expr_idx(bnd, expr))
 
 Base.get(bnd::Binding, expr, default) = haskey(bnd, expr) ? bnd[expr] : default
 
+Base.keys(bnd::Binding) = bnd.exprs
+Base.values(bnd::Binding) = bnd.data
+
 function push(bnd::Binding, kv::Pair)
     if !haskey(bnd, kv.first)
         exprs = (bnd.exprs..., kv.first)
