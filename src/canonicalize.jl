@@ -91,6 +91,13 @@ function isless_lex(x::STerm, y::STerm)
     return isless_atom(x, y)
 end
 
+# Static sorting of tuples of singleton types
+_ssort_impl(args::Tuple, lt, by) = (sort!(collect(args); lt, by)...,)
+@generated function ssort(args::Tuple; lt=isless, by=identity)
+    sorted = _ssort_impl(args.instance, lt.instance, by.instance)
+    return :($sorted)
+end
+
 # Monomial representation of products for canonicalization
 
 struct Monomial{S,B}
@@ -102,7 +109,8 @@ Monomial(term::STerm) = Monomial(StaticCoeff(1), Binding(term => SUniform(1)))
 
 function Monomial(expr::SExpr{Call})
     coeff, powers = collect_powers!(expr)
-    return Monomial(coeff, powers)
+    kv = ssort((pairs(powers)...,); lt=isless_lex, by=first)
+    return Monomial(coeff, Binding(kv...))
 end
 
 isconstant(monomial::Monomial) = length(monomial.powers) == 0
@@ -172,7 +180,7 @@ end
 
 # Partition a base^power factor between numerator and denominator tuples.
 # Keeping everything as tuples avoids heap allocations in the foldable path.
-function splitpower(num::Tuple, den::Tuple, base::STerm, npow::SExpr{Call})
+function splitpower(num::Tuple, den::Tuple, base::STerm, npow::STerm)
     # Negative exponents are represented as unary minus expressions.
     if isstaticzero(npow)
         return num, den
@@ -210,8 +218,8 @@ Base.@assume_effects :foldable function abs_product_expr(monomial::Monomial)
     # We handle the sign separately by negating the product
     numc = append_coeff(num, abs(monomial.coeff))
 
-    num_expr = _sorted_product_expression(numc)
-    den_expr = _sorted_product_expression(den)
+    num_expr = *(numc...)
+    den_expr = *(den...)
 
     return isstaticone(den_expr) ? num_expr : num_expr / den_expr
 end
@@ -223,26 +231,6 @@ end
 
 Base.@assume_effects :foldable function Base.isless(mx::Monomial, my::Monomial)
     # TODO
-end
-
-base(term::STerm) = term
-function base(term::SExpr{Call})
-    operation(term) === SRef(:^) || return term
-    return first(arguments(term))
-end
-
-function _sort_product_impl(expr::SExpr{Call})
-    operation(expr) === SRef(:*) || return expr
-    args = collect(arguments(expr))
-    sort!(args; lt=isless_product)
-    return *(args...)
-end
-
-sort_product(expr::STerm) = expr
-@generated function sort_product(expr::SExpr{Call})
-    expri = expr.instance
-    sorted = _sort_product_impl(expri)
-    return :($sorted)
 end
 
 canonicalize_product(term::STerm) = term
