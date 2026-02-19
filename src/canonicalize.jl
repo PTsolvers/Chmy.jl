@@ -42,7 +42,6 @@ isless_atom(x::SAtom, y::SAtom)                   = isless(atomrank(x), atomrank
 isless_atom(::SIndex{I}, ::SIndex{J}) where {I,J} = isless(I, J)
 isless_atom(::SRef{F1}, ::SRef{F2}) where {F1,F2} = isless(F1, F2)
 isless_atom(x::SFun, y::SFun)                     = isless(nameof(x.f), nameof(y.f))
-isless_atom(x::SUniform, y::SUniform)             = isless(value(x), value(y))
 function isless_atom(x::STensor, y::STensor)
     rx = tensorrank(x)
     ry = tensorrank(y)
@@ -78,10 +77,12 @@ function isless_expr(x::SExpr, y::SExpr)
     return isless_tuple(children(x), children(y))
 end
 
-# TODO: lex compare fails with SUniform and unary minus, e.g. -SUniform(1) < SUniform(1) should be true but we return false because
-# one is uniform and other is expression
 function isless_lex(x::STerm, y::STerm)
     x === y && return false
+
+    if isstatic(x) && isstatic(y)
+        return isless(compute(x), compute(y))
+    end
 
     rx = termrank(x)
     ry = termrank(y)
