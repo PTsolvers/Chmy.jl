@@ -78,6 +78,8 @@ function isless_expr(x::SExpr, y::SExpr)
     return isless_tuple(children(x), children(y))
 end
 
+# TODO: lex compare fails with SUniform and unary minus, e.g. -SUniform(1) < SUniform(1) should be true but we return false because
+# one is uniform and other is expression
 function isless_lex(x::STerm, y::STerm)
     x === y && return false
 
