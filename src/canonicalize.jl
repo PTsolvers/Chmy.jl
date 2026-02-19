@@ -92,9 +92,9 @@ function isless_lex(x::STerm, y::STerm)
 end
 
 # Static sorting of tuples of singleton types
-_ssort_impl(args::Tuple, lt, by) = (sort!(collect(args); lt, by)...,)
-@generated function ssort(args::Tuple; lt=Base.isless, by=Base.identity)
-    sorted = _ssort_impl(args.instance, lt.instance, by.instance)
+_ssort_impl(args::Tuple, lt, by, order) = (sort!(collect(args); lt, by, order)...,)
+@generated function ssort(args::Tuple; lt=Base.isless, by=Base.identity, order=Base.Order.Forward)
+    sorted = _ssort_impl(args.instance, lt.instance, by.instance, order.instance)
     return :($sorted)
 end
 
@@ -317,6 +317,20 @@ Base.@assume_effects :foldable function collect_terms(expr::SExpr{Call}, binding
     return binding
 end
 
+build_tree(expr, ::Tuple{}) = expr
+Base.@assume_effects :foldable function build_tree(expr, monomials)
+    mon = first(monomials)
+    rest = Base.tail(monomials)
+    if isnegative(mon.coeff)
+        new_expr = expr - abs_product_expr(mon)
+    elseif operation(expr) === SRef(:+)
+        new_expr = SExpr(Call(), children(expr)..., abs_product_expr(mon))
+    else
+        new_expr = expr + abs_product_expr(mon)
+    end
+    return build_tree(new_expr, rest)
+end
+
 function canonicalize_sum(expr::SExpr{Call})
     op = operation(expr)
     (op === SRef(:+) || op === SRef(:-)) || return expr
@@ -325,7 +339,7 @@ function canonicalize_sum(expr::SExpr{Call})
     isempty(kv) && return SUniform(0)
     monomials = map(kv -> Monomial(kv[2], kv[1]), kv)
     # Sort by grevlex order and reconstruct the sum
-    sorted = ssort(monomials)
-    sorted_exprs = map(product_expr, sorted)
-    return +(sorted_exprs...)
+    sorted = ssort(monomials; order=Base.Order.Reverse)
+    # Build a tree of additions and subtractions from the sorted monomials
+    return build_tree(product_expr(first(sorted)), Base.tail(sorted))
 end
