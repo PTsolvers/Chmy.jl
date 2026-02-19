@@ -93,7 +93,7 @@ end
 
 # Static sorting of tuples of singleton types
 _ssort_impl(args::Tuple, lt, by) = (sort!(collect(args); lt, by)...,)
-@generated function ssort(args::Tuple; lt=isless, by=identity)
+@generated function ssort(args::Tuple; lt=Base.isless, by=Base.identity)
     sorted = _ssort_impl(args.instance, lt.instance, by.instance)
     return :($sorted)
 end
@@ -108,43 +108,43 @@ end
 Monomial(term::STerm) = Monomial(StaticCoeff(1), Binding(term => SUniform(1)))
 
 function Monomial(expr::SExpr{Call})
-    coeff, powers = collect_powers!(expr)
+    coeff, powers = collect_powers(expr)
     kv = ssort((pairs(powers)...,); lt=isless_lex, by=first)
     return Monomial(coeff, Binding(kv...))
 end
 
 isconstant(monomial::Monomial) = length(monomial.powers) == 0
 
-Base.@assume_effects :foldable function collect_powers!(term::SExpr{Call},
-                                                        coeff::StaticCoeff=StaticCoeff(1),
-                                                        binding::Binding=Binding(),
-                                                        power::STerm=SUniform(1))
+Base.@assume_effects :foldable function collect_powers(term::SExpr{Call},
+                                                       coeff::StaticCoeff=StaticCoeff(1),
+                                                       binding::Binding=Binding(),
+                                                       power::STerm=SUniform(1))
     op = operation(term)
     if op === SRef(:*)
         # Flatten the tree and accumulate powers
         for arg in arguments(term)
-            coeff, binding = collect_powers!(arg, coeff, binding, power)
+            coeff, binding = collect_powers(arg, coeff, binding, power)
         end
     elseif op === SRef(:/)
         # a / b is treated as a * b^-1, so powers in the denominator are negated
         num, den = arguments(term)
-        coeff, binding = collect_powers!(num, coeff, binding, power)
-        coeff, binding = collect_powers!(den, coeff, binding, -power)
+        coeff, binding = collect_powers(num, coeff, binding, power)
+        coeff, binding = collect_powers(den, coeff, binding, -power)
     elseif op === SRef(:inv)
         # inv(a) is treated as a^-1, so powers are negated
         arg = only(arguments(term))
-        coeff, binding = collect_powers!(arg, coeff, binding, -power)
+        coeff, binding = collect_powers(arg, coeff, binding, -power)
     elseif isunaryminus(term) && isstatic(power)
         # Fold an unary minus into the coefficient for odd integer powers
         p = compute(power)
         if isinteger(p)
             isodd(p) && (coeff = -coeff) # (-a)^(2k+1) = -(a^(2k+1))
-            coeff, binding = collect_powers!(only(arguments(term)), coeff, binding, power)
+            coeff, binding = collect_powers(only(arguments(term)), coeff, binding, power)
         end
     elseif op === SRef(:^)
         # Fold nested powers by multiplying exponents
         base, exp = arguments(term)
-        coeff, binding = collect_powers!(base, coeff, binding, seval(power * exp))
+        coeff, binding = collect_powers(base, coeff, binding, seval(power * exp))
     else
         # Non-product call: store or update its accumulated power in the binding
         if haskey(binding, term)
@@ -157,7 +157,7 @@ Base.@assume_effects :foldable function collect_powers!(term::SExpr{Call},
 end
 
 # Fully static uniform literals can be folded into coeff at compile time
-Base.@assume_effects :foldable function collect_powers!(term::SUniform, coeff, binding, power)
+Base.@assume_effects :foldable function collect_powers(term::SUniform, coeff, binding, power::SUniform)
     base = value(term)
     pow = compute(power)
     # Preserve exact division of integers by promoting to Rational if possible
@@ -168,7 +168,7 @@ Base.@assume_effects :foldable function collect_powers!(term::SUniform, coeff, b
     return coeff, binding
 end
 
-Base.@assume_effects :foldable function collect_powers!(term::STerm, coeff, binding, power)
+Base.@assume_effects :foldable function collect_powers(term::STerm, coeff, binding, power)
     # Non-call term: store or update its accumulated power in the binding
     if haskey(binding, term)
         binding = push(binding, term => seval(binding[term] + power))
@@ -202,9 +202,9 @@ function collect_factors(exprs::Tuple{STerm,Vararg{STerm}},
 end
 
 # Coefficient 1 is implicit in products and should not introduce a factor.
-function append_coeff(factors::Tuple, coeff)
+function prepend_coeff(factors::Tuple, coeff)
     isone(coeff) && return factors
-    return (factors..., SUniform(coeff))
+    return (SUniform(coeff), factors...)
 end
 
 Base.@assume_effects :foldable function abs_product_expr(monomial::Monomial)
@@ -216,7 +216,7 @@ Base.@assume_effects :foldable function abs_product_expr(monomial::Monomial)
                                ())
 
     # We handle the sign separately by negating the product
-    numc = append_coeff(num, abs(monomial.coeff))
+    numc = prepend_coeff(num, abs(monomial.coeff))
 
     num_expr = *(numc...)
     den_expr = *(den...)
@@ -229,8 +229,51 @@ function product_expr(monomial::Monomial)
     return isnegative(monomial.coeff) ? -abs_expr : abs_expr
 end
 
-Base.@assume_effects :foldable function Base.isless(mx::Monomial, my::Monomial)
-    # TODO
+degree(monomial::Monomial) = isconstant(monomial) ? SUniform(0) : seval(+(values(monomial.powers)...))
+
+function base_union(mx::Monomial, my::Monomial)
+    px = (pairs(mx.powers)...,)
+    py = (pairs(my.powers)...,)
+    bx, by = base_union((), (), px, py)
+    return Monomial(mx.coeff, bx), Monomial(my.coeff, by)
+end
+base_union(x, y, ::Tuple{}, ::Tuple{}) = Binding(x...), Binding(y...)
+function base_union(x, y, ::Tuple{}, ty)
+    fy = first(ty)
+    base_union((x..., fy[1] => SUniform(0)), (y..., fy), (), Base.tail(ty))
+end
+function base_union(x, y, tx, ::Tuple{})
+    fx = first(tx)
+    base_union((x..., fx), (y..., fx[1] => SUniform(0)), Base.tail(tx), ())
+end
+function base_union(x, y, tx, ty)
+    fx, fy = first(tx), first(ty)
+    if fx[1] === fy[1]
+        return base_union((x..., fx), (y..., fy), Base.tail(tx), Base.tail(ty))
+    elseif isless_lex(fx[1], fy[1])
+        return base_union((x..., fx), (y..., fx[1] => SUniform(0)), Base.tail(tx), ty)
+    else
+        return base_union((x..., fy[1] => SUniform(0)), (y..., fy), tx, Base.tail(ty))
+    end
+end
+
+isless_grevlex(::Tuple{}, ::Tuple{}) = false
+function isless_grevlex(x::Tuple, y::Tuple)
+    lx, ly = last(x), last(y)
+    lx === ly && return isless_grevlex(Base.front(x), Base.front(y))
+    return !isless_lex(lx, ly)
+end
+
+function Base.isless(mx::Monomial, my::Monomial)
+    dx = degree(mx)
+    dy = degree(my)
+
+    if dx === dy
+        bx, by = base_union(mx, my)
+        return isless_grevlex(values(bx.powers), values(by.powers))
+    end
+
+    return isless_lex(dx, dy)
 end
 
 canonicalize_product(term::STerm) = term
@@ -238,4 +281,51 @@ function canonicalize_product(expr::SExpr{Call})
     op = operation(expr)
     (op === SRef(:*) || op === SRef(:/) || op === SRef(:inv)) || return expr
     return product_expr(Monomial(expr))
+end
+
+function collect_terms(expr::STerm, binding, add)
+    mon = Monomial(expr)
+    if haskey(binding, mon.powers)
+        binding = push(binding, mon.powers => binding[mon.powers] + add * mon.coeff)
+    else
+        binding = push(binding, mon.powers => add * mon.coeff)
+    end
+    return binding
+end
+Base.@assume_effects :foldable function collect_terms(expr::SExpr{Call}, binding=Binding(), add=StaticCoeff(1))
+    op = operation(expr)
+    if op === SRef(:+)
+        for arg in arguments(expr)
+            binding = collect_terms(arg, binding, add)
+        end
+    elseif op === SRef(:-)
+        if arity(expr) == 1
+            binding = collect_terms(only(arguments(expr)), binding, -add)
+        else
+            a, b = arguments(expr)
+            binding = collect_terms(a, binding, add)
+            binding = collect_terms(b, binding, -add)
+        end
+    else
+        mon = Monomial(expr)
+        if haskey(binding, mon.powers)
+            binding = push(binding, mon.powers => binding[mon.powers] + add * mon.coeff)
+        else
+            binding = push(binding, mon.powers => add * mon.coeff)
+        end
+    end
+    return binding
+end
+
+function canonicalize_sum(expr::SExpr{Call})
+    op = operation(expr)
+    (op === SRef(:+) || op === SRef(:-)) || return expr
+    binding = collect_terms(expr)
+    kv = filter(!iszero ∘ last, (pairs(binding)...,))
+    isempty(kv) && return SUniform(0)
+    monomials = map(kv -> Monomial(kv[2], kv[1]), kv)
+    # Sort by grevlex order and reconstruct the sum
+    sorted = ssort(monomials)
+    sorted_exprs = map(product_expr, sorted)
+    return +(sorted_exprs...)
 end
