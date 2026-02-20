@@ -5,7 +5,6 @@
     d = SScalar(:d)
     e = SScalar(:e)
     f = SScalar(:f)
-    n = SScalar(:n)
 
     @testset "SIndex constraint" begin
         @test SIndex(1) === SIndex{1}()
@@ -44,7 +43,7 @@
     @testset "ordering" begin
         @test canonicalize(sin(a) * a) === *(a, sin(a))
         @test canonicalize(sin(a) + a) === +(a, sin(a))
-        @test canonicalize(a^SUniform(2) + a^(n + SUniform(1))) === +(a^(n + SUniform(1)), a^SUniform(2))
+        @test canonicalize(a^SUniform(2) + a^(b + SUniform(1))) === +(a^(b + SUniform(1)), a^SUniform(2))
         @test_throws ArgumentError canonicalize(SScalar(:q) * SSymTensor{0}(:q))
     end
 
