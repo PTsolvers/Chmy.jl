@@ -201,16 +201,15 @@ function abs_product_expr(m::Monomial)
     num, den = collect_factors(keys(m.powers), values(m.powers), (), ())
 
     c = abs(m.coeff)
-    den_expr = *(den...)
-
-    if isstaticone(den_expr)
-        isone(c) && return *(num...)
-        return *(SUniform(c), num...)
+    
+    if isempty(den)
+        isone(c) && return makeop(:*, num...)
+        return makeop(:*, SUniform(c), num...)
     end
+    
+    expr = makeop(:*, num...) / makeop(:*, den...)
 
-    expr = *(num...) / den_expr
-
-    return isone(c) ? expr : SUniform(c) * expr
+    return isone(c) ? expr : makeop(:*, SUniform(c), expr)
 end
 
 function STerm(monomial::Monomial)
@@ -218,7 +217,7 @@ function STerm(monomial::Monomial)
     return isnegative(monomial.coeff) ? -abs_expr : abs_expr
 end
 
-degree(monomial::Monomial) = isconstant(monomial) ? SUniform(0) : canonicalize(+(values(monomial.powers)...))
+degree(monomial::Monomial) = isconstant(monomial) ? SUniform(0) : canonicalize(makeop(:+, values(monomial.powers)...))
 
 # align monomials to the same ordered base set before grevlex comparison
 function base_union(mx::Monomial, my::Monomial)

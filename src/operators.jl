@@ -1,3 +1,5 @@
+makeop(op::Symbol, arg1, args...) = SExpr(Call(), SRef(op), arg1, args...)
+
 for op in (:+, :-)
     @eval function _check_tensor_ranks(op::SRef{$(Meta.quot(op))}, args::Vararg{STerm})
         if !all(x -> tensorrank(x) == tensorrank(args[1]), args)

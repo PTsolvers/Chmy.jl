@@ -74,6 +74,9 @@ end
 
 SExpr(head::SExprHead, children::Vararg{STerm}) = SExpr(head, children)
 
+SExpr(::Call, ::SRef{:*}, x::STerm) = x
+SExpr(::Call, ::SRef{:+}, x::STerm) = x
+
 isexpr(::SExpr) = true
 
 head(expr::SExpr) = expr.head
