@@ -114,6 +114,8 @@ end
 
 isconstant(monomial::Monomial) = length(monomial.powers) == 0
 
+tensorrank(monomial::Monomial) = maximum(tensorrank, keys(monomial.powers))
+
 function addterm(binding, term, power)
     if haskey(binding, term)
         return push(binding, term => canonicalize(binding[term] + power))
@@ -195,15 +197,12 @@ function collect_factors(exprs, data, num, den)
     return collect_factors(Base.tail(exprs), Base.tail(data), num_next, den_next)
 end
 
-function abs_product_expr(monomial::Monomial)
-    iszero(monomial.coeff) && return SUniform(0)
+function abs_product_expr(m::Monomial)
+    iszero(m.coeff) && return SZeroTensor{tensorrank(m)}()
 
-    num, den = collect_factors(monomial.powers.exprs,
-                               monomial.powers.data,
-                               (),
-                               ())
+    num, den = collect_factors(keys(m.powers), values(m.powers), (), ())
 
-    c = abs(monomial.coeff)
+    c = abs(m.coeff)
     den_expr = *(den...)
 
     if isstaticone(den_expr)
@@ -322,7 +321,7 @@ canonicalize_sum(term::STerm) = term
 function canonicalize_sum(expr::SExpr{Call})
     binding = collect_terms(expr)
     kv = filter(!iszero ∘ last, (pairs(binding)...,))
-    isempty(kv) && return SUniform(0)
+    isempty(kv) && return SZeroTensor{tensorrank(expr)}()
     monomials = map(x -> Monomial(x[2], x[1]), kv)
     # sort by grevlex order and reconstruct the sum
     sorted = ssort(monomials; order=Base.Order.Reverse)
