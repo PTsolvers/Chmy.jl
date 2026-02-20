@@ -116,6 +116,7 @@ tensorrank(monomial::Monomial) = maximum(tensorrank, keys(monomial.powers))
 
 function addterm(binding, term, power)
     if haskey(binding, term)
+        # keep merged exponents canonicalized as we accumulate factors
         return push(binding, term => canonicalize(binding[term] + power))
     else
         return push(binding, term => canonicalize(power))
@@ -219,6 +220,7 @@ end
 
 degree(monomial::Monomial) = isconstant(monomial) ? SUniform(0) : canonicalize(+(values(monomial.powers)...))
 
+# align monomials to the same ordered base set before grevlex comparison
 function base_union(mx::Monomial, my::Monomial)
     px = (pairs(mx.powers)...,)
     py = (pairs(my.powers)...,)
@@ -247,6 +249,7 @@ end
 
 isless_grevlex(::Tuple{}, ::Tuple{}) = false
 function isless_grevlex(x::Tuple, y::Tuple)
+    # grevlex breaks ties from the last exponent backwards
     lx, ly = last(x), last(y)
     lx === ly && return isless_grevlex(Base.front(x), Base.front(y))
     return !isless_lex(lx, ly)
@@ -267,6 +270,7 @@ end
 canonicalize_product(expr::STerm) = STerm(Monomial(expr))
 
 function collect_terms(expr::STerm, binding, add)
+    # map each monomial basis to its accumulated scalar coefficient
     mon = Monomial(expr)
     if haskey(binding, mon.powers)
         binding = push(binding, mon.powers => binding[mon.powers] + add * mon.coeff)
@@ -304,6 +308,7 @@ build_tree(expr, ::Tuple{}) = expr
 function build_tree(expr, monomials)
     mon = first(monomials)
     rest = Base.tail(monomials)
+    # rebuild as `+`/`-` to preserve readable signs in the final tree
     if isnegative(mon.coeff)
         new_expr = expr - abs_product_expr(mon)
     elseif iscall(expr) && operation(expr) === SRef(:+)
@@ -331,6 +336,7 @@ struct CanonicalizeRule <: AbstractRule end
 function (::CanonicalizeRule)(expr::SExpr)
     iscall(expr) || return expr
     op = operation(expr)
+    # normalize multiplicative and additive families with dedicated passes
     if op === SRef(:*) || op === SRef(:/) || op === SRef(:inv) || op === SRef(:^)
         return canonicalize_product(expr)
     elseif op === SRef(:+) || op === SRef(:-)
@@ -340,4 +346,12 @@ function (::CanonicalizeRule)(expr::SExpr)
     end
 end
 
+"""
+    canonicalize(term::STerm)
+
+Return a deterministic canonical form of a symbolic term. `canonicalize` folds
+fully static subexpressions into `SUniform` values, merges multiplicative factors
+into monomials, collects like terms in sums, and sorts terms with a stable ordering
+so structurally equivalent expressions map to the same tree.
+"""
 canonicalize(term::STerm) = Postwalk(CanonicalizeRule())(term)
