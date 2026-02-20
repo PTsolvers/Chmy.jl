@@ -1,11 +1,9 @@
-# Static evaluation
-
+# static evaluation
 isstatic(::STerm) = false
 isstatic(::SUniform) = true
 isstatic(expr::SExpr{Call}) = all(isstatic, arguments(expr))
 
-# Lexicographic ordering of terms for deterministic canonicalization
-
+# lex ordering of terms for deterministic canonicalization
 termrank(::SIndex)   = 1
 termrank(::STensor)  = 2
 termrank(::SRef)     = 3
@@ -72,34 +70,33 @@ end
 function isless_lex(x::STerm, y::STerm)
     x === y && return false
 
-    # Fully static terms can be compared at compile time
+    # fully static terms can be compared at compile time
     if isstatic(x) && isstatic(y)
         return isless(compute(x), compute(y))
     end
 
-    # Different kinds of terms are compared by their rank
+    # different kinds of terms are compared by their rank
     rx = termrank(x)
     ry = termrank(y)
     rx == ry || return rx < ry
 
-    # Special logic for comparing expressions
+    # special logic for comparing expressions
     if isexpr(x) && isexpr(y)
         return isless_expr(x, y)
     end
 
-    # Leaf terms
+    # leaf terms
     return isless_atom(x, y)
 end
 
-# Static sorting of tuples of singleton types
+# static sorting of tuples of singleton types
 _ssort_impl(args::Tuple, lt, by, order) = (sort!(collect(args); lt, by, order)...,)
 @generated function ssort(args::Tuple; lt=Base.isless, by=Base.identity, order=Base.Order.Forward)
     sorted = _ssort_impl(args.instance, lt.instance, by.instance, order.instance)
     return :($sorted)
 end
 
-# Monomial representation of products for canonicalization
-
+# monomial representation of products for canonicalization
 struct Monomial{S,B}
     coeff::S
     powers::B
@@ -128,7 +125,7 @@ end
 function collect_powers(term::SExpr{Call}, coeff=StaticCoeff(1), binding=Binding(), power=SUniform(1))
     op = operation(term)
     if op === SRef(:*)
-        # Flatten the tree and accumulate powers
+        # flatten the tree and accumulate powers
         for arg in arguments(term)
             coeff, binding = collect_powers(arg, coeff, binding, power)
         end
@@ -138,49 +135,47 @@ function collect_powers(term::SExpr{Call}, coeff=StaticCoeff(1), binding=Binding
         coeff, binding = collect_powers(num, coeff, binding, power)
         coeff, binding = collect_powers(den, coeff, binding, -power)
     elseif op === SRef(:inv)
-        # inv(a) is treated as a^-1, so powers are negated
         arg = only(arguments(term))
         if tensorrank(arg) == 0
+            # scalar inv(a) is treated as a^-1, so powers are negated
             coeff, binding = collect_powers(arg, coeff, binding, -power)
         else
             binding = addterm(binding, term, power)
         end
     elseif isunaryminus(term) && isstatic(power)
-        # Fold an unary minus into the coefficient for odd integer powers, e.g. a * (-x)^3 -> -a * x^3
+        # fold an unary minus into the coefficient for odd integer powers, e.g. a * (-x)^3 -> -a * x^3
         p = compute(power)
         if isinteger(p)
             isodd(p) && (coeff = -coeff)
             coeff, binding = collect_powers(only(arguments(term)), coeff, binding, power)
         end
     elseif op === SRef(:^)
-        # Fold nested powers by multiplying exponents
+        # fold nested powers by multiplying exponents
         base, exp = arguments(term)
         coeff, binding = collect_powers(base, coeff, binding, power * exp)
     else
-        # Non-product call: store or update its accumulated power in the binding
         binding = addterm(binding, term, power)
     end
     return coeff, binding
 end
 
 function collect_powers(term::STerm, coeff, binding, power)
-    # Fully static uniform literals can be folded into coeff at compile time
+    # fully static uniform literals can be folded into coeff at compile time
     if isstatic(term) && isstatic(power)
         base = compute(term)
         pow = compute(power)
-        # Preserve exact division of integers by promoting to Rational if possible
+        # preserve exact division of integers by promoting to Rational if possible
         if isinteger(base) && isinteger(pow) && pow < zero(pow)
             base = Rational(base)
         end
         coeff *= StaticCoeff(base^pow)
     else
-        # Non-product call: store or update its accumulated power in the binding
         binding = addterm(binding, term, power)
     end
     return coeff, binding
 end
 
-# Partition a base^power factor between numerator and denominator tuples.
+# partition a base^power factor between numerator and denominator tuples.
 function splitpower(num, den, base, npow)
     if isstaticzero(npow)
         return num, den
@@ -193,7 +188,7 @@ function splitpower(num, den, base, npow)
     end
 end
 
-# Consume (base, power) tuples recursively and accumulate factored tuples.
+# consume (base, power) tuples recursively and accumulate factored tuples.
 collect_factors(::Tuple{}, ::Tuple{}, num, den) = num, den
 function collect_factors(exprs, data, num, den)
     num_next, den_next = splitpower(num, den, first(exprs), first(data))
@@ -329,9 +324,9 @@ function canonicalize_sum(expr::SExpr{Call})
     kv = filter(!iszero ∘ last, (pairs(binding)...,))
     isempty(kv) && return SUniform(0)
     monomials = map(x -> Monomial(x[2], x[1]), kv)
-    # Sort by grevlex order and reconstruct the sum
+    # sort by grevlex order and reconstruct the sum
     sorted = ssort(monomials; order=Base.Order.Reverse)
-    # Build a tree of additions and subtractions from the sorted monomials
+    # build a tree of additions and subtractions from the sorted monomials
     return build_tree(STerm(first(sorted)), Base.tail(sorted))
 end
 

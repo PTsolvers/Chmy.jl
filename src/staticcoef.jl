@@ -22,13 +22,12 @@ Base.isinteger(c::StaticCoef) = isinteger(value(c))
 Base.abs(c::StaticCoef) = StaticCoef(abs(value(c)))
 
 Base.:+(c::StaticCoef) = c
-Base.:-(c::StaticCoef) = StaticCoef(-value(c))
-
 function Base.:+(a::StaticCoef, b::StaticCoef)
     iszero(a) && return b
     iszero(b) && return a
     StaticCoef(value(a) + value(b))
 end
+Base.:-(c::StaticCoef) = StaticCoef(-value(c))
 function Base.:-(a::StaticCoef, b::StaticCoef)
     iszero(a) && return -b
     iszero(b) && return a
@@ -40,7 +39,6 @@ function Base.:*(a::StaticCoef, b::StaticCoef)
     isone(b) && return a
     StaticCoef(value(a) * value(b))
 end
-
 function Base.:/(a::StaticCoef, b::StaticCoef)
     iszero(a) && return StaticCoef(0)
     isone(b) && return a
