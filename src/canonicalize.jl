@@ -214,7 +214,7 @@ function abs_product_expr(monomial::Monomial)
     return isone(c) ? expr : SUniform(c) * expr
 end
 
-function product_expr(monomial::Monomial)
+function STerm(monomial::Monomial)
     abs_expr = abs_product_expr(monomial)
     return isnegative(monomial.coeff) ? -abs_expr : abs_expr
 end
@@ -266,7 +266,7 @@ function Base.isless(mx::Monomial, my::Monomial)
     return isless_lex(dx, dy)
 end
 
-canonicalize_product(expr::STerm) = product_expr(Monomial(expr))
+canonicalize_product(expr::STerm) = STerm(Monomial(expr))
 
 function collect_terms(expr::STerm, binding, add)
     mon = Monomial(expr)
@@ -325,7 +325,7 @@ function canonicalize_sum(expr::SExpr{Call})
     # Sort by grevlex order and reconstruct the sum
     sorted = ssort(monomials; order=Base.Order.Reverse)
     # Build a tree of additions and subtractions from the sorted monomials
-    return build_tree(product_expr(first(sorted)), Base.tail(sorted))
+    return build_tree(STerm(first(sorted)), Base.tail(sorted))
 end
 
 seval(term::STerm) = isstatic(term) ? SUniform(compute(term)) : term
