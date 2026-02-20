@@ -3,6 +3,8 @@ isstatic(::STerm) = false
 isstatic(::SUniform) = true
 isstatic(expr::SExpr{Call}) = all(isstatic, arguments(expr))
 
+seval(term::STerm) = isstatic(term) ? SUniform(compute(term)) : term
+
 # lex ordering of terms for deterministic canonicalization
 termrank(::SIndex)   = 1
 termrank(::STensor)  = 2
@@ -101,11 +103,8 @@ struct Monomial{S,B}
     coeff::S
     powers::B
 end
-
 Monomial(::SUniform{C}) where {C} = Monomial(StaticCoeff(C), Binding())
-
 Monomial(term::STerm) = Monomial(StaticCoeff(1), Binding(term => SUniform(1)))
-
 function Monomial(expr::SExpr{Call})
     coeff, powers = collect_powers(expr)
     kv = ssort((pairs(powers)...,); lt=isless_lex, by=first)
@@ -113,7 +112,6 @@ function Monomial(expr::SExpr{Call})
 end
 
 isconstant(monomial::Monomial) = length(monomial.powers) == 0
-
 tensorrank(monomial::Monomial) = maximum(tensorrank, keys(monomial.powers))
 
 function addterm(binding, term, power)
@@ -160,7 +158,6 @@ function collect_powers(term::SExpr{Call}, coeff=StaticCoeff(1), binding=Binding
     end
     return coeff, binding
 end
-
 function collect_powers(term::STerm, coeff, binding, power)
     # fully static uniform literals can be folded into coeff at compile time
     if isstatic(term) && isstatic(power)
@@ -328,8 +325,6 @@ function canonicalize_sum(expr::SExpr{Call})
     # build a tree of additions and subtractions from the sorted monomials
     return build_tree(STerm(first(sorted)), Base.tail(sorted))
 end
-
-seval(term::STerm) = isstatic(term) ? SUniform(compute(term)) : term
 
 struct CanonicalizeRule <: AbstractRule end
 
