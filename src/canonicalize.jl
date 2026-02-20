@@ -2,18 +2,7 @@
 
 isstatic(::STerm) = false
 isstatic(::SUniform) = true
-isstatic(::SRef) = true
-isstatic(::SFun) = true
-isstatic(expr::SExpr) = all(isstatic, children(expr))
-
-struct SEvalRule <: AbstractRule end
-
-Base.@assume_effects :foldable function (::SEvalRule)(expr::SExpr)
-    isstatic(expr) && return SUniform(compute(expr))
-    return expr
-end
-
-seval(expr::STerm) = Postwalk(SEvalRule())(expr)
+isstatic(expr::SExpr{Call}) = all(isstatic, arguments(expr))
 
 # Lexicographic ordering of terms for deterministic canonicalization
 
@@ -80,17 +69,22 @@ end
 function isless_lex(x::STerm, y::STerm)
     x === y && return false
 
+    # Fully static terms can be compared at compile time
     if isstatic(x) && isstatic(y)
         return isless(compute(x), compute(y))
     end
 
+    # Different kinds of terms are compared by their rank
     rx = termrank(x)
     ry = termrank(y)
     rx == ry || return rx < ry
 
+    # Special logic for comparing expressions
     if isexpr(x) && isexpr(y)
         return isless_expr(x, y)
     end
+
+    # Leaf terms
     return isless_atom(x, y)
 end
 
@@ -108,6 +102,8 @@ struct Monomial{S,B}
     powers::B
 end
 
+Monomial(::SUniform{C}) where {C} = Monomial(StaticCoeff(C), Binding())
+
 Monomial(term::STerm) = Monomial(StaticCoeff(1), Binding(term => SUniform(1)))
 
 function Monomial(expr::SExpr{Call})
@@ -118,10 +114,15 @@ end
 
 isconstant(monomial::Monomial) = length(monomial.powers) == 0
 
-Base.@assume_effects :foldable function collect_powers(term::SExpr{Call},
-                                                       coeff::StaticCoeff=StaticCoeff(1),
-                                                       binding::Binding=Binding(),
-                                                       power::STerm=SUniform(1))
+function addterm(binding, term, power)
+    if haskey(binding, term)
+        return push(binding, term => canonicalize(binding[term] + power))
+    else
+        return push(binding, term => canonicalize(power))
+    end
+end
+
+function collect_powers(term::SExpr{Call}, coeff=StaticCoeff(1), binding=Binding(), power=SUniform(1))
     op = operation(term)
     if op === SRef(:*)
         # Flatten the tree and accumulate powers
@@ -138,56 +139,47 @@ Base.@assume_effects :foldable function collect_powers(term::SExpr{Call},
         arg = only(arguments(term))
         coeff, binding = collect_powers(arg, coeff, binding, -power)
     elseif isunaryminus(term) && isstatic(power)
-        # Fold an unary minus into the coefficient for odd integer powers
+        # Fold an unary minus into the coefficient for odd integer powers, e.g. a * (-x)^3 -> -a * x^3
         p = compute(power)
         if isinteger(p)
-            isodd(p) && (coeff = -coeff) # (-a)^(2k+1) = -(a^(2k+1))
+            isodd(p) && (coeff = -coeff)
             coeff, binding = collect_powers(only(arguments(term)), coeff, binding, power)
         end
     elseif op === SRef(:^)
         # Fold nested powers by multiplying exponents
         base, exp = arguments(term)
-        coeff, binding = collect_powers(base, coeff, binding, seval(power * exp))
+        coeff, binding = collect_powers(base, coeff, binding, power * exp)
     else
         # Non-product call: store or update its accumulated power in the binding
-        if haskey(binding, term)
-            binding = push(binding, term => seval(binding[term] + power))
-        else
-            binding = push(binding, term => power)
+        binding = addterm(binding, term, power)
+    end
+    return coeff, binding
+end
+
+function collect_powers(term::STerm, coeff, binding, power)
+    # Fully static uniform literals can be folded into coeff at compile time
+    if isstatic(term) && isstatic(power)
+        base = compute(term)
+        pow = compute(power)
+        # Preserve exact division of integers by promoting to Rational if possible
+        if isinteger(base) && isinteger(pow) && pow < zero(pow)
+            base = Rational(base)
         end
-    end
-    return coeff, binding
-end
-
-# Fully static uniform literals can be folded into coeff at compile time
-Base.@assume_effects :foldable function collect_powers(term::SUniform, coeff, binding, power::SUniform)
-    base = value(term)
-    pow = compute(power)
-    # Preserve exact division of integers by promoting to Rational if possible
-    if isinteger(base) && isinteger(pow) && pow < zero(pow)
-        base = Rational(base)
-    end
-    coeff *= StaticCoeff(base^pow)
-    return coeff, binding
-end
-
-Base.@assume_effects :foldable function collect_powers(term::STerm, coeff, binding, power)
-    # Non-call term: store or update its accumulated power in the binding
-    if haskey(binding, term)
-        binding = push(binding, term => seval(binding[term] + power))
+        coeff *= StaticCoeff(base^pow)
     else
-        binding = push(binding, term => power)
+        # Non-product call: store or update its accumulated power in the binding
+        binding = addterm(binding, term, power)
     end
     return coeff, binding
 end
 
 # Partition a base^power factor between numerator and denominator tuples.
 # Keeping everything as tuples avoids heap allocations in the foldable path.
-function splitpower(num::Tuple, den::Tuple, base::STerm, npow::STerm)
+function splitpower(num, den, base, npow)
     # Negative exponents are represented as unary minus expressions.
     if isstaticzero(npow)
         return num, den
-    elseif isunaryminus(npow)
+    elseif isstatic(npow) && compute(npow) < zero(compute(npow))
         return num, (den..., base^-npow)
     else
         return (num..., base^npow), den
@@ -195,22 +187,13 @@ function splitpower(num::Tuple, den::Tuple, base::STerm, npow::STerm)
 end
 
 # Consume (base, power) tuples recursively and accumulate factored tuples.
-collect_factors(::Tuple{}, ::Tuple{}, num::Tuple, den::Tuple) = num, den
-function collect_factors(exprs::Tuple{STerm,Vararg{STerm}},
-                         data::Tuple{STerm,Vararg{STerm}},
-                         num::Tuple,
-                         den::Tuple)
+collect_factors(::Tuple{}, ::Tuple{}, num, den) = num, den
+function collect_factors(exprs, data, num, den)
     num_next, den_next = splitpower(num, den, first(exprs), first(data))
     return collect_factors(Base.tail(exprs), Base.tail(data), num_next, den_next)
 end
 
-# Coefficient 1 is implicit in products and should not introduce a factor.
-function prepend_coeff(factors::Tuple, coeff)
-    isone(coeff) && return factors
-    return (SUniform(coeff), factors...)
-end
-
-Base.@assume_effects :foldable function abs_product_expr(monomial::Monomial)
+function abs_product_expr(monomial::Monomial)
     iszero(monomial.coeff) && return SUniform(0)
 
     num, den = collect_factors(monomial.powers.exprs,
@@ -218,13 +201,17 @@ Base.@assume_effects :foldable function abs_product_expr(monomial::Monomial)
                                (),
                                ())
 
-    # We handle the sign separately by negating the product
-    numc = prepend_coeff(num, abs(monomial.coeff))
-
-    num_expr = *(numc...)
+    c = abs(monomial.coeff)
     den_expr = *(den...)
 
-    return isstaticone(den_expr) ? num_expr : num_expr / den_expr
+    if isstaticone(den_expr)
+        isone(c) && return *(num...)
+        return *(SUniform(c), num...)
+    end
+
+    expr = *(num...) / den_expr
+
+    return isone(c) ? expr : SUniform(c) * expr
 end
 
 function product_expr(monomial::Monomial)
@@ -232,7 +219,7 @@ function product_expr(monomial::Monomial)
     return isnegative(monomial.coeff) ? -abs_expr : abs_expr
 end
 
-degree(monomial::Monomial) = isconstant(monomial) ? SUniform(0) : seval(+(values(monomial.powers)...))
+degree(monomial::Monomial) = isconstant(monomial) ? SUniform(0) : canonicalize(+(values(monomial.powers)...))
 
 function base_union(mx::Monomial, my::Monomial)
     px = (pairs(mx.powers)...,)
@@ -279,12 +266,7 @@ function Base.isless(mx::Monomial, my::Monomial)
     return isless_lex(dx, dy)
 end
 
-canonicalize_product(term::STerm) = term
-function canonicalize_product(expr::SExpr{Call})
-    op = operation(expr)
-    (op === SRef(:*) || op === SRef(:/) || op === SRef(:inv)) || return expr
-    return product_expr(Monomial(expr))
-end
+canonicalize_product(expr::STerm) = product_expr(Monomial(expr))
 
 function collect_terms(expr::STerm, binding, add)
     mon = Monomial(expr)
@@ -295,7 +277,7 @@ function collect_terms(expr::STerm, binding, add)
     end
     return binding
 end
-Base.@assume_effects :foldable function collect_terms(expr::SExpr{Call}, binding=Binding(), add=StaticCoeff(1))
+function collect_terms(expr::SExpr{Call}, binding=Binding(), add=StaticCoeff(1))
     op = operation(expr)
     if op === SRef(:+)
         for arg in arguments(expr)
@@ -321,12 +303,12 @@ Base.@assume_effects :foldable function collect_terms(expr::SExpr{Call}, binding
 end
 
 build_tree(expr, ::Tuple{}) = expr
-Base.@assume_effects :foldable function build_tree(expr, monomials)
+function build_tree(expr, monomials)
     mon = first(monomials)
     rest = Base.tail(monomials)
     if isnegative(mon.coeff)
         new_expr = expr - abs_product_expr(mon)
-    elseif operation(expr) === SRef(:+)
+    elseif iscall(expr) && operation(expr) === SRef(:+)
         new_expr = SExpr(Call(), children(expr)..., abs_product_expr(mon))
     else
         new_expr = expr + abs_product_expr(mon)
@@ -334,15 +316,32 @@ Base.@assume_effects :foldable function build_tree(expr, monomials)
     return build_tree(new_expr, rest)
 end
 
+canonicalize_sum(term::STerm) = term
 function canonicalize_sum(expr::SExpr{Call})
-    op = operation(expr)
-    (op === SRef(:+) || op === SRef(:-)) || return expr
     binding = collect_terms(expr)
     kv = filter(!iszero ∘ last, (pairs(binding)...,))
     isempty(kv) && return SUniform(0)
-    monomials = map(kv -> Monomial(kv[2], kv[1]), kv)
+    monomials = map(x -> Monomial(x[2], x[1]), kv)
     # Sort by grevlex order and reconstruct the sum
     sorted = ssort(monomials; order=Base.Order.Reverse)
     # Build a tree of additions and subtractions from the sorted monomials
     return build_tree(product_expr(first(sorted)), Base.tail(sorted))
 end
+
+seval(term::STerm) = isstatic(term) ? SUniform(compute(term)) : term
+
+struct CanonicalizeRule <: AbstractRule end
+
+Base.@assume_effects :foldable function (::CanonicalizeRule)(expr::SExpr)
+    iscall(expr) || return expr
+    op = operation(expr)
+    if op === SRef(:*) || op === SRef(:/) || op === SRef(:inv) || op === SRef(:^)
+        return canonicalize_product(expr)
+    elseif op === SRef(:+) || op === SRef(:-)
+        return canonicalize_sum(expr)
+    else
+        return seval(expr)
+    end
+end
+
+canonicalize(term::STerm) = Postwalk(CanonicalizeRule())(term)

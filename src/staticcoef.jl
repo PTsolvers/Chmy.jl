@@ -24,11 +24,26 @@ Base.abs(c::StaticCoef) = StaticCoef(abs(value(c)))
 Base.:+(c::StaticCoef) = c
 Base.:-(c::StaticCoef) = StaticCoef(-value(c))
 
-Base.:+(a::StaticCoef, b::StaticCoef) = StaticCoef(value(a) + value(b))
-Base.:-(a::StaticCoef, b::StaticCoef) = StaticCoef(value(a) - value(b))
-Base.:*(a::StaticCoef, b::StaticCoef) = StaticCoef(value(a) * value(b))
+function Base.:+(a::StaticCoef, b::StaticCoef)
+    iszero(a) && return b
+    iszero(b) && return a
+    StaticCoef(value(a) + value(b))
+end
+function Base.:-(a::StaticCoef, b::StaticCoef)
+    iszero(a) && return -b
+    iszero(b) && return a
+    StaticCoef(value(a) - value(b))
+end
+function Base.:*(a::StaticCoef, b::StaticCoef)
+    (iszero(a) || iszero(b)) && return StaticCoef(0)
+    isone(a) && return b
+    isone(b) && return a
+    StaticCoef(value(a) * value(b))
+end
 
 function Base.:/(a::StaticCoef, b::StaticCoef)
+    iszero(a) && return StaticCoef(0)
+    isone(b) && return a
     va = value(a)
     vb = value(b)
     # Keep integer division exact

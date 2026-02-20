@@ -48,7 +48,7 @@ include("binding.jl")
 export compute, to_expr
 include("compute.jl")
 
-export canonicalize, seval
+export canonicalize
 include("canonicalize.jl")
 
 include("show.jl")
