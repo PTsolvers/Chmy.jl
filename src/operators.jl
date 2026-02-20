@@ -111,7 +111,7 @@ end
 # division operators
 for op in (:/, ://, :÷)
     @eval function Base.$op(a::STerm, b::STerm)
-        _check_scalar_ranks(SRef($(Meta.quot(op))), a, b)
+        _check_tensor_ranks(SRef($(Meta.quot(op))), a, b)
         (isstaticzero(a) && isstaticzero(b)) && throw(ArgumentError("division of zero by zero"))
         isstaticzero(a) && return SUniform(0)
         isstaticone(b) && return a

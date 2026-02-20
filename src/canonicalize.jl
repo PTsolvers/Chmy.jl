@@ -60,6 +60,9 @@ function isless_tuple(xs::Tuple{X,Vararg}, ys::Tuple{Y,Vararg}) where {X,Y}
 end
 
 function isless_expr(x::SExpr, y::SExpr)
+    tx = tensorrank(x)
+    ty = tensorrank(y)
+    tx == ty || return isless(tx, ty)
     hx = headrank(x)
     hy = headrank(y)
     hx == hy || return hx < hy
@@ -137,7 +140,11 @@ function collect_powers(term::SExpr{Call}, coeff=StaticCoeff(1), binding=Binding
     elseif op === SRef(:inv)
         # inv(a) is treated as a^-1, so powers are negated
         arg = only(arguments(term))
-        coeff, binding = collect_powers(arg, coeff, binding, -power)
+        if tensorrank(arg) == 0
+            coeff, binding = collect_powers(arg, coeff, binding, -power)
+        else
+            binding = addterm(binding, term, power)
+        end
     elseif isunaryminus(term) && isstatic(power)
         # Fold an unary minus into the coefficient for odd integer powers, e.g. a * (-x)^3 -> -a * x^3
         p = compute(power)
@@ -174,11 +181,11 @@ function collect_powers(term::STerm, coeff, binding, power)
 end
 
 # Partition a base^power factor between numerator and denominator tuples.
-# Keeping everything as tuples avoids heap allocations in the foldable path.
 function splitpower(num, den, base, npow)
-    # Negative exponents are represented as unary minus expressions.
     if isstaticzero(npow)
         return num, den
+    elseif isstaticone(npow)
+        return (num..., base), den
     elseif isstatic(npow) && compute(npow) < zero(compute(npow))
         return num, (den..., base^-npow)
     else
@@ -332,7 +339,7 @@ seval(term::STerm) = isstatic(term) ? SUniform(compute(term)) : term
 
 struct CanonicalizeRule <: AbstractRule end
 
-Base.@assume_effects :foldable function (::CanonicalizeRule)(expr::SExpr)
+function (::CanonicalizeRule)(expr::SExpr)
     iscall(expr) || return expr
     op = operation(expr)
     if op === SRef(:*) || op === SRef(:/) || op === SRef(:inv) || op === SRef(:^)
