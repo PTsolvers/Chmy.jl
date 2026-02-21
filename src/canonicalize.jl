@@ -123,7 +123,7 @@ function addterm(binding, term, power)
     end
 end
 
-function collect_powers(term::SExpr{Call}, coeff=StaticCoeff(1), binding=Binding(), power=SUniform(1))
+Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff=StaticCoeff(1), binding=Binding(), power=SUniform(1))
     op = operation(term)
     if op === SRef(:*)
         # flatten the tree and accumulate powers
@@ -175,7 +175,7 @@ function collect_powers(term::STerm, coeff, binding, power)
     return coeff, binding
 end
 
-# partition a base^power factor between numerator and denominator tuples.
+# partition a base^power factor between numerator and denominator tuples
 function splitpower(num, den, base, npow)
     if isstaticzero(npow)
         return num, den
@@ -191,7 +191,7 @@ function splitpower(num, den, base, npow)
     end
 end
 
-# consume (base, power) tuples recursively and accumulate factored tuples.
+# consume (base, power) tuples recursively and accumulate factored tuples
 collect_factors(::Tuple{}, ::Tuple{}, num, den) = num, den
 function collect_factors(exprs, data, num, den)
     num_next, den_next = splitpower(num, den, first(exprs), first(data))
