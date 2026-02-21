@@ -153,7 +153,8 @@ Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff=
     elseif op === SRef(:^)
         # fold nested powers by multiplying exponents
         base, exp = arguments(term)
-        coeff, binding = collect_powers(base, coeff, binding, power * exp)
+        newpower = isstaticone(power) ? exp : power * exp
+        coeff, binding = collect_powers(base, coeff, binding, newpower)
     else
         binding = addterm(binding, term, power)
     end
@@ -223,7 +224,7 @@ end
 
 function STerm(monomial::Monomial)
     abs_expr = abs_product_expr(monomial)
-    return isnegative(monomial.coeff) ? makeop(:-, abs_expr) : abs_expr
+    return isnegative(monomial.coeff) ? -abs_expr : abs_expr
 end
 
 degree(monomial::Monomial) = isconstant(monomial) ? SUniform(0) : +(values(monomial.powers)...)
@@ -339,17 +340,8 @@ function canonicalize_sum(expr::SExpr{Call})
     return build_tree(STerm(first(sorted)), Base.tail(sorted))
 end
 
-"""
-    canonicalize(term)
-
-Return a deterministic canonical form of a symbolic term. `canonicalize` folds
-fully static subexpressions into `SUniform` values, merges multiplicative factors
-into monomials, collects like terms in sums, and sorts terms with a stable ordering
-so structurally equivalent expressions map to the same tree.
-"""
-canonicalize(expr::STerm) = expr
-Base.@assume_effects :foldable function canonicalize(expr::SExpr)
-    iscall(expr) || return expr
+struct CanonicalizeRule <: AbstractRule end
+Base.@assume_effects :foldable function (::CanonicalizeRule)(expr::SExpr{Call})
     op = operation(expr)
     # normalize multiplicative and additive families with dedicated passes
     if op === SRef(:*) || op === SRef(:/) || op === SRef(:inv) || op === SRef(:^)
@@ -360,3 +352,21 @@ Base.@assume_effects :foldable function canonicalize(expr::SExpr)
         return seval(expr)
     end
 end
+
+"""
+    canonicalize(expr)
+
+Return a deterministic canonical form of a symbolic expression `expr` with respect to algebraic operations.
+`canonicalize` merges multiplicative factors into monomials, collects like terms in sums, and sorts 
+terms with a stable ordering so structurally equivalent expressions map to the same tree.
+
+Canonicalization is not recursively applied to subterms, for a recursive version use `simplify` instead.
+"""
+canonicalize(expr::STerm) = CanonicalizeRule()(expr)
+
+"""
+    simplify(expr)
+
+Return a simplified form of a symbolic expression `expr` by recursively applying `canonicalize` to all subterms of `expr`.
+"""
+simplify(expr::STerm) = Postwalk(CanonicalizeRule())(expr)

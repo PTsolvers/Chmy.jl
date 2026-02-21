@@ -1,61 +1,50 @@
-@testset "Canonicalize" begin
+@testset "canonicalize" begin
     a = SScalar(:a)
     b = SScalar(:b)
     c = SScalar(:c)
-    d = SScalar(:d)
-    e = SScalar(:e)
-    f = SScalar(:f)
 
-    @testset "SIndex constraint" begin
-        @test SIndex(1) === SIndex{1}()
-        @test_throws MethodError SIndex(:i)
+    @testset "commutativity" begin
+        @test b + c + a === makeop(:+, a, b, c)
+        @test c + b - a === makeop(:+, makeop(:-, a), b, c)
+        @test b * c * a === makeop(:*, a, b, c)
     end
 
-    @testset "product canonicalization" begin
-        @test canonicalize(b * a) === *(a, b)
-        @test canonicalize(a * a) === a^SUniform(2)
-        @test canonicalize(a * (-a)) === -(a^SUniform(2))
-        @test canonicalize((-a) * (-a)) === a^SUniform(2)
-        @test canonicalize(SUniform(2) * b * SUniform(3) * a) === *(SUniform(6), a, b)
-
-        expr = a * (a * b) / (inv(b) * (SUniform(1 // 2) * a)^(-SUniform(1)))
-        @test canonicalize(expr) === *(SUniform(1 // 2), a^SUniform(3), b^SUniform(2))
-
-        @test canonicalize(inv(a^b)) === a^(-b)
-        @test canonicalize(SUniform(1) / (a^b)) === a^(-b)
-        @test canonicalize(a * a^(-b)) === a^(-b + SUniform(1))
+    @testset "associativity" begin
+        @test (a + b) + c === makeop(:+, a, b, c)
+        @test a + (b + c) === makeop(:+, a, b, c)
+        @test (a * b) * c === makeop(:*, a, b, c)
+        @test a * (b * c) === makeop(:*, a, b, c)
     end
 
-    @testset "sum canonicalization" begin
-        @test canonicalize((a + b) + (c + a)) === +(SUniform(2) * a, b, c)
-        @test canonicalize(a + b - a) === b
-        @test canonicalize(SUniform(2) + a + SUniform(1)) === a + SUniform(3)
-
-        @test canonicalize(-d + a - e + b + c - f) === a + b + c - d - e - f
-        @test canonicalize(-d + a - e - b + c + f) === a - b + c - d - e + f
+    @testset "constant folding" begin
+        @test SUniform(2) + SUniform(3) === SUniform(5)
+        @test SUniform(2) * SUniform(3) === SUniform(6)
+        @test SUniform(2) - SUniform(3) === SUniform(-1)
+        @test SUniform(2) / SUniform(4) === SUniform(1 // 2)
     end
 
-    @testset "recursive canonicalization" begin
-        expr = sin(b + a) * sin(a + b)
-        @test canonicalize(expr) === sin(a + b)^SUniform(2)
+    @testset "monomials" begin
+        @test a * a === makeop(:^, a, SUniform(2))
+        @test a * b * a^SUniform(2) === makeop(:*, makeop(:^, a, SUniform(3)), b)
+        @test a * inv(a) === SUniform(1)
+        @test b * a^(-SUniform(2)) === makeop(:/, b, makeop(:^, a, SUniform(2)))
+        @test SUniform(1) / a === makeop(:inv, a)
+        @test a * b^(-SUniform(1)) === makeop(:/, a, b)
+        @test (-a)^SUniform(2) === makeop(:^, a, SUniform(2))
+        @test (-a)^SUniform(3) === makeop(:-, makeop(:^, a, SUniform(3)))
+        @test a^b * a^c === makeop(:^, a, makeop(:+, b, c))
+        @test a^(-SUniform(2)) * a^(-b) === makeop(:^, a, makeop(:-, makeop(:-, b), SUniform(2)))
+        @test (SUniform(2) * a)^SUniform(3) === makeop(:*, SUniform(8), makeop(:^, a, SUniform(3)))
+        @test (SUniform(2) * a)^(-SUniform(3)) === makeop(:/, SUniform(1 // 8), makeop(:^, a, SUniform(3)))
     end
 
-    @testset "ordering" begin
-        @test canonicalize(sin(a) * a) === *(a, sin(a))
-        @test canonicalize(sin(a) + a) === +(a, sin(a))
-        @test canonicalize(a^SUniform(2) + a^(b + SUniform(1))) === +(a^(b + SUniform(1)), a^SUniform(2))
-        @test_throws ArgumentError canonicalize(SScalar(:q) * SSymTensor{0}(:q))
+    @testset "sums" begin
+        @test a + a === makeop(:*, SUniform(2), a)
+        @test a + b + a === makeop(:+, makeop(:*, SUniform(2), a), b)
+        @test a - a === SUniform(0)
     end
 
-    @testset "opaque division operators" begin
-        @test canonicalize((a // b) / c) === (a // b) / c
-        @test canonicalize((a ÷ b) * c) === *(c, a ÷ b)
-    end
-
-    @testset "idempotence" begin
-        expr = sin(b + a) * sin(a + b) + a * (a * b) / (inv(b) * (SUniform(1 // 2) * a)^(-SUniform(1))) - (a + b - a)
-        once = canonicalize(expr)
-        twice = canonicalize(once)
-        @test once === twice
+    @testset "simplify" begin
+        @test simplify(sin(makeop(:+, b, a))) === sin(makeop(:+, a, b))
     end
 end

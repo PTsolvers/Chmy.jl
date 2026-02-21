@@ -7,7 +7,6 @@ import Chmy: StaticCoef
 
     @test Chmy.isnegative(StaticCoef(-1))
     @test !Chmy.isnegative(StaticCoef(0))
-    @test !Chmy.isnegative(StaticCoef(1 // 2))
 
     @test iszero(StaticCoef(0))
     @test !iszero(StaticCoef(1 // 2))

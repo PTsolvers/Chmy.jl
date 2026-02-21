@@ -70,11 +70,13 @@ end
 makeop(op::Symbol, arg1, args...) = SExpr(Call(), SRef(op), arg1, args...)
 canonop(op::Symbol, arg1, args...) = canonicalize(makeop(op, arg1, args...))
 
+Base.:+(a::STerm) = a
 function Base.:+(args::Vararg{STerm})
     _check_tensor_ranks(SRef(:+), args...)
     return canonop(:+, args...)
 end
 
+Base.:*(a::STerm) = a
 function Base.:*(args::Vararg{STerm})
     _check_tensor_ranks(SRef(:*), args...)
     return canonop(:*, args...)
@@ -221,14 +223,14 @@ for op in (:gram, :cogram)
 end
 
 # scalar unary operations
-Base.:-(arg::STerm) = canonop(:-, arg)
+Base.:-(arg::STerm) = makeop(:-, arg)
 Base.:-(arg::SUniform{0}) = arg
 Base.:-(arg::SZeroTensor) = arg
 function Base.:-(arg::SExpr{Call})
-    if operation(arg) === SRef(:-) && length(arguments(arg)) == 1
-        return first(arguments(arg))
-    else
+    if operation(arg) === SRef(:+) || operation(arg) === SRef(:-)
         return canonop(:-, arg)
+    else
+        return makeop(:-, arg)
     end
 end
 
