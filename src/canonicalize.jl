@@ -6,12 +6,14 @@ isstatic(expr::SExpr{Call}) = all(isstatic, arguments(expr))
 seval(term::STerm) = isstatic(term) ? SUniform(compute(term)) : term
 
 # lex ordering of terms for deterministic canonicalization
-termrank(::SIndex)   = 1
-termrank(::STensor)  = 2
-termrank(::SRef)     = 3
-termrank(::SFun)     = 4
-termrank(::SUniform) = 5
-termrank(::SExpr)    = 6
+termrank(::SIndex) = 1
+termrank(::STensor) = 2
+termrank(::SZeroTensor) = 3
+termrank(::SIdTensor) = 4
+termrank(::SRef) = 5
+termrank(::SFun) = 6
+termrank(::SUniform) = 7
+termrank(::SExpr) = 8
 
 headrank(::Call) = 1
 headrank(::Comp) = 2
@@ -19,19 +21,10 @@ headrank(::Ind) = 3
 headrank(::Loc) = 4
 headrank(expr::SExpr) = headrank(head(expr))
 
-const SAtom = Union{SIndex,STensor,SRef,SFun,SUniform}
-
-atomrank(::SIndex)   = 1
-atomrank(::STensor)  = 2
-atomrank(::SRef)     = 3
-atomrank(::SFun)     = 4
-atomrank(::SUniform) = 5
-
-isless_atom(x::SAtom, y::SAtom)                   = isless(atomrank(x), atomrank(y))
-isless_atom(::SIndex{I}, ::SIndex{J}) where {I,J} = isless(I, J)
-isless_atom(::SRef{F1}, ::SRef{F2}) where {F1,F2} = isless(F1, F2)
-isless_atom(x::SFun, y::SFun)                     = isless(nameof(x.f), nameof(y.f))
-function isless_atom(x::STensor, y::STensor)
+isless_lex(::SIndex{I}, ::SIndex{J}) where {I,J} = isless(I, J)
+isless_lex(::SRef{F1}, ::SRef{F2}) where {F1,F2} = isless(F1, F2)
+isless_lex(x::SFun, y::SFun) = isless(nameof(x.f), nameof(y.f))
+function isless_lex(x::STensor, y::STensor)
     rx = tensorrank(x)
     ry = tensorrank(y)
     rx == ry || return isless(rx, ry)
@@ -45,6 +38,26 @@ function isless_atom(x::STensor, y::STensor)
     end
 
     return false
+end
+function isless_lex(x::STerm, y::STerm)
+    x === y && return false
+
+    tx = tensorrank(x)
+    ty = tensorrank(y)
+    tx == ty || return isless(tx, ty)
+
+    # fully static terms can be compared at compile time
+    if isstatic(x) && isstatic(y)
+        return isless(compute(x), compute(y))
+    end
+
+    # different kinds of terms are compared by their rank
+    rx = termrank(x)
+    ry = termrank(y)
+    rx == ry || return rx < ry
+
+    # special logic for comparing expressions
+    return isless_expr(x, y)
 end
 
 isless_tuple(::Tuple{}, ::Tuple{}) = false
@@ -60,35 +73,10 @@ function isless_tuple(xs::Tuple{X,Vararg}, ys::Tuple{Y,Vararg}) where {X,Y}
 end
 
 function isless_expr(x::SExpr, y::SExpr)
-    tx = tensorrank(x)
-    ty = tensorrank(y)
-    tx == ty || return isless(tx, ty)
     hx = headrank(x)
     hy = headrank(y)
     hx == hy || return hx < hy
     return isless_tuple(children(x), children(y))
-end
-
-function isless_lex(x::STerm, y::STerm)
-    x === y && return false
-
-    # fully static terms can be compared at compile time
-    if isstatic(x) && isstatic(y)
-        return isless(compute(x), compute(y))
-    end
-
-    # different kinds of terms are compared by their rank
-    rx = termrank(x)
-    ry = termrank(y)
-    rx == ry || return rx < ry
-
-    # special logic for comparing expressions
-    if isexpr(x) && isexpr(y)
-        return isless_expr(x, y)
-    end
-
-    # leaf terms
-    return isless_atom(x, y)
 end
 
 # static sorting of tuples of singleton types
@@ -112,6 +100,9 @@ function Monomial(expr::SExpr{Call})
 end
 
 isconstant(monomial::Monomial) = length(monomial.powers) == 0
+
+Base.iszero(monomial::Monomial) = iszero(monomial.coeff) || any(isstaticzero, keys(monomial.powers))
+
 tensorrank(monomial::Monomial) = maximum(tensorrank, keys(monomial.powers); init=0)
 
 function addterm(binding, term, power)
@@ -123,55 +114,56 @@ function addterm(binding, term, power)
     end
 end
 
-Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff=StaticCoeff(1), binding=Binding(), power=SUniform(1))
+collect_powers(term) = collect_powers(term, StaticCoeff(1), Binding(), SUniform(1))
+Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff, binding, npow)
     op = operation(term)
     if op === SRef(:*)
         # flatten the tree and accumulate powers
         for arg in arguments(term)
-            coeff, binding = collect_powers(arg, coeff, binding, power)
+            coeff, binding = collect_powers(arg, coeff, binding, npow)
         end
     elseif op === SRef(:/)
         # a / b is treated as a * b^-1, so powers in the denominator are negated
         num, den = arguments(term)
-        coeff, binding = collect_powers(num, coeff, binding, power)
-        coeff, binding = collect_powers(den, coeff, binding, -power)
+        coeff, binding = collect_powers(num, coeff, binding, npow)
+        coeff, binding = collect_powers(den, coeff, binding, -npow)
     elseif op === SRef(:inv)
         arg = only(arguments(term))
         if tensorrank(arg) == 0
             # scalar inv(a) is treated as a^-1, so powers are negated
-            coeff, binding = collect_powers(arg, coeff, binding, -power)
+            coeff, binding = collect_powers(arg, coeff, binding, -npow)
         else
-            binding = addterm(binding, term, power)
+            binding = addterm(binding, term, npow)
         end
-    elseif isunaryminus(term) && isstatic(power)
+    elseif isunaryminus(term) && isstatic(npow)
         # fold an unary minus into the coefficient for odd integer powers, e.g. a * (-x)^3 -> -a * x^3
-        p = compute(power)
+        p = compute(npow)
         if isinteger(p)
             isodd(p) && (coeff = -coeff)
-            coeff, binding = collect_powers(only(arguments(term)), coeff, binding, power)
+            coeff, binding = collect_powers(only(arguments(term)), coeff, binding, npow)
         end
     elseif op === SRef(:^)
         # fold nested powers by multiplying exponents
         base, exp = arguments(term)
-        newpower = isstaticone(power) ? exp : power * exp
-        coeff, binding = collect_powers(base, coeff, binding, newpower)
+        newnpow = isstaticone(npow) ? exp : npow * exp
+        coeff, binding = collect_powers(base, coeff, binding, newnpow)
     else
-        binding = addterm(binding, term, power)
+        binding = addterm(binding, term, npow)
     end
     return coeff, binding
 end
-function collect_powers(term::STerm, coeff, binding, power)
+function collect_powers(term, coeff, binding, npow)
     # fully static uniform literals can be folded into coeff at compile time
-    if isstatic(term) && isstatic(power)
+    if isstatic(term) && isstatic(npow)
         base = compute(term)
-        pow = compute(power)
+        powr = compute(npow)
         # preserve exact division of integers by promoting to Rational if possible
-        if isinteger(base) && isinteger(pow) && pow < zero(pow)
+        if isinteger(base) && isinteger(powr) && powr < zero(powr)
             base = Rational(base)
         end
-        coeff *= StaticCoeff(base^pow)
+        coeff *= StaticCoeff(base^powr)
     else
-        binding = addterm(binding, term, power)
+        binding = addterm(binding, term, npow)
     end
     return coeff, binding
 end
@@ -200,7 +192,7 @@ function collect_factors(exprs, data, num, den)
 end
 
 function abs_product_expr(m::Monomial)
-    iszero(m.coeff) && return SZeroTensor{tensorrank(m)}()
+    iszero(m) && return SZeroTensor{tensorrank(m)}()
 
     num, den = collect_factors(keys(m.powers), values(m.powers), (), ())
 
@@ -331,11 +323,11 @@ end
 canonicalize_sum(term::STerm) = term
 function canonicalize_sum(expr::SExpr{Call})
     binding = collect_terms(expr)
-    kv = filter(!iszero ∘ last, (pairs(binding)...,))
-    isempty(kv) && return SZeroTensor{tensorrank(expr)}()
-    monomials = map(x -> Monomial(x[2], x[1]), kv)
+    monomials = map(x -> Monomial(x[2], x[1]), (pairs(binding)...,))
+    nz_monomials = filter(!iszero, monomials)
+    isempty(nz_monomials) && return SZeroTensor{tensorrank(expr)}()
     # sort by grevlex order and reconstruct the sum
-    sorted = ssort(monomials; order=Base.Order.Reverse)
+    sorted = ssort(nz_monomials; order=Base.Order.Reverse)
     # build a tree of additions and subtractions from the sorted monomials
     return build_tree(STerm(first(sorted)), Base.tail(sorted))
 end
