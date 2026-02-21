@@ -132,7 +132,6 @@ end
 
 function needs_parens(expr, prec)
     iscall(expr) || return false
-    arity(expr) == 1 && return false
     op = operation(expr)
     op_prec = Base.operator_precedence(variablename(op))
     if op_prec == 0 || prec == 0
