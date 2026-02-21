@@ -112,12 +112,12 @@ function Monomial(expr::SExpr{Call})
 end
 
 isconstant(monomial::Monomial) = length(monomial.powers) == 0
-tensorrank(monomial::Monomial) = maximum(tensorrank, keys(monomial.powers))
+tensorrank(monomial::Monomial) = maximum(tensorrank, keys(monomial.powers); init=0)
 
 function addterm(binding, term, power)
     if haskey(binding, term)
         # keep merged exponents canonicalized as we accumulate factors
-        return push(binding, term => canonicalize(binding[term] + power))
+        return push(binding, term => binding[term] + power)
     else
         return push(binding, term => canonicalize(power))
     end
@@ -153,7 +153,7 @@ function collect_powers(term::SExpr{Call}, coeff=StaticCoeff(1), binding=Binding
     elseif op === SRef(:^)
         # fold nested powers by multiplying exponents
         base, exp = arguments(term)
-        coeff, binding = collect_powers(base, coeff, binding, power * exp)
+        coeff, binding = collect_powers(base, coeff, binding, makeop(:*, power, exp))
     else
         binding = addterm(binding, term, power)
     end
@@ -182,9 +182,12 @@ function splitpower(num, den, base, npow)
     elseif isstaticone(npow)
         return (num..., base), den
     elseif isstatic(npow) && compute(npow) < zero(compute(npow))
-        return num, (den..., base^-npow)
+        if isstaticone(-npow)
+            return num, (den..., base)
+        end
+        return num, (den..., makeop(:^, base, -npow))
     else
-        return (num..., base^npow), den
+        return (num..., makeop(:^, base, npow)), den
     end
 end
 
@@ -201,23 +204,29 @@ function abs_product_expr(m::Monomial)
     num, den = collect_factors(keys(m.powers), values(m.powers), (), ())
 
     c = abs(m.coeff)
-    
+
+    if isempty(num)
+        isempty(den) && return SUniform(c)
+        isone(c) && return makeop(:inv, makeop(:*, den...))
+        return makeop(:/, SUniform(c), makeop(:*, den...))
+    end
+
     if isempty(den)
         isone(c) && return makeop(:*, num...)
         return makeop(:*, SUniform(c), num...)
     end
-    
-    expr = makeop(:*, num...) / makeop(:*, den...)
+
+    expr = makeop(:/, makeop(:*, num...), makeop(:*, den...))
 
     return isone(c) ? expr : makeop(:*, SUniform(c), expr)
 end
 
 function STerm(monomial::Monomial)
     abs_expr = abs_product_expr(monomial)
-    return isnegative(monomial.coeff) ? -abs_expr : abs_expr
+    return isnegative(monomial.coeff) ? makeop(:-, abs_expr) : abs_expr
 end
 
-degree(monomial::Monomial) = isconstant(monomial) ? SUniform(0) : canonicalize(makeop(:+, values(monomial.powers)...))
+degree(monomial::Monomial) = isconstant(monomial) ? SUniform(0) : +(values(monomial.powers)...)
 
 # align monomials to the same ordered base set before grevlex comparison
 function base_union(mx::Monomial, my::Monomial)
@@ -309,11 +318,11 @@ function build_tree(expr, monomials)
     rest = Base.tail(monomials)
     # rebuild as `+`/`-` to preserve readable signs in the final tree
     if isnegative(mon.coeff)
-        new_expr = expr - abs_product_expr(mon)
+        new_expr = makeop(:-, expr, abs_product_expr(mon))
     elseif iscall(expr) && operation(expr) === SRef(:+)
         new_expr = SExpr(Call(), children(expr)..., abs_product_expr(mon))
     else
-        new_expr = expr + abs_product_expr(mon)
+        new_expr = makeop(:+, expr, abs_product_expr(mon))
     end
     return build_tree(new_expr, rest)
 end

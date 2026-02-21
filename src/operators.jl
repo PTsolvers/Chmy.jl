@@ -1,5 +1,3 @@
-makeop(op::Symbol, arg1, args...) = SExpr(Call(), SRef(op), arg1, args...)
-
 for op in (:+, :-)
     @eval function _check_tensor_ranks(op::SRef{$(Meta.quot(op))}, args::Vararg{STerm})
         if !all(x -> tensorrank(x) == tensorrank(args[1]), args)
@@ -69,73 +67,60 @@ function _check_tensor_ranks(::SRef{:broadcasted}, op::STerm, args::Vararg{STerm
 end
 
 # operators for symbolic terms
-Base.:+(arg::STerm) = arg
+makeop(op::Symbol, arg1, args...) = SExpr(Call(), SRef(op), arg1, args...)
+canonop(op::Symbol, arg1, args...) = canonicalize(makeop(op, arg1, args...))
 
-# addition with filtering zeros
 function Base.:+(args::Vararg{STerm})
     _check_tensor_ranks(SRef(:+), args...)
-    nz_args = filter(!isstaticzero, args)
-    length(nz_args) == 0 && return args[1]
-    length(nz_args) == 1 && return first(nz_args)
-    return SExpr(Call(), SRef(:+), nz_args...)
+    return canonop(:+, args...)
 end
 
-# multiplication with filtering ones and checking for zeros
 function Base.:*(args::Vararg{STerm})
     _check_tensor_ranks(SRef(:*), args...)
-    if any(isstaticzero, args)
-        maxrank = maximum(tensorrank, args)
-        return SZeroTensor{maxrank}()
-    end
-    nn_args = filter(x -> !isstaticone(x), args)
-    length(nn_args) == 0 && return SUniform(1)
-    length(nn_args) == 1 && return first(nn_args)
-    return SExpr(Call(), SRef(:*), nn_args...)
+    return canonop(:*, args...)
 end
 
 # multiary operators
 for op in (:max, :min)
     @eval function Base.$op(args::Vararg{STerm})
         _check_scalar_ranks(SRef($(Meta.quot(op))), args...)
-        return SExpr(Call(), SRef($(Meta.quot(op))), args...)
+        return makeop($(Meta.quot(op)), args...)
     end
 end
 
 # subtraction with zero detection
 function Base.:-(a::STerm, b::STerm)
     _check_tensor_ranks(SRef(:-), a, b)
-    isstaticzero(a) && return -b
-    isstaticzero(b) && return a
-    a === b && return SZeroTensor{tensorrank(a)}()
-    return SExpr(Call(), SRef(:-), a, b)
+    return canonop(:-, a, b)
 end
 
-# division operators
-for op in (:/, ://, :÷)
+function Base.:/(a::STerm, b::STerm)
+    _check_tensor_ranks(SRef(:/), a, b)
+    (isstaticzero(a) && isstaticzero(b)) && throw(ArgumentError("division of zero by zero"))
+    canonop(:/, a, b)
+end
+
+for op in (://, :÷)
     @eval function Base.$op(a::STerm, b::STerm)
         _check_tensor_ranks(SRef($(Meta.quot(op))), a, b)
         (isstaticzero(a) && isstaticzero(b)) && throw(ArgumentError("division of zero by zero"))
         isstaticzero(a) && return SUniform(0)
         isstaticone(b) && return a
         a === b && return SUniform(1)
-        return SExpr(Call(), SRef($(Meta.quot(op))), a, b)
+        return makeop($(Meta.quot(op)), a, b)
     end
 end
 
 function Base.:^(a::STerm, b::STerm)
     _check_scalar_ranks(SRef(:^), a, b)
-    isstaticzero(b) && return SUniform(1)
-    isstaticzero(a) && return SUniform(0)
-    isstaticone(a) && return SUniform(1)
-    isstaticone(b) && return a
-    return SExpr(Call(), SRef(:^), a, b)
+    return canonop(:^, a, b)
 end
 
 # scalar binary operators
 for op in (:<, :<=, :>, :>=, :(==), :!=, :&, :|, :xor)
     @eval function Base.$op(a::STerm, b::STerm)
         _check_scalar_ranks(SRef($(Meta.quot(op))), a, b)
-        return SExpr(Call(), SRef($(Meta.quot(op))), a, b)
+        return makeop($(Meta.quot(op)), a, b)
     end
 end
 
@@ -150,17 +135,17 @@ end
 function Base.adjoint(t::STerm)
     _check_tensor_ranks(SRef(:adjoint), t)
     tensorrank(t) == 0 && return t
-    SExpr(Call(), SRef(:adjoint), t)
+    makeop(:adjoint, t)
 end
 
 # tensor double contraction
 function ⊡(a::STerm, b::STerm)
     _check_tensor_ranks(SRef(:⊡), a, b)
-    SExpr(Call(), SRef(:⊡), a, b)
+    makeop(:⊡, a, b)
 end
 
 # tensor outer product
-⊗(a::STerm, b::STerm) = SExpr(Call(), SRef(:⊗), a, b)
+⊗(a::STerm, b::STerm) = makeop(:⊗, a, b)
 
 # methods from LinearAlgebra
 transpose(t::STerm) = t'
@@ -169,18 +154,19 @@ for op in (:det, :tr, :diag)
     @eval function $op(t::STerm)
         _check_tensor_ranks(SRef($(Meta.quot(op))), t)
         tensorrank(t) == 0 && return t
-        SExpr(Call(), SRef($(Meta.quot(op))), t)
+        makeop($(Meta.quot(op)), t)
     end
 end
 
 function Base.inv(t::STerm)
     _check_tensor_ranks(SRef(:inv), t)
-    SExpr(Call(), SRef(:inv), t)
+    # canonicalize inv of scalars
+    canonop(:inv, t)
 end
 
 function ×(a::STerm, b::STerm)
     _check_tensor_ranks(SRef(:×), a, b)
-    SExpr(Call(), SRef(:×), a, b)
+    makeop(:×, a, b)
 end
 
 function _isopof(op, x, y)
@@ -196,50 +182,53 @@ _isadjof(a, b) = _isopof(SRef(:adj), a, b)
 
 function ⋅(a::STerm, b::STerm)
     _check_tensor_ranks(SRef(:⋅), a, b)
+    # a * I = a, I * b = b
     isidentity(a) && return b
     isidentity(b) && return a
     R = tensorrank(a) + tensorrank(b) - 2
+    # a * inv(a) = I, inv(b) * b = I
     (_isinvof(a, b) || _isinvof(b, a)) && return SIdTensor{R}()
+    # a * adj(a) = det(a) * I, adj(b) * b = det(b) * I
     _isadjof(a, b) && return det(b) * SIdTensor{R}()
     _isadjof(b, a) && return det(a) * SIdTensor{R}()
-    SExpr(Call(), SRef(:⋅), a, b)
+    makeop(:⋅, a, b)
 end
 
 function adj(t::STerm)
     _check_tensor_ranks(SRef(:adj), t)
-    tensorrank(t) == 0 && return SUniform(1)
-    SExpr(Call(), SRef(:adj), t)
+    tensorrank(t) == 0 && return t
+    makeop(:adj, t)
 end
 
 function sym(t::STerm)
     _check_tensor_ranks(SRef(:sym), t)
     tensorrank(t) == 0 && return t
-    SExpr(Call(), SRef(:sym), t)
+    makeop(:sym, t)
 end
 
 function asym(t::STerm)
     _check_tensor_ranks(SRef(:asym), t)
     tensorrank(t) == 0 && return SUniform(0)
-    SExpr(Call(), SRef(:asym), t)
+    makeop(:asym, t)
 end
 
 for op in (:gram, :cogram)
     @eval function $op(t::STerm)
         _check_tensor_ranks(SRef($(Meta.quot(op))), t)
         tensorrank(t) == 0 && return t^2
-        SExpr(Call(), SRef($(Meta.quot(op))), t)
+        makeop($(Meta.quot(op)), t)
     end
 end
 
 # scalar unary operations
-Base.:-(arg::STerm) = SExpr(Call(), SRef(:-), arg)
+Base.:-(arg::STerm) = canonop(:-, arg)
 Base.:-(arg::SUniform{0}) = arg
 Base.:-(arg::SZeroTensor) = arg
 function Base.:-(arg::SExpr{Call})
     if operation(arg) === SRef(:-) && length(arguments(arg)) == 1
         return first(arguments(arg))
     else
-        return SExpr(Call(), SRef(:-), arg)
+        return canonop(:-, arg)
     end
 end
 
@@ -258,34 +247,30 @@ for op in (:sqrt, :abs,
            :exp, :expm1, :exp2, :exp10)
     @eval function Base.$op(arg::STerm)
         _check_scalar_ranks(SRef($(Meta.quot(op))), arg)
-        SExpr(Call(), SRef($(Meta.quot(op))), arg)
+        makeop($(Meta.quot(op)), arg)
     end
 end
 
 # overloading broadcasting
 function Base.Broadcast.broadcasted(f, args::Vararg{STerm})
     _check_tensor_ranks(SRef(:broadcasted), SFun(f), args...)
-    return SExpr(Call(), SRef(:broadcasted), SFun(f), args...)
+    return makeop(:broadcasted, SFun(f), args...)
 end
-
 function Base.Broadcast.broadcasted(::typeof(Base.literal_pow), f, t::STerm, n::Val{N}) where {N}
-    return SExpr(Call(), SRef(:broadcasted), SRef(:^), t, SUniform(N))
+    return makeop(:broadcasted, SRef(:^), t, SUniform(N))
 end
-
 Base.Broadcast.broadcasted(f, a::STerm, b::Number) = Base.Broadcast.broadcasted(f, a, SUniform(b))
 Base.Broadcast.broadcasted(f, a::Number, b::STerm) = Base.Broadcast.broadcasted(f, SUniform(a), b)
 
 function Base.ifelse(cond::STerm, x::STerm, y::STerm)
     _check_scalar_ranks(SRef(:ifelse), cond, x, y)
-    SExpr(Call(), SRef(:ifelse), cond, x, y)
+    makeop(:ifelse, cond, x, y)
 end
-
 Base.ifelse(cond::STerm, x::Number, y::STerm)  = ifelse(cond, SUniform(x), y)
 Base.ifelse(cond::STerm, x::STerm, y::Number)  = ifelse(cond, x, SUniform(y))
 Base.ifelse(cond::STerm, x::Number, y::Number) = ifelse(cond, SUniform(x), SUniform(y))
 
 # tensor operations
-
 Base.:+(t::Tensor) = t
 Base.:-(t::Tensor{R,D,K}) where {R,D,K} = Tensor{R,D,K}(map(-, t.components)...)
 
@@ -337,7 +322,6 @@ Base.:÷(t::Tensor{O,D,S}, s::NumberOrTerm) where {O,D,S} = Tensor{O,D,S}(map(x 
 end
 
 ⋅(v1::Vec{D}, v2::Vec{D}) where {D} = +(ntuple(i -> v1[i] * v2[i], Val(D))...)
-
 @generated function ⋅(t::Tensor{2,D}, v::Vec{D}) where {D}
     idx(i, j) = linear_index(t, i, j)
     vc(i) = Expr(:call, :+, Tuple(:(t.components[$(idx(i, j))] * v.components[$j]) for j in 1:D)...)
@@ -347,7 +331,6 @@ end
         return $ex
     end
 end
-
 @generated function ⋅(t1::Tensor{2,D}, t2::Tensor{2,D}) where {D}
     idx1(i, j) = linear_index(t1, i, j)
     idx2(i, j) = linear_index(t2, i, j)
@@ -383,7 +366,6 @@ end
 Base.transpose(t::SymTensor{2}) = t
 Base.transpose(t::AltTensor{2}) = -t
 Base.transpose(t::DiagTensor{2}) = t
-
 @generated function Base.transpose(t::Tensor{2,D}) where {D}
     idx(i, j) = linear_index(t, i, j)
     ex = Expr(:call, :(Tensor{2,$D}), Tuple(:(t.components[$(idx(j, i))]) for i in 1:D, j in 1:D)...)
@@ -398,7 +380,6 @@ Base.adjoint(S::Tensor) = transpose(S)
 det(t::Tensor{2,2}) = t[1, 1] * t[2, 2] - t[1, 2] * t[2, 1]
 det(t::SymTensor{2,2}) = t[1, 1] * t[2, 2] - t[1, 2]^2
 det(t::AltTensor{2,2}) = t[1, 2]^2
-
 function det(t::Tensor{2,3})
     t[1, 1] * (t[2, 2] * t[3, 3] - t[2, 3] * t[3, 2]) +
     t[1, 2] * (t[2, 3] * t[3, 1] - t[2, 1] * t[3, 3]) +
@@ -412,7 +393,6 @@ diag(t::Tensor{2,D}) where {D} = Vec(ntuple(i -> t[i, i], Val(D))...)
 adj(t::Tensor{2,2}) = Tensor{2,2}(t[2, 2], -t[1, 2], -t[2, 1], t[1, 1])
 adj(t::SymTensor{2,2}) = SymTensor{2,2}(t[1, 1], -t[1, 2], t[2, 2])
 adj(t::AltTensor{2,2}) = AltTensor{2,2}(-t[1, 2])
-
 function adj(t::Tensor{2,3})
     c11 = t[2, 2] * t[3, 3] - t[2, 3] * t[3, 2]
     c12 = t[2, 3] * t[3, 1] - t[2, 1] * t[3, 3]
@@ -427,7 +407,6 @@ function adj(t::Tensor{2,3})
                        c12, c22, c32,
                        c13, c23, c33)
 end
-
 function adj(t::SymTensor{2,3})
     c11 = t[2, 2] * t[3, 3] - t[2, 3]^2
     c12 = t[2, 3] * t[1, 3] - t[1, 2] * t[3, 3]
@@ -439,7 +418,6 @@ function adj(t::SymTensor{2,3})
                           c12, c22,
                           c13, c23, c33)
 end
-
 function adj(t::AltTensor{2,3})
     c11 = t[2, 3]^2
     c12 = -t[1, 3] * t[2, 3]
