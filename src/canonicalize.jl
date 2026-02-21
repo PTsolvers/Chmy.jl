@@ -339,8 +339,6 @@ function canonicalize_sum(expr::SExpr{Call})
     return build_tree(STerm(first(sorted)), Base.tail(sorted))
 end
 
-struct CanonicalizeRule <: AbstractRule end
-
 """
     canonicalize(term)
 
