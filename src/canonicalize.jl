@@ -119,7 +119,7 @@ function addterm(binding, term, power)
         # keep merged exponents canonicalized as we accumulate factors
         return push(binding, term => binding[term] + power)
     else
-        return push(binding, term => canonicalize(power))
+        return push(binding, term => power)
     end
 end
 
@@ -153,7 +153,7 @@ function collect_powers(term::SExpr{Call}, coeff=StaticCoeff(1), binding=Binding
     elseif op === SRef(:^)
         # fold nested powers by multiplying exponents
         base, exp = arguments(term)
-        coeff, binding = collect_powers(base, coeff, binding, makeop(:*, power, exp))
+        coeff, binding = collect_powers(base, coeff, binding, power * exp)
     else
         binding = addterm(binding, term, power)
     end
@@ -341,7 +341,16 @@ end
 
 struct CanonicalizeRule <: AbstractRule end
 
-function (::CanonicalizeRule)(expr::SExpr)
+"""
+    canonicalize(term)
+
+Return a deterministic canonical form of a symbolic term. `canonicalize` folds
+fully static subexpressions into `SUniform` values, merges multiplicative factors
+into monomials, collects like terms in sums, and sorts terms with a stable ordering
+so structurally equivalent expressions map to the same tree.
+"""
+canonicalize(expr::STerm) = expr
+Base.@assume_effects :foldable function canonicalize(expr::SExpr)
     iscall(expr) || return expr
     op = operation(expr)
     # normalize multiplicative and additive families with dedicated passes
@@ -353,13 +362,3 @@ function (::CanonicalizeRule)(expr::SExpr)
         return seval(expr)
     end
 end
-
-"""
-    canonicalize(term::STerm)
-
-Return a deterministic canonical form of a symbolic term. `canonicalize` folds
-fully static subexpressions into `SUniform` values, merges multiplicative factors
-into monomials, collects like terms in sums, and sorts terms with a stable ordering
-so structurally equivalent expressions map to the same tree.
-"""
-canonicalize(term::STerm) = Postwalk(CanonicalizeRule())(term)
