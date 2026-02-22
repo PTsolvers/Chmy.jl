@@ -223,8 +223,8 @@ degree(monomial::Monomial) = isconstant(monomial) ? SUniform(0) : +(values(monom
 
 # align monomials to the same ordered base set before grevlex comparison
 function base_union(mx::Monomial, my::Monomial)
-    px = (pairs(mx.powers)...,)
-    py = (pairs(my.powers)...,)
+    px = pairstuple(mx.powers)
+    py = pairstuple(my.powers)
     bx, by = base_union((), (), px, py)
     return Monomial(mx.coeff, bx), Monomial(my.coeff, by)
 end

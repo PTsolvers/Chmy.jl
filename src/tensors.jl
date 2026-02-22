@@ -136,23 +136,18 @@ isstaticzero(::SZeroTensor) = true
 isstaticzero(t::Tensor) = all(isstaticzero, t.components)
 
 linear_index(t::Tensor, I::Vararg{Int}) = linear_index(typeof(t), I...)
-
 linear_index(::Type{<:Tensor{R,D,K}}, I::Vararg{Int,R}) where {R,D,K} = linear_index(K, Val(D), I...)
-
 function linear_index(::Type{SymKind}, ::Val, I::Vararg{Int,O}) where {O}
     J = sort(I)
     return 1 + sum(ntuple(k -> binomial(J[k] + k - 2, k), Val(O)))
 end
-
 function linear_index(::Type{AltKind}, ::Val, I::Vararg{Int,O}) where {O}
     J = sort(I)
     return 1 + sum(ntuple(k -> binomial(J[k] - 1, k), Val(O)))
 end
-
 function linear_index(::Type{NoKind}, ::Val{D}, I::Vararg{Int,O}) where {O,D}
     return LinearIndices(ntuple(_ -> D, Val(O)))[I...]
 end
-
 function linear_index(::Type{DiagKind}, ::Val{D}, I::Vararg{Int,O}) where {O,D}
     return I[1]
 end
@@ -186,12 +181,10 @@ function _construct_tensor(::Type{Tensor{R,D,DiagKind}}, data::NTuple{N,STerm}) 
     all(isstaticone, data) && return SIdTensor{R}()
     return Tensor{R,D,DiagKind,typeof(data)}(data)
 end
-
 function _construct_tensor(::Type{Tensor{R,D,AltKind}}, data::NTuple{N,STerm}) where {R,D,N}
     all(isstaticzero, data) && return SZeroTensor{R}()
     return Tensor{R,D,AltKind,typeof(data)}(data)
 end
-
 function _construct_tensor(::Type{Tensor{R,D,SymKind}}, data::NTuple{N,STerm}) where {R,D,N}
     if _is_diagonal(Val(R), Val(D), data)
         diag_comps = _diagonal_from_symmetric(Tensor{R,D}, data)
@@ -199,7 +192,6 @@ function _construct_tensor(::Type{Tensor{R,D,SymKind}}, data::NTuple{N,STerm}) w
     end
     return Tensor{R,D,SymKind,typeof(data)}(data)
 end
-
 function _construct_tensor(::Type{Tensor{R,D,NoKind}}, data::NTuple{N,STerm}) where {R,D,N}
     if _is_symmetric(Val(R), Val(D), data)
         sym_comps = _symmetric_components(Tensor{R,D}, data)
