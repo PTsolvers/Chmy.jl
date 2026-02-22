@@ -260,6 +260,41 @@ function Tensor{D,R,K}(data::Vararg{STerm,M}) where {D,R,K,M}
     _construct_tensor(Tensor{D,R,K}, data)
 end
 
+"""
+    Tensor{D}(s::STensor)
+
+Construct a dimension-`D` component representation of symbolic tensor `s`.
+The result has the same rank and the symmetries as `s`.
+"""
+@generated function Tensor{D}(s::STensor{R,K}) where {D,R,K}
+    ex = Expr(:call, :(Tensor{$D,$R,$K}))
+    comp_expr(I) = :(s[$(map(i -> :(SUniform($i)), I)...)])
+
+    if K <: NoKind
+        for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+            I = Tuple(idx)
+            push!(ex.args, comp_expr(I))
+        end
+    elseif K <: SymKind
+        foreach_nondecreasing(Val(D), Val(R)) do I
+            push!(ex.args, comp_expr(I))
+        end
+    elseif K <: AltKind
+        foreach_increasing(Val(D), Val(R)) do I
+            push!(ex.args, comp_expr(I))
+        end
+    elseif K <: DiagKind
+        for i in 1:D
+            I = ntuple(_ -> i, Val(R))
+            push!(ex.args, comp_expr(I))
+        end
+    else
+        error("unsupported tensor kind $K")
+    end
+
+    return ex
+end
+
 # construct the most specific tensor type based on the symmetries of the components
 function _construct_tensor(::Type{Tensor{D,R,DiagKind}}, data::NTuple{N,STerm}) where {D,R,N}
     all(isstaticzero, data) && return SZeroTensor{R}()
