@@ -153,12 +153,10 @@ function linear_index(::Type{DiagKind}, ::Val{D}, I::Vararg{Int,O}) where {O,D}
 end
 
 Base.getindex(t::Tensor{R,D,K}, I::Vararg{Int,R}) where {R,D,K} = t.components[linear_index(K, Val(D), I...)]
-
 function Base.getindex(t::DiagTensor{R,D}, I::Vararg{Int,R}) where {R,D}
     all(==(I[1]), I) || return SUniform(0)
     return t.components[I[1]]
 end
-
 function Base.getindex(t::AltTensor{R,D}, I::Vararg{Int,R}) where {R,D}
     allunique(I) || return SUniform(0)
     J = sort(I)
