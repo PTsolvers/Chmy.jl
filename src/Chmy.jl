@@ -11,6 +11,9 @@ export isexpr, iscall, isind, isloc, head, children, operation, arguments, argum
 export value, isstaticzero, isstaticone
 include("expressions.jl")
 
+export canonicalize, simplify
+include("canonicalize.jl")
+
 export Space, Segment, Point
 export scale, offset
 include("spaces.jl")
@@ -47,9 +50,6 @@ include("binding.jl")
 
 export compute, to_expr
 include("compute.jl")
-
-export canonicalize, simplify
-include("canonicalize.jl")
 
 include("show.jl")
 

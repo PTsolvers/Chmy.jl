@@ -37,11 +37,37 @@ const SVec = STensor{1,NoKind}
 
 const IntegerOrSUniform = Union{Integer,SUniform}
 
-function Base.getindex(t::STensor{R}, inds::Vararg{IntegerOrSUniform,R}) where {R}
-    SExpr(Comp(), t, map(STerm, inds)...)
+sallunique(I::Tuple{SUniform}) = true
+function sallunique(I)
+    I[1] === I[2] && return false
+    return sallunique(Base.tail(I))
+end
+function sinversion_count(I::NTuple{N,SUniform}) where {N}
+    return inversion_count(map(value, I))
 end
 
 Base.getindex(s::SScalar) = s
+Base.getindex(::SZeroTensor{R}, I::Vararg{IntegerOrSUniform,R}) where {R} = SUniform(0)
+Base.getindex(t::SIdTensor{R}, I::Vararg{IntegerOrSUniform,R}) where {R} = Base.getindex(t, map(SUniform, I)...)
+Base.getindex(::SIdTensor{R}, I::Vararg{SUniform,R}) where {R} = all(x -> x === I[1], I) ? SUniform(1) : SUniform(0)
+Base.getindex(t::STensor{R}, I::Vararg{IntegerOrSUniform,R}) where {R} = Base.getindex(t, map(SUniform, I)...)
+function Base.getindex(t::SDiagTensor{R,D}, I::Vararg{SUniform,R}) where {R,D}
+    all(x -> x === I[1], I) || return SUniform(0)
+    return SExpr(Comp(), t, I...)
+end
+function Base.getindex(t::SSymTensor{R}, I::Vararg{SUniform,R}) where {R}
+    J = ssort(I; lt=isless_lex)
+    SExpr(Comp(), t, J...)
+end
+function Base.getindex(t::SAltTensor{R}, I::Vararg{SUniform,R}) where {R}
+    J = ssort(I; lt=isless_lex)
+    sallunique(J) || return SUniform(0)
+    v = SExpr(Comp(), t, J...)
+    return iseven(sinversion_count(I)) ? v : -v
+end
+function Base.getindex(t::STensor{R}, I::Vararg{SUniform,R}) where {R}
+    SExpr(Comp(), t, I...)
+end
 
 tensorrank(expr::SExpr{Call}) = tensorrank(operation(expr), arguments(expr)...)
 tensorrank(::SExpr{Comp}) = 0
@@ -144,10 +170,6 @@ function Base.getindex(t::AltTensor{R,D}, I::Vararg{Int,R}) where {R,D}
     v = t.components[linear_index(AltKind, Val(D), J...)]
     return iseven(inversion_count(I)) ? v : -v
 end
-
-Base.getindex(::SZeroTensor{R}, I::Vararg{Int,R}) where {R} = SUniform(0)
-
-Base.getindex(::SIdTensor{R}, I::Vararg{Int,R}) where {R} = all(==(I[1]), I) ? SUniform(1) : SUniform(0)
 
 Vec(data::Vararg{STerm,M}) where {M} = Vec{M}(data...)
 
