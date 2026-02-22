@@ -239,8 +239,12 @@ SubsRule(kv::Pair) = SubsRule(kv.first, kv.second)
 (rule::SubsRule{Lhs})(::Lhs) where {Lhs<:STerm} = rule.rhs
 
 """
-    subs(expr, lhs => rhs)
+    subs(expr, kvs...)
 
-Replace occurrences of `lhs` with `rhs` in `expr` using a post-order traversal.
+Replace occurrences in `expr` using a post-order traversal. Substitutions are
+tried in the given order, and the first matching pair is applied.
 """
-subs(expr::STerm, kv::Pair) = simplify(Postwalk(SubsRule(kv))(expr))
+function subs(expr::STerm, kvs::Pair...)
+    rules = map(SubsRule, kvs)
+    return simplify(Postwalk(Chain(rules))(expr))
+end

@@ -91,5 +91,7 @@
         @test sameterm(subs(a, a => c), c)
         @test sameterm(subs(a + b, a => c), b + c)
         @test sameterm(subs((a+b)[i], a => c), (b+c)[i])
+        @test sameterm(subs(a + b, a => c, b => a), a + c)
+        @test sameterm(subs(a, a => b, a => c), b)
     end
 end
