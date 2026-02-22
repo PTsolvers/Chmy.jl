@@ -21,6 +21,24 @@
         @test sameterm(passthrough(c), c)
     end
 
+    @testset "Chain" begin
+        replace_a = t -> t === a ? b : nothing
+        replace_a_again = t -> t === a ? c : nothing
+        never_reached = _ -> error("Chain should stop at the first match")
+
+        chain = Chain(replace_a, replace_a_again, never_reached)
+        safe_chain = Chain(replace_a, replace_a_again)
+
+        @test Chain(chain) === chain
+        @test sameterm(chain(a), b)
+        @test sameterm(Chain((replace_a, replace_a_again))(a), b)
+        @test isnothing(safe_chain(c))
+        @test isnothing(Chain()(a))
+
+        @inferred Union{Nothing,STerm} safe_chain(a)
+        @inferred Union{Nothing,STerm} safe_chain(c)
+    end
+
     @testset "Prewalk vs Postwalk order" begin
         expr = a[i]
 

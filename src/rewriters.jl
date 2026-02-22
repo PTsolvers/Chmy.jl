@@ -29,6 +29,32 @@ function (p::Passthrough)(term::STerm)
 end
 
 """
+    Chain(rules...)
+    Chain(rules::Tuple)
+
+Try `rules` in order and return the first successful rewrite (the first result
+that is not `nothing`). If no rule matches, return `nothing`.
+"""
+struct Chain{Rs<:Tuple} <: AbstractRule
+    rules::Rs
+end
+
+Chain(chain::Chain) = chain
+Chain(rules...) = Chain(rules)
+
+_chainfirst(::Tuple{}, ::STerm) = nothing
+
+function _chainfirst(rules::Tuple, term::STerm)
+    new_term = first(rules)(term)
+    isnothing(new_term) || return new_term
+    return _chainfirst(Base.tail(rules), term)
+end
+
+Base.@assume_effects :foldable function (c::Chain)(term::STerm)
+    return _chainfirst(c.rules, term)
+end
+
+"""
     Prewalk(rule)
 
 Apply `rule` in a top-down traversal (parent before children).

@@ -38,7 +38,7 @@ include("tensors.jl")
 export ⊡, ⊗, sym, asym, adj, gram, cogram
 include("operators.jl")
 
-export AbstractRule, Passthrough, Prewalk, Postwalk, Fixpoint
+export AbstractRule, Passthrough, Chain, Prewalk, Postwalk, Fixpoint
 export stencil_rule, lower_stencil, lift, subs
 include("rewriters.jl")
 
