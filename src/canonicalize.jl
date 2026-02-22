@@ -115,7 +115,7 @@ function addterm(binding, term, power)
 end
 
 collect_powers(term) = collect_powers(term, StaticCoeff(1), Binding(), SUniform(1))
-function collect_powers(term::SExpr{Call}, coeff, binding, npow)
+Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff, binding, npow)
     op = operation(term)
     if op === SRef(:*)
         # flatten the tree and accumulate powers
@@ -270,6 +270,7 @@ end
 
 canonicalize_product(expr::STerm) = STerm(Monomial(expr))
 
+collect_terms(expr::STerm) = collect_terms(expr, Binding(), StaticCoeff(1))
 function collect_terms(expr::STerm, binding, add)
     # map each monomial basis to its accumulated scalar coefficient
     mon = Monomial(expr)
@@ -280,7 +281,7 @@ function collect_terms(expr::STerm, binding, add)
     end
     return binding
 end
-function collect_terms(expr::SExpr{Call}, binding=Binding(), add=StaticCoeff(1))
+function collect_terms(expr::SExpr{Call}, binding, add)
     op = operation(expr)
     if op === SRef(:+)
         for arg in arguments(expr)
@@ -334,7 +335,7 @@ function canonicalize_sum(expr::SExpr{Call})
 end
 
 struct CanonicalizeRule <: AbstractRule end
-function (::CanonicalizeRule)(expr::SExpr{Call})
+Base.@assume_effects :foldable function (::CanonicalizeRule)(expr::SExpr{Call})
     op = operation(expr)
     # normalize multiplicative and additive families with dedicated passes
     if op === SRef(:*) || op === SRef(:/) || op === SRef(:inv) || op === SRef(:^)
@@ -355,7 +356,7 @@ terms with a stable ordering so structurally equivalent expressions map to the s
 
 Canonicalization is not recursively applied to subterms, for a recursive version use `simplify` instead.
 """
-canonicalize(expr::STerm) = CanonicalizeRule()(expr)
+canonicalize(expr::STerm) = Passthrough(CanonicalizeRule())(expr)
 
 """
     simplify(expr)

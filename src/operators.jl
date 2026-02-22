@@ -70,13 +70,11 @@ end
 makeop(op::Symbol, arg1, args...) = SExpr(Call(), SRef(op), arg1, args...)
 canonop(op::Symbol, arg1, args...) = canonicalize(makeop(op, arg1, args...))
 
-Base.:+(a::STerm) = a
 function Base.:+(args::Vararg{STerm})
     _check_tensor_ranks(SRef(:+), args...)
     return canonop(:+, args...)
 end
 
-Base.:*(a::STerm) = a
 function Base.:*(args::Vararg{STerm})
     _check_tensor_ranks(SRef(:*), args...)
     return canonop(:*, args...)
