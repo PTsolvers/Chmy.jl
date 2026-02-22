@@ -161,6 +161,8 @@ struct Tensor{D,R,K,C}
     components::C
 end
 
+Base.ndims(::Tensor{D}) where {D} = D
+
 tensorrank(::Tensor{<:Any,R}) where {R} = R
 dimensions(::Tensor{D}) where {D} = D
 tensorkind(::Tensor{<:Any,<:Any,K}) where {K} = K
