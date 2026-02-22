@@ -16,23 +16,72 @@ tensorrank(::SIndex) = 0
 tensorrank(::SUniform) = 0
 tensorkind(::SUniform) = NoKind
 
+"""
+    STensor{R,K}(name)
+
+Construct a symbolic tensor of rank `R` and kind `K` with the given name.
+"""
 STensor{R,K}(name::Symbol) where {R,K} = STensor{R,K,name}()
+
+"""
+    STensor{R}(name)
+
+Construct a symbolic tensor of rank `R` and kind `NoKind` with the given name.
+"""
 STensor{R}(name::Symbol) where {R} = STensor{R,NoKind,name}()
 
+"""
+    SSymTensor{R}(name)
+
+Construct a symbolic symmetric tensor of rank `R` with the given name.
+"""
 const SSymTensor{R}  = STensor{R,SymKind}
+
+"""
+    SAltTensor{R}(name)
+
+Construct a symbolic alternating tensor of rank `R` with the given name.
+"""
 const SAltTensor{R}  = STensor{R,AltKind}
+
+"""
+    SDiagTensor{R}(name)
+
+Construct a symbolic diagonal tensor of rank `R` with the given name.
+"""
 const SDiagTensor{R} = STensor{R,DiagKind}
 
+"""
+    SZeroTensor{R}()
+
+Construct the zero tensor of rank `R`.
+"""
 struct SZeroTensor{R} <: STerm end
 SZeroTensor{0}() = SUniform(0)
 
+"""
+    SIdTensor{R}()
+
+Construct the identity tensor of rank `R`.
+"""
 struct SIdTensor{R} <: STerm end
 SIdTensor{0}() = SUniform(1)
 
 tensorrank(::SZeroTensor{R}) where {R} = R
 tensorrank(::SIdTensor{R}) where {R} = R
 
+"""
+    SScalar(name)
+
+Construct a symbolic scalar with the given name.
+"""
 const SScalar = STensor{0,NoKind}
+
+"""
+    SVec{D}(name)
+
+Construct a symbolic vector of dimension `D` with the given name.
+"""
 const SVec = STensor{1,NoKind}
 
 const IntegerOrSUniform = Union{Integer,SUniform}
@@ -68,6 +117,13 @@ end
 function Base.getindex(t::STensor{R}, I::Vararg{SUniform,R}) where {R}
     SExpr(Comp(), t, I...)
 end
+
+"""
+    tensorrank(expr)
+
+Return the rank of the tensor represented by the symbolic expression `expr`.
+"""
+function tensorrank end
 
 tensorrank(expr::SExpr{Call}) = tensorrank(operation(expr), arguments(expr)...)
 tensorrank(::SExpr{Comp}) = 0
@@ -123,10 +179,32 @@ ncomponents(::Type{SymKind}, ::Val{R}, ::Val{D}) where {R,D} = binomial(D + R - 
 ncomponents(::Type{AltKind}, ::Val{R}, ::Val{D}) where {R,D} = binomial(D, R)
 ncomponents(::Type{DiagKind}, ::Val{R}, ::Val{D}) where {R,D} = D
 
+"""
+    SymTensor{R,D}(data...)
+
+Construct a symmetric tensor of rank `R` and dimension `D` with the given components.
+"""
 const SymTensor{R,D}  = Tensor{R,D,SymKind}
+
+"""
+    AltTensor{R,D}(data...)
+
+Construct an alternating tensor of rank `R` and dimension `D` with the given components.
+"""
 const AltTensor{R,D}  = Tensor{R,D,AltKind}
+
+"""
+    DiagTensor{R,D}(data...)
+
+Construct a diagonal tensor of rank `R` and dimension `D` with the given components.
+"""
 const DiagTensor{R,D} = Tensor{R,D,DiagKind}
 
+"""
+    Vec{D}(data...)
+
+Construct a vector of dimension `D` with the given components.
+"""
 const Vec{D} = Tensor{1,D}
 
 isidentity(::STerm) = false
@@ -166,14 +244,21 @@ end
 
 Vec(data::Vararg{STerm,M}) where {M} = Vec{M}(data...)
 
-Tensor{O,D}(data::Vararg{STerm,M}) where {O,D,M} = Tensor{O,D,NoKind}(data...)
 
+"""
+    Tensor{R,D}(data...)
+
+Construct a tensor of rank `R` and dimension `D` with the given components.
+The kind of the tensor is automatically determined based on the symmetries of the components.
+"""
+Tensor{R,D}(data::Vararg{STerm,M}) where {R,D,M} = Tensor{R,D,NoKind}(data...)
 function Tensor{R,D,K}(data::Vararg{STerm,M}) where {R,D,K,M}
     N = ncomponents(K, Val(R), Val(D))
     M == N || error("expected $N components to construct order-$R $(K) Tensor, got $M")
     _construct_tensor(Tensor{R,D,K}, data)
 end
 
+# construct the most specific tensor type based on the symmetries of the components
 function _construct_tensor(::Type{Tensor{R,D,DiagKind}}, data::NTuple{N,STerm}) where {R,D,N}
     all(isstaticzero, data) && return SZeroTensor{R}()
     all(isstaticone, data) && return SIdTensor{R}()
