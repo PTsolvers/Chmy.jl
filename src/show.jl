@@ -148,7 +148,7 @@ function Base.show(io::IO, ::MIME"text/plain", v::Vec{N}) where {N}
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", t::Tensor{R,D}) where {R,D}
+function Base.show(io::IO, ::MIME"text/plain", t::Tensor{D,R}) where {D,R}
     join(io, ntuple(_ -> D, Val(R)), '×')
     print(io, " Tensor:")
     for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
