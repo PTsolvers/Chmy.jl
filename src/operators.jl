@@ -489,3 +489,6 @@ end
         return $ex
     end
 end
+
+# custom broadcasting for tensors
+Base.Broadcast.broadcasted(f::F, arg::Tensor{D,R,K}) where {F,D,R,K} = Tensor{D,R,K}(map(f, arg.components)...)
