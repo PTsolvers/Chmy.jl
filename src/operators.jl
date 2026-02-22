@@ -160,7 +160,9 @@ end
 
 function Base.inv(t::STerm)
     _check_tensor_ranks(SRef(:inv), t)
-    # canonicalize inv of scalars
+    if iscall(t) && operation(t) === SRef(:inv)
+        return only(arguments(t))
+    end
     return canonop(:inv, t)
 end
 
