@@ -100,10 +100,18 @@ function Base.adjoint(t::STerm)
     return canonop(:adjoint, t)
 end
 
-# tensor double contraction
+"""
+    ⊡(a, b)
+
+The double contraction operator, which contracts the first two indices of `a` with the first two indices of `b`.
+"""
 ⊡(a::STerm, b::STerm) = canonop(:⊡, a, b)
 
-# tensor outer product
+"""
+    ⊗(a, b)
+
+The outer product operator, which creates a tensor by combining all indices of `a` with all indices of `b`.
+"""
 ⊗(a::STerm, b::STerm) = canonop(:⊗, a, b)
 
 # methods from LinearAlgebra
@@ -136,6 +144,11 @@ end
 _isinvof(a, b) = _isopof(SRef(:inv), a, b)
 _isadjof(a, b) = _isopof(SRef(:adj), a, b)
 
+"""
+    ⋅(a, b)
+
+The dot product operator, which contracts the last index of `a` with the first index of `b`.
+"""
 function ⋅(a::STerm, b::STerm)
     # a * I = a, I * b = b
     isidentity(a) && return b
@@ -149,16 +162,31 @@ function ⋅(a::STerm, b::STerm)
     return canonop(:⋅, a, b)
 end
 
+"""
+    adj(t)
+
+The adjugate of a second-rank tensor, defined as the transpose of the cofactor matrix.
+"""
 function adj(t::STerm)
     tensorrank(t) == 0 && return t
     return canonop(:adj, t)
 end
 
+"""
+    sym(t)
+
+The symmetric part of a second-rank tensor, defined as `(t + t') / 2`.
+"""
 function sym(t::STerm)
     tensorrank(t) == 0 && return t
     return canonop(:sym, t)
 end
 
+"""
+    asym(t)
+
+The antisymmetric part of a second-rank tensor, defined as `(t - t') / 2`.
+"""
 function asym(t::STerm)
     tensorrank(t) == 0 && return SUniform(0)
     return canonop(:asym, t)
@@ -401,6 +429,11 @@ end
     end
 end
 
+"""
+    gram(t)
+
+The Gramian of a second-rank tensor, defined as `t' ⋅ t`.
+"""
 @generated function gram(t::Tensor{D,2}) where {D}
     idx(i, j) = linear_index(t, i, j)
     ex = Expr(:call, :(SymTensor{2,$D}))
@@ -417,6 +450,11 @@ end
     end
 end
 
+"""
+    cogram(t)
+
+The co-Gramian of a second-rank tensor, defined as `t ⋅ t'`.
+"""
 @generated function cogram(t::Tensor{D,2}) where {D}
     idx(i, j) = linear_index(t, i, j)
     ex = Expr(:call, :(SymTensor{2,$D}))
