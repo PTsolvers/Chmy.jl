@@ -95,7 +95,7 @@ Monomial(::SUniform{C}) where {C} = Monomial(StaticCoeff(C), Binding())
 Monomial(term::STerm) = Monomial(StaticCoeff(1), Binding(term => SUniform(1)))
 function Monomial(expr::SExpr{Call})
     coeff, powers = collect_powers(expr)
-    kv = ssort((pairs(powers)...,); lt=isless_lex, by=first)
+    kv = ssort(pairstuple(powers); lt=isless_lex, by=first)
     return Monomial(coeff, Binding(kv...))
 end
 
@@ -105,7 +105,7 @@ Base.iszero(monomial::Monomial) = iszero(monomial.coeff) || any(isstaticzero, ke
 
 tensorrank(monomial::Monomial) = maximum(tensorrank, keys(monomial.powers); init=0)
 
-function addterm(binding, term, power)
+function addpower(binding, term, power)
     if haskey(binding, term)
         # keep merged exponents canonicalized as we accumulate factors
         return push(binding, term => binding[term] + power)
@@ -119,9 +119,9 @@ Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff,
     op = operation(term)
     if op === SRef(:*)
         # flatten the tree and accumulate powers
-        for arg in arguments(term)
-            coeff, binding = collect_powers(arg, coeff, binding, npow)
-        end
+        coeff, binding = collect_powers(first(arguments(term)), coeff, binding, npow)
+        rest = makeop(:*, Base.tail(arguments(term))...)
+        coeff, binding = collect_powers(rest, coeff, binding, npow)
     elseif op === SRef(:/)
         # a / b is treated as a * b^-1, so powers in the denominator are negated
         num, den = arguments(term)
@@ -133,7 +133,7 @@ Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff,
             # scalar inv(a) is treated as a^-1, so powers are negated
             coeff, binding = collect_powers(arg, coeff, binding, -npow)
         else
-            binding = addterm(binding, term, npow)
+            binding = addpower(binding, term, npow)
         end
     elseif isunaryminus(term) && isstatic(npow)
         # fold an unary minus into the coefficient for odd integer powers, e.g. a * (-x)^3 -> -a * x^3
@@ -148,7 +148,7 @@ Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff,
         newnpow = isstaticone(npow) ? exp : npow * exp
         coeff, binding = collect_powers(base, coeff, binding, newnpow)
     else
-        binding = addterm(binding, term, npow)
+        binding = addpower(binding, term, npow)
     end
     return coeff, binding
 end
@@ -163,7 +163,7 @@ function collect_powers(term, coeff, binding, npow)
         end
         coeff *= StaticCoeff(Base.literal_pow(^, base, Val(powr)))
     else
-        binding = addterm(binding, term, npow)
+        binding = addpower(binding, term, npow)
     end
     return coeff, binding
 end
@@ -186,7 +186,7 @@ end
 
 # consume (base, power) tuples recursively and accumulate factored tuples
 collect_factors(::Tuple{}, ::Tuple{}, num, den) = num, den
-function collect_factors(exprs, data, num, den)
+Base.@assume_effects :foldable function collect_factors(exprs, data, num, den)
     num_next, den_next = splitpower(num, den, first(exprs), first(data))
     return collect_factors(Base.tail(exprs), Base.tail(data), num_next, den_next)
 end
@@ -274,22 +274,19 @@ collect_terms(expr::STerm) = collect_terms(expr, Binding(), StaticCoeff(1))
 function collect_terms(expr::STerm, binding, add)
     # map each monomial basis to its accumulated scalar coefficient
     mon = Monomial(expr)
-    if haskey(binding, mon.powers)
-        binding = push(binding, mon.powers => binding[mon.powers] + add * mon.coeff)
-    else
-        binding = push(binding, mon.powers => add * mon.coeff)
-    end
-    return binding
+    return addpower(binding, mon.powers, add * mon.coeff)
 end
-function collect_terms(expr::SExpr{Call}, binding, add)
+Base.@assume_effects :foldable function collect_terms(expr::SExpr{Call}, binding, add)
     op = operation(expr)
     if op === SRef(:+)
-        for arg in arguments(expr)
-            binding = collect_terms(arg, binding, add)
-        end
+        arg = first(arguments(expr))
+        binding = collect_terms(arg, binding, add)
+        rest = makeop(:+, Base.tail(arguments(expr))...)
+        binding = collect_terms(rest, binding, add)
     elseif op === SRef(:-)
         if arity(expr) == 1
-            binding = collect_terms(only(arguments(expr)), binding, -add)
+            arg = only(arguments(expr))
+            binding = collect_terms(arg, binding, -add)
         else
             a, b = arguments(expr)
             binding = collect_terms(a, binding, add)
@@ -297,11 +294,7 @@ function collect_terms(expr::SExpr{Call}, binding, add)
         end
     else
         mon = Monomial(expr)
-        if haskey(binding, mon.powers)
-            binding = push(binding, mon.powers => binding[mon.powers] + add * mon.coeff)
-        else
-            binding = push(binding, mon.powers => add * mon.coeff)
-        end
+        binding = addpower(binding, mon.powers, add * mon.coeff)
     end
     return binding
 end
@@ -335,7 +328,7 @@ function canonicalize_sum(expr::SExpr{Call})
 end
 
 struct CanonicalizeRule <: AbstractRule end
-Base.@assume_effects :foldable function (::CanonicalizeRule)(expr::SExpr{Call})
+function (::CanonicalizeRule)(expr::SExpr{Call})
     op = operation(expr)
     # normalize multiplicative and additive families with dedicated passes
     if op === SRef(:*) || op === SRef(:/) || op === SRef(:inv) || op === SRef(:^)
@@ -343,7 +336,7 @@ Base.@assume_effects :foldable function (::CanonicalizeRule)(expr::SExpr{Call})
     elseif op === SRef(:+) || op === SRef(:-)
         return canonicalize_sum(expr)
     else
-        return expr
+        return seval(expr)
     end
 end
 

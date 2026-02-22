@@ -84,7 +84,7 @@ end
 for op in (:max, :min)
     @eval function Base.$op(args::Vararg{STerm})
         _check_scalar_ranks(SRef($(Meta.quot(op))), args...)
-        return makeop($(Meta.quot(op)), args...)
+        return canonop($(Meta.quot(op)), args...)
     end
 end
 
@@ -97,7 +97,7 @@ end
 function Base.:/(a::STerm, b::STerm)
     _check_tensor_ranks(SRef(:/), a, b)
     (isstaticzero(a) && isstaticzero(b)) && throw(ArgumentError("division of zero by zero"))
-    canonop(:/, a, b)
+    return canonop(:/, a, b)
 end
 
 for op in (://, :÷)
@@ -107,7 +107,7 @@ for op in (://, :÷)
         isstaticzero(a) && return SUniform(0)
         isstaticone(b) && return a
         a === b && return SUniform(1)
-        return makeop($(Meta.quot(op)), a, b)
+        return canonop($(Meta.quot(op)), a, b)
     end
 end
 
@@ -120,7 +120,7 @@ end
 for op in (:<, :<=, :>, :>=, :(==), :!=, :&, :|, :xor)
     @eval function Base.$op(a::STerm, b::STerm)
         _check_scalar_ranks(SRef($(Meta.quot(op))), a, b)
-        return makeop($(Meta.quot(op)), a, b)
+        return canonop($(Meta.quot(op)), a, b)
     end
 end
 
@@ -135,17 +135,17 @@ end
 function Base.adjoint(t::STerm)
     _check_tensor_ranks(SRef(:adjoint), t)
     tensorrank(t) == 0 && return t
-    makeop(:adjoint, t)
+    return canonop(:adjoint, t)
 end
 
 # tensor double contraction
 function ⊡(a::STerm, b::STerm)
     _check_tensor_ranks(SRef(:⊡), a, b)
-    makeop(:⊡, a, b)
+    return canonop(:⊡, a, b)
 end
 
 # tensor outer product
-⊗(a::STerm, b::STerm) = makeop(:⊗, a, b)
+⊗(a::STerm, b::STerm) = canonop(:⊗, a, b)
 
 # methods from LinearAlgebra
 transpose(t::STerm) = t'
@@ -154,19 +154,19 @@ for op in (:det, :tr, :diag)
     @eval function $op(t::STerm)
         _check_tensor_ranks(SRef($(Meta.quot(op))), t)
         tensorrank(t) == 0 && return t
-        makeop($(Meta.quot(op)), t)
+        return canonop($(Meta.quot(op)), t)
     end
 end
 
 function Base.inv(t::STerm)
     _check_tensor_ranks(SRef(:inv), t)
     # canonicalize inv of scalars
-    canonop(:inv, t)
+    return canonop(:inv, t)
 end
 
 function ×(a::STerm, b::STerm)
     _check_tensor_ranks(SRef(:×), a, b)
-    makeop(:×, a, b)
+    return canonop(:×, a, b)
 end
 
 function _isopof(op, x, y)
@@ -191,48 +191,47 @@ function ⋅(a::STerm, b::STerm)
     # a * adj(a) = det(a) * I, adj(b) * b = det(b) * I
     _isadjof(a, b) && return det(b) * SIdTensor{R}()
     _isadjof(b, a) && return det(a) * SIdTensor{R}()
-    makeop(:⋅, a, b)
+    return canonop(:⋅, a, b)
 end
 
 function adj(t::STerm)
     _check_tensor_ranks(SRef(:adj), t)
     tensorrank(t) == 0 && return t
-    makeop(:adj, t)
+    return canonop(:adj, t)
 end
 
 function sym(t::STerm)
     _check_tensor_ranks(SRef(:sym), t)
     tensorrank(t) == 0 && return t
-    makeop(:sym, t)
+    return canonop(:sym, t)
 end
 
 function asym(t::STerm)
     _check_tensor_ranks(SRef(:asym), t)
     tensorrank(t) == 0 && return SUniform(0)
-    makeop(:asym, t)
+    return canonop(:asym, t)
 end
 
 for op in (:gram, :cogram)
     @eval function $op(t::STerm)
         _check_tensor_ranks(SRef($(Meta.quot(op))), t)
         tensorrank(t) == 0 && return t^2
-        makeop($(Meta.quot(op)), t)
+        return canonop($(Meta.quot(op)), t)
     end
 end
 
 # scalar unary operations
-Base.:-(arg::STerm) = makeop(:-, arg)
+isunaryminus(expr::STerm) = iscall(expr) && operation(expr) === SRef(:-) && arity(expr) == 1
+
+function Base.:-(arg::STerm)
+    if iscall(arg) && (operation(arg) === SRef(:-) || operation(arg) === SRef(:+))
+        return canonop(:-, arg)
+    end
+    return makeop(:-, arg)
+end
 Base.:-(arg::SUniform{0}) = arg
 Base.:-(arg::SZeroTensor) = arg
-function Base.:-(arg::SExpr{Call})
-    if operation(arg) === SRef(:+) || operation(arg) === SRef(:-)
-        return canonop(:-, arg)
-    else
-        return makeop(:-, arg)
-    end
-end
 
-isunaryminus(expr::STerm) = iscall(expr) && operation(expr) === SRef(:-) && arity(expr) == 1
 
 for op in (:sqrt, :abs,
            :sin, :cos, :tan,
@@ -247,24 +246,24 @@ for op in (:sqrt, :abs,
            :exp, :expm1, :exp2, :exp10)
     @eval function Base.$op(arg::STerm)
         _check_scalar_ranks(SRef($(Meta.quot(op))), arg)
-        makeop($(Meta.quot(op)), arg)
+        return canonop($(Meta.quot(op)), arg)
     end
 end
 
 # overloading broadcasting
 function Base.Broadcast.broadcasted(f, args::Vararg{STerm})
     _check_tensor_ranks(SRef(:broadcasted), SFun(f), args...)
-    return makeop(:broadcasted, SFun(f), args...)
+    return canonop(:broadcasted, SFun(f), args...)
 end
 function Base.Broadcast.broadcasted(::typeof(Base.literal_pow), f, t::STerm, n::Val{N}) where {N}
-    return makeop(:broadcasted, SRef(:^), t, SUniform(N))
+    return canonop(:broadcasted, SRef(:^), t, SUniform(N))
 end
 Base.Broadcast.broadcasted(f, a::STerm, b::Number) = Base.Broadcast.broadcasted(f, a, SUniform(b))
 Base.Broadcast.broadcasted(f, a::Number, b::STerm) = Base.Broadcast.broadcasted(f, SUniform(a), b)
 
 function Base.ifelse(cond::STerm, x::STerm, y::STerm)
     _check_scalar_ranks(SRef(:ifelse), cond, x, y)
-    makeop(:ifelse, cond, x, y)
+    return canonop(:ifelse, cond, x, y)
 end
 Base.ifelse(cond::STerm, x::Number, y::STerm)  = ifelse(cond, SUniform(x), y)
 Base.ifelse(cond::STerm, x::STerm, y::Number)  = ifelse(cond, x, SUniform(y))
