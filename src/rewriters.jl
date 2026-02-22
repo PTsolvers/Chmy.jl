@@ -239,7 +239,7 @@ SubsRule(kv::Pair) = SubsRule(kv.first, kv.second)
 (rule::SubsRule{Lhs})(::Lhs) where {Lhs<:STerm} = rule.rhs
 
 """
-    subs(expr, kvs...)
+    subs(expr, kvs::Pair...)
 
 Replace occurrences in `expr` using a post-order traversal. Substitutions are
 tried in the given order, and the first matching pair is applied.
