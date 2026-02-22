@@ -1,3 +1,5 @@
+# Symbolic expression rewriters inspired by SymbolicUtils.jl
+
 """
     AbstractRule
 
