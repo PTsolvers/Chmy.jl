@@ -174,33 +174,33 @@ tensorkind(::Type{Tensor{<:Any,<:Any,K}}) where {K} = K
 Base.length(t::Tensor) = length(t.components)
 
 ncomponents(t::Tensor) = ncomponents(typeof(t))
-ncomponents(tt::Type{Tensor}) = ncomponents(tensorkind(tt), Val(tensorrank(tt)), Val(dimensions(tt)))
+ncomponents(tt::Type{Tensor}) = ncomponents(tensorkind(tt), Val(dimensions(tt)), Val(tensorrank(tt)))
 
-ncomponents(::Type{NoKind}, ::Val{R}, ::Val{D}) where {R,D} = D^R
-ncomponents(::Type{SymKind}, ::Val{R}, ::Val{D}) where {R,D} = binomial(D + R - 1, R)
-ncomponents(::Type{AltKind}, ::Val{R}, ::Val{D}) where {R,D} = binomial(D, R)
-ncomponents(::Type{DiagKind}, ::Val{R}, ::Val{D}) where {R,D} = D
+ncomponents(::Type{NoKind}, ::Val{D}, ::Val{R}) where {D,R} = D^R
+ncomponents(::Type{SymKind}, ::Val{D}, ::Val{R}) where {D,R} = binomial(D + R - 1, R)
+ncomponents(::Type{AltKind}, ::Val{D}, ::Val{R}) where {D,R} = binomial(D, R)
+ncomponents(::Type{DiagKind}, ::Val{D}, ::Val{R}) where {D,R} = D
 
 """
-    SymTensor{R,D}(data...)
+    SymTensor{D,R}(data...)
 
 Construct a symmetric tensor of rank `R` and dimension `D` with the given components.
 """
-const SymTensor{R,D}  = Tensor{D,R,SymKind}
+const SymTensor{D,R}  = Tensor{D,R,SymKind}
 
 """
-    AltTensor{R,D}(data...)
+    AltTensor{D,R}(data...)
 
 Construct an alternating tensor of rank `R` and dimension `D` with the given components.
 """
-const AltTensor{R,D}  = Tensor{D,R,AltKind}
+const AltTensor{D,R}  = Tensor{D,R,AltKind}
 
 """
-    DiagTensor{R,D}(data...)
+    DiagTensor{D,R}(data...)
 
 Construct a diagonal tensor of rank `R` and dimension `D` with the given components.
 """
-const DiagTensor{R,D} = Tensor{D,R,DiagKind}
+const DiagTensor{D,R} = Tensor{D,R,DiagKind}
 
 """
     Vec{D}(data...)
@@ -233,11 +233,11 @@ function linear_index(::Type{DiagKind}, ::Val{D}, I::Vararg{Int,O}) where {O,D}
 end
 
 Base.getindex(t::Tensor{D,R,K}, I::Vararg{Int,R}) where {D,R,K} = t.components[linear_index(K, Val(D), I...)]
-function Base.getindex(t::DiagTensor{R,D}, I::Vararg{Int,R}) where {R,D}
+function Base.getindex(t::DiagTensor{D,R}, I::Vararg{Int,R}) where {D,R}
     all(==(I[1]), I) || return SUniform(0)
     return t.components[I[1]]
 end
-function Base.getindex(t::AltTensor{R,D}, I::Vararg{Int,R}) where {R,D}
+function Base.getindex(t::AltTensor{D,R}, I::Vararg{Int,R}) where {D,R}
     allunique(I) || return SUniform(0)
     J = sort(I)
     v = t.components[linear_index(AltKind, Val(D), J...)]
@@ -255,7 +255,7 @@ The kind of the tensor is automatically determined based on the symmetries of th
 """
 Tensor{D,R}(data::Vararg{STerm,M}) where {D,R,M} = Tensor{D,R,NoKind}(data...)
 function Tensor{D,R,K}(data::Vararg{STerm,M}) where {D,R,K,M}
-    N = ncomponents(K, Val(R), Val(D))
+    N = ncomponents(K, Val(D), Val(R))
     M == N || error("expected $N components to construct order-$R $(K) Tensor, got $M")
     _construct_tensor(Tensor{D,R,K}, data)
 end
@@ -306,19 +306,19 @@ function _construct_tensor(::Type{Tensor{D,R,AltKind}}, data::NTuple{N,STerm}) w
     return Tensor{D,R,AltKind,typeof(data)}(data)
 end
 function _construct_tensor(::Type{Tensor{D,R,SymKind}}, data::NTuple{N,STerm}) where {D,R,N}
-    if _is_diagonal(Val(R), Val(D), data)
+    if _is_diagonal(Val(D), Val(R), data)
         diag_comps = _diagonal_from_symmetric(Tensor{D,R}, data)
         return _construct_tensor(Tensor{D,R,DiagKind}, diag_comps)
     end
     return Tensor{D,R,SymKind,typeof(data)}(data)
 end
 function _construct_tensor(::Type{Tensor{D,R,NoKind}}, data::NTuple{N,STerm}) where {D,R,N}
-    if _is_symmetric(Val(R), Val(D), data)
+    if _is_symmetric(Val(D), Val(R), data)
         sym_comps = _symmetric_components(Tensor{D,R}, data)
         return _construct_tensor(Tensor{D,R,SymKind}, sym_comps)
     end
 
-    if _is_alternating(Val(R), Val(D), data)
+    if _is_alternating(Val(D), Val(R), data)
         alt_comps = _alternating_components(Tensor{D,R}, data)
         return _construct_tensor(Tensor{D,R,AltKind}, alt_comps)
     end
@@ -326,7 +326,7 @@ function _construct_tensor(::Type{Tensor{D,R,NoKind}}, data::NTuple{N,STerm}) wh
     return Tensor{D,R,NoKind,typeof(data)}(data)
 end
 
-@generated function _is_symmetric(::Val{R}, ::Val{D}, v::NTuple{N,STerm}) where {R,D,N}
+@generated function _is_symmetric(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
     check = Expr(:&&)
 
     for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
@@ -344,7 +344,7 @@ end
     return check
 end
 
-@generated function _is_alternating(::Val{R}, ::Val{D}, v::NTuple{N,STerm}) where {R,D,N}
+@generated function _is_alternating(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
     check = Expr(:&&)
 
     for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
@@ -375,7 +375,7 @@ end
     return check
 end
 
-@generated function _is_diagonal(::Val{R}, ::Val{D}, v::NTuple{N,STerm}) where {R,D,N}
+@generated function _is_diagonal(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
     check = Expr(:&&)
     for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
         I = Tuple(idx)
