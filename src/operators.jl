@@ -1,12 +1,11 @@
 for op in (:+, :-)
-    @eval function _check_tensor_ranks(op::SRef{$(Meta.quot(op))}, args::Vararg{STerm})
+    @eval function check_tensor_ranks(op::SRef{$(Meta.quot(op))}, args::Vararg{STerm})
         if !all(x -> tensorrank(x) == tensorrank(args[1]), args)
             throw(ArgumentError("all tensor arguments to '$op' must have the same rank"))
         end
     end
 end
-
-function _check_tensor_ranks(::SRef{:*}, args::Vararg{STerm})
+function check_tensor_ranks(::SRef{:*}, args::Vararg{STerm})
     if count(x -> tensorrank(x) > 0, args) > 1
         throw(ArgumentError("""
                             at most one tensor argument with rank > 0 allowed in multiplication, \
@@ -15,48 +14,41 @@ function _check_tensor_ranks(::SRef{:*}, args::Vararg{STerm})
                             """))
     end
 end
-
 for op in (:/, ://, :÷)
-    @eval function _check_tensor_ranks(op::SRef{$(Meta.quot(op))}, ::STerm, b::STerm)
+    @eval function check_tensor_ranks(op::SRef{$(Meta.quot(op))}, ::STerm, b::STerm)
         if tensorrank(b) > 0
             throw(ArgumentError("denominator in '$op' must be a scalar term"))
         end
     end
 end
-
 for op in (:adjoint, :adj, :det, :inv, :tr, :diag, :sym, :asym, :gram, :cogram)
-    @eval function _check_tensor_ranks(op::SRef{$(Meta.quot(op))}, t::STerm)
+    @eval function check_tensor_ranks(op::SRef{$(Meta.quot(op))}, t::STerm)
         if tensorrank(t) != 2 && tensorrank(t) != 0
             throw(ArgumentError("'$op' can only be applied to scalars or rank-2 tensors"))
         end
     end
 end
-
-function _check_tensor_ranks(::SRef{:×}, a::STerm, b::STerm)
+function check_tensor_ranks(::SRef{:×}, a::STerm, b::STerm)
     if tensorrank(a) != 1 || tensorrank(b) != 1
         throw(ArgumentError("cross product '×' can only be applied to rank-1 tensors (vectors)"))
     end
 end
-
-function _check_tensor_ranks(::SRef{:⋅}, a::STerm, b::STerm)
+function check_tensor_ranks(::SRef{:⋅}, a::STerm, b::STerm)
     if tensorrank(a) + tensorrank(b) < 2
         throw(ArgumentError("dot product '⋅' requires both arguments to have rank at least 1"))
     end
 end
-
-function _check_tensor_ranks(::SRef{:⊡}, a::STerm, b::STerm)
+function check_tensor_ranks(::SRef{:⊡}, a::STerm, b::STerm)
     if tensorrank(a) < 2 || tensorrank(b) < 2
         throw(ArgumentError("double tensor contraction '⊡' requires both arguments to have rank at least 2"))
     end
 end
-
-function _check_scalar_ranks(op::SRef, args::Vararg{STerm})
-    if any(x -> tensorrank(x) != 0, args)
-        throw(ArgumentError("'$op' can only be applied to scalar terms, consider using broadcasting"))
+function check_tensor_ranks(::SRef{:⊗}, a::STerm, b::STerm)
+    if tensorrank(a) == 0 || tensorrank(b) == 0
+        throw(ArgumentError("outer product '⊗' cannot be applied to scalar terms"))
     end
 end
-
-function _check_tensor_ranks(::SRef{:broadcasted}, op::STerm, args::Vararg{STerm})
+function check_tensor_ranks(::SRef{:broadcasted}, op::STerm, args::Vararg{STerm})
     maxrank = maximum(tensorrank, args)
     foreach(args) do arg
         tr = tensorrank(arg)
@@ -70,56 +62,27 @@ end
 makeop(op::Symbol, arg1, args...) = SExpr(Call(), SRef(op), arg1, args...)
 canonop(op::Symbol, arg1, args...) = canonicalize(makeop(op, arg1, args...))
 
-function Base.:+(args::Vararg{STerm})
-    _check_tensor_ranks(SRef(:+), args...)
-    return canonop(:+, args...)
-end
-
-function Base.:*(args::Vararg{STerm})
-    _check_tensor_ranks(SRef(:*), args...)
-    return canonop(:*, args...)
-end
-
 # multiary operators
-for op in (:max, :min)
-    @eval function Base.$op(args::Vararg{STerm})
-        _check_scalar_ranks(SRef($(Meta.quot(op))), args...)
-        return canonop($(Meta.quot(op)), args...)
-    end
+for op in (:+, :*, :max, :min)
+    @eval Base.$op(args::Vararg{STerm}) = canonop($(Meta.quot(op)), args...)
 end
 
-# subtraction with zero detection
-function Base.:-(a::STerm, b::STerm)
-    _check_tensor_ranks(SRef(:-), a, b)
-    return canonop(:-, a, b)
+# binary operators
+for op in (:-, :^, :<, :<=, :>, :>=, :(==), :!=, :&, :|, :xor)
+    @eval Base.$op(a::STerm, b::STerm) = canonop($(Meta.quot(op)), a, b)
 end
 
 function Base.:/(a::STerm, b::STerm)
-    _check_tensor_ranks(SRef(:/), a, b)
     (isstaticzero(a) && isstaticzero(b)) && throw(ArgumentError("division of zero by zero"))
     return canonop(:/, a, b)
 end
 
 for op in (://, :÷)
     @eval function Base.$op(a::STerm, b::STerm)
-        _check_tensor_ranks(SRef($(Meta.quot(op))), a, b)
         (isstaticzero(a) && isstaticzero(b)) && throw(ArgumentError("division of zero by zero"))
         isstaticzero(a) && return SUniform(0)
         isstaticone(b) && return a
         a === b && return SUniform(1)
-        return canonop($(Meta.quot(op)), a, b)
-    end
-end
-
-function Base.:^(a::STerm, b::STerm)
-    _check_scalar_ranks(SRef(:^), a, b)
-    return canonop(:^, a, b)
-end
-
-# scalar binary operators
-for op in (:<, :<=, :>, :>=, :(==), :!=, :&, :|, :xor)
-    @eval function Base.$op(a::STerm, b::STerm)
-        _check_scalar_ranks(SRef($(Meta.quot(op))), a, b)
         return canonop($(Meta.quot(op)), a, b)
     end
 end
@@ -133,16 +96,12 @@ for op in (:+, :-, :*, :max, :min, :/, ://, :÷, :^, :<, :<=, :>, :>=, :(==), :!
 end
 
 function Base.adjoint(t::STerm)
-    _check_tensor_ranks(SRef(:adjoint), t)
     tensorrank(t) == 0 && return t
     return canonop(:adjoint, t)
 end
 
 # tensor double contraction
-function ⊡(a::STerm, b::STerm)
-    _check_tensor_ranks(SRef(:⊡), a, b)
-    return canonop(:⊡, a, b)
-end
+⊡(a::STerm, b::STerm) = canonop(:⊡, a, b)
 
 # tensor outer product
 ⊗(a::STerm, b::STerm) = canonop(:⊗, a, b)
@@ -152,24 +111,19 @@ transpose(t::STerm) = t'
 
 for op in (:det, :tr, :diag)
     @eval function $op(t::STerm)
-        _check_tensor_ranks(SRef($(Meta.quot(op))), t)
         tensorrank(t) == 0 && return t
         return canonop($(Meta.quot(op)), t)
     end
 end
 
 function Base.inv(t::STerm)
-    _check_tensor_ranks(SRef(:inv), t)
     if iscall(t) && operation(t) === SRef(:inv)
         return only(arguments(t))
     end
     return canonop(:inv, t)
 end
 
-function ×(a::STerm, b::STerm)
-    _check_tensor_ranks(SRef(:×), a, b)
-    return canonop(:×, a, b)
-end
+×(a::STerm, b::STerm) = canonop(:×, a, b)
 
 function _isopof(op, x, y)
     if isexpr(x) && operation(x) === op && first(arguments(x)) === y
@@ -183,7 +137,6 @@ _isinvof(a, b) = _isopof(SRef(:inv), a, b)
 _isadjof(a, b) = _isopof(SRef(:adj), a, b)
 
 function ⋅(a::STerm, b::STerm)
-    _check_tensor_ranks(SRef(:⋅), a, b)
     # a * I = a, I * b = b
     isidentity(a) && return b
     isidentity(b) && return a
@@ -197,26 +150,22 @@ function ⋅(a::STerm, b::STerm)
 end
 
 function adj(t::STerm)
-    _check_tensor_ranks(SRef(:adj), t)
     tensorrank(t) == 0 && return t
     return canonop(:adj, t)
 end
 
 function sym(t::STerm)
-    _check_tensor_ranks(SRef(:sym), t)
     tensorrank(t) == 0 && return t
     return canonop(:sym, t)
 end
 
 function asym(t::STerm)
-    _check_tensor_ranks(SRef(:asym), t)
     tensorrank(t) == 0 && return SUniform(0)
     return canonop(:asym, t)
 end
 
 for op in (:gram, :cogram)
     @eval function $op(t::STerm)
-        _check_tensor_ranks(SRef($(Meta.quot(op))), t)
         tensorrank(t) == 0 && return t^2
         return canonop($(Meta.quot(op)), t)
     end
@@ -234,7 +183,6 @@ end
 Base.:-(arg::SUniform{0}) = arg
 Base.:-(arg::SZeroTensor) = arg
 
-
 for op in (:sqrt, :abs,
            :sin, :cos, :tan,
            :asin, :acos, :atan,
@@ -247,14 +195,12 @@ for op in (:sqrt, :abs,
            :log, :log1p, :log2, :log10,
            :exp, :expm1, :exp2, :exp10)
     @eval function Base.$op(arg::STerm)
-        _check_scalar_ranks(SRef($(Meta.quot(op))), arg)
         return canonop($(Meta.quot(op)), arg)
     end
 end
 
 # overloading broadcasting
 function Base.Broadcast.broadcasted(f, args::Vararg{STerm})
-    _check_tensor_ranks(SRef(:broadcasted), SFun(f), args...)
     return canonop(:broadcasted, SFun(f), args...)
 end
 function Base.Broadcast.broadcasted(::typeof(Base.literal_pow), f, t::STerm, n::Val{N}) where {N}
@@ -263,12 +209,9 @@ end
 Base.Broadcast.broadcasted(f, a::STerm, b::Number) = Base.Broadcast.broadcasted(f, a, SUniform(b))
 Base.Broadcast.broadcasted(f, a::Number, b::STerm) = Base.Broadcast.broadcasted(f, SUniform(a), b)
 
-function Base.ifelse(cond::STerm, x::STerm, y::STerm)
-    _check_scalar_ranks(SRef(:ifelse), cond, x, y)
-    return canonop(:ifelse, cond, x, y)
-end
-Base.ifelse(cond::STerm, x::Number, y::STerm)  = ifelse(cond, SUniform(x), y)
-Base.ifelse(cond::STerm, x::STerm, y::Number)  = ifelse(cond, x, SUniform(y))
+Base.ifelse(cond::STerm, x::STerm, y::STerm) = canonop(:ifelse, cond, x, y)
+Base.ifelse(cond::STerm, x::Number, y::STerm) = ifelse(cond, SUniform(x), y)
+Base.ifelse(cond::STerm, x::STerm, y::Number) = ifelse(cond, x, SUniform(y))
 Base.ifelse(cond::STerm, x::Number, y::Number) = ifelse(cond, SUniform(x), SUniform(y))
 
 # tensor operations

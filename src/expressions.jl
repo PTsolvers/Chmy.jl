@@ -77,6 +77,17 @@ SExpr(head::SExprHead, children::Vararg{STerm}) = SExpr(head, children)
 SExpr(::Call, ::SRef{:*}, x::STerm) = x
 SExpr(::Call, ::SRef{:+}, x::STerm) = x
 
+function check_tensor_ranks(f::SRef, args...)
+    if any(x -> tensorrank(x) != 0, args)
+        throw(ArgumentError("'$f' can only be applied to scalar terms, consider using broadcasting"))
+    end
+end
+
+function SExpr(::Call, f::SRef, args::STerm...)
+    check_tensor_ranks(f, args...)
+    return SExpr(Call(), (f, args...))
+end
+
 isexpr(::SExpr) = true
 
 head(expr::SExpr) = expr.head
