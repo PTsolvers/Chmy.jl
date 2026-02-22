@@ -115,7 +115,7 @@ function addterm(binding, term, power)
 end
 
 collect_powers(term) = collect_powers(term, StaticCoeff(1), Binding(), SUniform(1))
-Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff, binding, npow)
+function collect_powers(term::SExpr{Call}, coeff, binding, npow)
     op = operation(term)
     if op === SRef(:*)
         # flatten the tree and accumulate powers
@@ -161,7 +161,7 @@ function collect_powers(term, coeff, binding, npow)
         if isinteger(base) && isinteger(powr) && powr < zero(powr)
             base = Rational(base)
         end
-        coeff *= StaticCoeff(base^powr)
+        coeff *= StaticCoeff(Base.literal_pow(^, base, Val(powr)))
     else
         binding = addterm(binding, term, npow)
     end
@@ -329,11 +329,12 @@ function canonicalize_sum(expr::SExpr{Call})
     # sort by grevlex order and reconstruct the sum
     sorted = ssort(nz_monomials; order=Base.Order.Reverse)
     # build a tree of additions and subtractions from the sorted monomials
-    return build_tree(STerm(first(sorted)), Base.tail(sorted))
+    first_expr = STerm(first(sorted))
+    return build_tree(first_expr, Base.tail(sorted))
 end
 
 struct CanonicalizeRule <: AbstractRule end
-Base.@assume_effects :foldable function (::CanonicalizeRule)(expr::SExpr{Call})
+function (::CanonicalizeRule)(expr::SExpr{Call})
     op = operation(expr)
     # normalize multiplicative and additive families with dedicated passes
     if op === SRef(:*) || op === SRef(:/) || op === SRef(:inv) || op === SRef(:^)
@@ -341,7 +342,7 @@ Base.@assume_effects :foldable function (::CanonicalizeRule)(expr::SExpr{Call})
     elseif op === SRef(:+) || op === SRef(:-)
         return canonicalize_sum(expr)
     else
-        return seval(expr)
+        return expr
     end
 end
 
