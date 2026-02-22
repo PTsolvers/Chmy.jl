@@ -1,8 +1,21 @@
+"""
+    AbstractRule
+
+Base type for symbolic rewrite rules.
+
+Rules are callable objects that take an `STerm` and return either a replacement
+`STerm` or `nothing` to indicate "no match".
+"""
 abstract type AbstractRule end
 
 # no match by default
 (::AbstractRule)(::STerm) = nothing
 
+"""
+    Passthrough(rule)
+
+Wrap a rule so unmatched terms are returned unchanged instead of `nothing`.
+"""
 struct Passthrough{R} <: AbstractRule
     rule::R
 end
@@ -15,11 +28,17 @@ function (p::Passthrough)(term::STerm)
     return new_term
 end
 
+"""
+    Prewalk(rule)
+
+Apply `rule` in a top-down traversal (parent before children).
+"""
 struct Prewalk{R} <: AbstractRule
     rule::R
 end
 
 Base.@assume_effects :foldable function (p::Prewalk)(term::STerm)
+    # Treat "no match" as identity so traversal only needs to handle `STerm`s.
     rule = Passthrough(p.rule)
     new_term = rule(term)
     if isexpr(new_term)
@@ -29,11 +48,17 @@ Base.@assume_effects :foldable function (p::Prewalk)(term::STerm)
     end
 end
 
+"""
+    Postwalk(rule)
+
+Apply `rule` in a bottom-up traversal (children before parent).
+"""
 struct Postwalk{R} <: AbstractRule
     rule::R
 end
 
 Base.@assume_effects :foldable function (p::Postwalk)(term::STerm)
+    # Postwalk rewrites descendants first, then gives the rebuilt node to `rule`.
     rule = Passthrough(p.rule)
     if isexpr(term)
         new_term = SExpr(head(term), map(p, children(term)))
@@ -43,6 +68,11 @@ Base.@assume_effects :foldable function (p::Postwalk)(term::STerm)
     end
 end
 
+"""
+    Fixpoint(rule)
+
+Repeatedly apply `rule` until it returns `nothing`.
+"""
 struct Fixpoint{R} <: AbstractRule
     rule::R
 end
@@ -63,6 +93,8 @@ Base.@assume_effects :foldable function (::LowerStencil)(t::SExpr{Ind})
 
     isexpr(arg) || return t
 
+    # `arg[loc...][inds...]` is represented as `Ind(Loc(arg, loc...), inds...)`,
+    # so lower the location and index parts together when present.
     if isloc(arg)
         return _lower_loc(argument(arg), location(arg), inds)
     else
@@ -71,6 +103,7 @@ Base.@assume_effects :foldable function (::LowerStencil)(t::SExpr{Ind})
 end
 
 function _lower_loc(t::STerm, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where {N}
+    # Leaf terms and components accept direct indexing; calls must be distributed.
     (!isexpr(t) || iscomp(t)) && return t[loc...][inds...]
     if iscall(t)
         return stencil_rule(operation(t), arguments(t), loc, inds)
@@ -80,6 +113,7 @@ function _lower_loc(t::STerm, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where
 end
 
 function _lower_ind(t::STerm, inds::NTuple{N,STerm}) where {N}
+    # Leaf terms and components accept direct indexing; calls must be distributed.
     (!isexpr(t) || iscomp(t)) && return t[inds...]
     if iscall(t)
         return stencil_rule(operation(t), arguments(t), inds)
@@ -88,6 +122,13 @@ function _lower_ind(t::STerm, inds::NTuple{N,STerm}) where {N}
     end
 end
 
+"""
+    stencil_rule(op, args, inds)
+    stencil_rule(op, args, loc, inds)
+
+Distribute a stencil operation over `args`, indexing each argument with the
+provided symbolic indices (and optional staggered locations).
+"""
 function stencil_rule(op::Union{SRef,SFun}, args::Tuple{Vararg{STerm}}, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where {N}
     return SExpr(Call(), op, map(x -> x[loc...][inds...], args)...)
 end
@@ -106,10 +147,18 @@ end
 
 function (rule::InsertRule{I,N})(term::SExpr{Ind}) where {I,N}
     ind = only(indices(term))
+    # `lift` builds a 1D stencil in axis `I`; reinsert the fixed indices around it.
     new_inds = ntuple(j -> j == I ? ind : rule.inds[j], Val(N))
     return argument(term)[new_inds...]
 end
 
+"""
+    lift(op, args, inds, Val(I))
+    lift(op, args, loc, inds, Val(I))
+
+Build an `N`-dimensional stencil expression by lifting a one-axis stencil along
+dimension `I` and reinserting the fixed indices (and locations) in other axes.
+"""
 function lift(op::STerm, args, inds::NTuple{N,STerm}, ::Val{I}) where {I,N}
     expr = stencil_rule(op, args, (inds[I],))
     rule = InsertRule(inds, Val(I), Val(N))
@@ -127,12 +176,14 @@ end
 
 function (rule::InsertRuleLoc{I,N})(term::SExpr{Loc}) where {I,N}
     loc = only(location(term))
+    # Reinsert the lifted location into the full location tuple.
     new_loc = ntuple(j -> j == I ? loc : rule.loc[j], Val(N))
     return argument(term)[new_loc...]
 end
 
 function (rule::InsertRuleLoc{I,N})(term::SExpr{Ind}) where {I,N}
     ind = only(indices(term))
+    # Reinsert the lifted index into the full index tuple.
     new_inds = ntuple(j -> j == I ? ind : rule.inds[j], Val(N))
     return argument(term)[new_inds...]
 end
@@ -143,6 +194,11 @@ function lift(op::STerm, args, loc::NTuple{N,Space}, inds::NTuple{N,STerm}, ::Va
     return Prewalk(rule)(expr)
 end
 
+"""
+    lower_stencil(expr)
+
+Lower indexed stencil expressions by distributing indexing into call arguments.
+"""
 lower_stencil(expr::STerm) = Prewalk(LowerStencil())(expr)
 
 struct SubsRule{Lhs,Rhs} <: AbstractRule
@@ -154,4 +210,9 @@ SubsRule(kv::Pair) = SubsRule(kv.first, kv.second)
 
 (rule::SubsRule{Lhs})(::Lhs) where {Lhs<:STerm} = rule.rhs
 
-subs(expr::STerm, kv::Pair) = Postwalk(SubsRule(kv))(expr)
+"""
+    subs(expr, lhs => rhs)
+
+Replace occurrences of `lhs` with `rhs` in `expr` using a post-order traversal.
+"""
+subs(expr::STerm, kv::Pair) = simplify(Postwalk(SubsRule(kv))(expr))
