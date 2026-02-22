@@ -3,6 +3,9 @@ module Chmy
 using KernelAbstractions
 import LinearAlgebra: ⋅, ×, tr, det, diag, transpose
 
+# re-export from LinearAlgebra
+export ⋅, ×, tr, det, diag, transpose
+
 include("utils.jl")
 include("staticcoef.jl")
 
@@ -10,9 +13,6 @@ export STerm, SExprHead, Call, Comp, Loc, Ind, SUniform, SRef, SFun, SIndex, SEx
 export isexpr, iscall, isind, isloc, head, children, operation, arguments, argument, arity, indices, location
 export value, isstaticzero, isstaticone
 include("expressions.jl")
-
-export canonicalize, simplify
-include("canonicalize.jl")
 
 export Space, Segment, Point
 export scale, offset
@@ -35,9 +35,6 @@ export tensorrank, tensorkind, name
 export isalternating, issymmetric, isdiag
 include("tensors.jl")
 
-# re-exported from LinearAlgebra
-export ⋅, ×, tr, det, diag, transpose
-
 export ⊡, ⊗, sym, asym, adj, gram, cogram
 include("operators.jl")
 
@@ -47,6 +44,9 @@ include("rewriters.jl")
 
 export Binding, push, binding_types
 include("binding.jl")
+
+export canonicalize, simplify
+include("canonicalize.jl")
 
 export compute, to_expr
 include("compute.jl")
