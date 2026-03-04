@@ -160,7 +160,7 @@ function Base.show(io::IO, ::MIME"text/plain", t::Tensor{D,R}) where {D,R}
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", t::SymTensor{R,D}) where {R,D}
+function Base.show(io::IO, ::MIME"text/plain", t::SymTensor{D,R}) where {D,R}
     join(io, ntuple(_ -> D, Val(R)), '×')
     print(io, " SymTensor:")
     foreach_nondecreasing(Val(D), Val(R)) do I
@@ -171,7 +171,7 @@ function Base.show(io::IO, ::MIME"text/plain", t::SymTensor{R,D}) where {R,D}
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", t::AltTensor{R,D}) where {R,D}
+function Base.show(io::IO, ::MIME"text/plain", t::AltTensor{D,R}) where {D,R}
     join(io, ntuple(_ -> D, Val(R)), '×')
     print(io, " AltTensor:")
     foreach_increasing(Val(D), Val(R)) do I
@@ -182,7 +182,7 @@ function Base.show(io::IO, ::MIME"text/plain", t::AltTensor{R,D}) where {R,D}
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", t::DiagTensor{R,D}) where {R,D}
+function Base.show(io::IO, ::MIME"text/plain", t::DiagTensor{D,R}) where {D,R}
     join(io, ntuple(_ -> D, Val(R)), '×')
     print(io, " DiagTensor:")
     for i in 1:D
