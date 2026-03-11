@@ -109,6 +109,35 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test td[3, 3] === d[3, 3]
     end
 
+    @testset "symbolic tensor expression expansion" begin
+        u = SVec(:u)
+        v = SVec(:v)
+        T = SSymTensor{2}(:T)
+
+        expr = T ⋅ u + 2 * v
+        tex = Tensor{2}(expr)
+
+        @test tex isa Vec{2}
+        @test tex[1] === T[1, 1] * u[1] + T[1, 2] * u[2] + 2 * v[1]
+        @test tex[2] === T[1, 2] * u[1] + T[2, 2] * u[2] + 2 * v[2]
+
+        tau = SSymTensor{2}(:tau)
+        @test Tensor{3}(tau[1, 1]) === tau[1, 1]
+        @test Tensor{3}(tau[1, 1] + tau[2, 2]) === tau[1, 1] + tau[2, 2]
+
+        @test Tensor{4}(SUniform(3)) === SUniform(3)
+        @test Tensor{4}(SScalar(:p)) === SScalar(:p)
+
+        p = SScalar(:p)
+        I = SIdTensor{2}()
+        σ = -p * I + tau
+        tσ = Tensor{2}(σ)
+        @test tσ isa SymTensor{2,2}
+        @test tσ[1, 1] === -p + tau[1, 1]
+        @test tσ[1, 2] === tau[1, 2]
+        @test tσ[2, 2] === -p + tau[2, 2]
+    end
+
     @testset "expression tensor rank inference" begin
         a = SScalar(:a)
         u = SVec(:u)

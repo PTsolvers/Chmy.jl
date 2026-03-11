@@ -14,6 +14,9 @@ termrank(::SRef) = 5
 termrank(::SFun) = 6
 termrank(::SUniform) = 7
 termrank(::SExpr) = 8
+termrank(::Gradient) = 9
+termrank(::Divergence) = 10
+termrank(::Curl) = 11
 
 headrank(::Call) = 1
 headrank(::Comp) = 2

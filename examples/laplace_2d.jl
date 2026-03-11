@@ -10,7 +10,9 @@
 using Chmy
 using CairoMakie: Figure, Axis, Colorbar, DataAspect, heatmap!
 
-function laplace_2d(nx, ny)
+nx, ny = 51, 51
+
+# function laplace_2d(nx, ny)
     # grid
     grid = Grid(nx, ny)
     inds = indices(grid)
@@ -18,13 +20,14 @@ function laplace_2d(nx, ny)
     # operators
     p, s = Point(), Segment()
     D    = StaggeredCentralDifference()
-    grad = Gradient{ndims(grid)}(D)
-    divg = Divergence{ndims(grid)}(D)
+    grad = Gradient(D)
+    divg = Divergence(D)
 
     # main equation definition (spelled out)
-    f = Tag(:f)
+    f = SScalar(:f)
     q = -grad(f)
     r = -divg(q)
+    Tensor{2}(r)
     r_c = lower_stencil(r[p, p][inds...])
 
     ## boundary conditions
@@ -99,6 +102,6 @@ function laplace_2d(nx, ny)
     display(fig)
 
     return
-end
+# end
 
-laplace_2d(51, 51)
+# laplace_2d(51, 51)

@@ -35,14 +35,14 @@ STensor{R}(name::Symbol) where {R} = STensor{R,NoKind,name}()
 
 Construct a symbolic symmetric tensor of rank `R` with the given name.
 """
-const SSymTensor{R}  = STensor{R,SymKind}
+const SSymTensor{R} = STensor{R,SymKind}
 
 """
     SAltTensor{R}(name)
 
 Construct a symbolic alternating tensor of rank `R` with the given name.
 """
-const SAltTensor{R}  = STensor{R,AltKind}
+const SAltTensor{R} = STensor{R,AltKind}
 
 """
     SDiagTensor{R}(name)
@@ -186,14 +186,14 @@ ncomponents(::Type{DiagKind}, ::Val{D}, ::Val{R}) where {D,R} = D
 
 Construct a symmetric tensor of rank `R` and dimension `D` with the given components.
 """
-const SymTensor{D,R}  = Tensor{D,R,SymKind}
+const SymTensor{D,R} = Tensor{D,R,SymKind}
 
 """
     AltTensor{D,R}(data...)
 
 Construct an alternating tensor of rank `R` and dimension `D` with the given components.
 """
-const AltTensor{D,R}  = Tensor{D,R,AltKind}
+const AltTensor{D,R} = Tensor{D,R,AltKind}
 
 """
     DiagTensor{D,R}(data...)
@@ -246,7 +246,6 @@ end
 
 Vec(data::Vararg{STerm,M}) where {M} = Vec{M}(data...)
 
-
 """
     Tensor{D,R}(data...)
 
@@ -257,7 +256,7 @@ Tensor{D,R}(data::Vararg{STerm,M}) where {D,R,M} = Tensor{D,R,NoKind}(data...)
 function Tensor{D,R,K}(data::Vararg{STerm,M}) where {D,R,K,M}
     N = ncomponents(K, Val(D), Val(R))
     M == N || error("expected $N components to construct order-$R $(K) Tensor, got $M")
-    _construct_tensor(Tensor{D,R,K}, data)
+    construct_tensor(Tensor{D,R,K}, data)
 end
 
 """
@@ -266,6 +265,7 @@ end
 Construct a dimension-`D` component representation of symbolic tensor `s`.
 The result has the same rank and the symmetries as `s`.
 """
+Tensor{D}(s::SScalar) where {D} = s
 @generated function Tensor{D}(s::STensor{R,K}) where {D,R,K}
     ex = Expr(:call, :(Tensor{$D,$R,$K}))
     comp_expr(I) = :(s[$(map(i -> :(SUniform($i)), I)...)])
@@ -295,38 +295,113 @@ The result has the same rank and the symmetries as `s`.
     return ex
 end
 
+raw_tensor(::Type{Tensor{D,R,K}}, data::NTuple{N,STerm}) where {D,R,K,N} = Tensor{D,R,K,typeof(data)}(data)
+@generated function Tensor{D}(::SZeroTensor{R}) where {D,R}
+    data = Expr(:tuple, ntuple(_ -> :(SUniform(0)), Val(D))...)
+    return :(raw_tensor(Tensor{$D,$R,DiagKind}, $data))
+end
+@generated function Tensor{D}(::SIdTensor{R}) where {D,R}
+    data = Expr(:tuple, ntuple(_ -> :(SUniform(1)), Val(D))...)
+    return :(raw_tensor(Tensor{$D,$R,DiagKind}, $data))
+end
+
+texpr(expr::STerm, ::Val) = expr
+texpr(s::SScalar, ::Val) = s
+
+texpr(::SRef{F}, ::Val) where {F} = F
+texpr(s::Union{STensor,SZeroTensor,SIdTensor}, ::Val{D}) where {D} = :(Tensor{$D}($s))
+
+texpr(expr::SExpr{Call}, d::Val) = texpr(operation(expr), d, arguments(expr))
+
+function texpr(op::SRef, d::Val, args::NTuple{N,STerm}) where {N}
+    return Expr(:call, texpr(op, d), map(arg -> texpr(arg, d), args)...)
+end
+
+function texpr(op::Gradient, d::Val, args::Tuple{STerm})
+    arg = only(args)
+    result = compute_scalar_gradient(PartialDerivative(op.op), arg, d)
+    return :($result)
+end
+
+function compute_scalar_gradient(∂::PartialDerivative, s::STerm, d::Val)
+    return Vec(ntuple(i -> ∂(s, i), d)...)
+end
+
+function texpr(expr::SExpr{Comp}, d::Val)
+    return Expr(:ref,
+                _tensor_index_base_expr(argument(expr), d),
+                map(_tensor_index_value_expr, indices(expr))...)
+end
+
+function texpr(expr::SExpr{Ind}, d::Val)
+    return Expr(:ref,
+                texpr(argument(expr), d),
+                map(_tensor_dynamic_index_expr, indices(expr))...)
+end
+
+_tensor_index_base_expr(s::STensor, ::Val{D}) where {D} = :(Tensor{$D}($s))
+_tensor_index_base_expr(expr::STerm, d::Val) = texpr(expr, d)
+
+function _tensor_index_value_expr(::SUniform{Value}) where {Value}
+    Value isa Integer || error("component index must be an integer, got $Value")
+    return Int(Value)
+end
+_tensor_index_value_expr(i::STerm) = error("unsupported component index $i")
+
+_tensor_dynamic_index_expr(i::SUniform) = _tensor_index_value_expr(i)
+function _tensor_dynamic_index_expr(::SIndex)
+    error("cannot convert indexed symbolic expression with placeholder indices to components")
+end
+_tensor_dynamic_index_expr(i::STerm) = error("unsupported symbolic index $i")
+
+"""
+    Tensor{D}(expr::STerm)
+
+Convert a symbolic tensor expression `expr` to dimension-`D` component form by
+expanding symbolic tensor leaves and evaluating the expression with `Tensor`
+operations. Scalar symbolic values (including `SUniform` and `SScalar`) are
+preserved as symbolic terms.
+"""
+@generated function Tensor{D}(expr::STerm) where {D}
+    expri = expr.instance
+    return quote
+        Base.@_propagate_inbounds_meta
+        $(texpr(expri, Val(D)))
+    end
+end
+
 # construct the most specific tensor type based on the symmetries of the components
-function _construct_tensor(::Type{Tensor{D,R,DiagKind}}, data::NTuple{N,STerm}) where {D,R,N}
+function construct_tensor(::Type{Tensor{D,R,DiagKind}}, data::NTuple{N,STerm}) where {D,R,N}
     all(isstaticzero, data) && return SZeroTensor{R}()
     all(isstaticone, data) && return SIdTensor{R}()
     return Tensor{D,R,DiagKind,typeof(data)}(data)
 end
-function _construct_tensor(::Type{Tensor{D,R,AltKind}}, data::NTuple{N,STerm}) where {D,R,N}
+function construct_tensor(::Type{Tensor{D,R,AltKind}}, data::NTuple{N,STerm}) where {D,R,N}
     all(isstaticzero, data) && return SZeroTensor{R}()
     return Tensor{D,R,AltKind,typeof(data)}(data)
 end
-function _construct_tensor(::Type{Tensor{D,R,SymKind}}, data::NTuple{N,STerm}) where {D,R,N}
-    if _is_diagonal(Val(D), Val(R), data)
-        diag_comps = _diagonal_from_symmetric(Tensor{D,R}, data)
-        return _construct_tensor(Tensor{D,R,DiagKind}, diag_comps)
+function construct_tensor(::Type{Tensor{D,R,SymKind}}, data::NTuple{N,STerm}) where {D,R,N}
+    if isdiagonal(Val(D), Val(R), data)
+        diag_comps = diagonal_from_symmetric(Tensor{D,R}, data)
+        return construct_tensor(Tensor{D,R,DiagKind}, diag_comps)
     end
     return Tensor{D,R,SymKind,typeof(data)}(data)
 end
-function _construct_tensor(::Type{Tensor{D,R,NoKind}}, data::NTuple{N,STerm}) where {D,R,N}
-    if _is_symmetric(Val(D), Val(R), data)
-        sym_comps = _symmetric_components(Tensor{D,R}, data)
-        return _construct_tensor(Tensor{D,R,SymKind}, sym_comps)
+function construct_tensor(::Type{Tensor{D,R,NoKind}}, data::NTuple{N,STerm}) where {D,R,N}
+    if issymmetric(Val(D), Val(R), data)
+        sym_comps = symmetric_components(Tensor{D,R}, data)
+        return construct_tensor(Tensor{D,R,SymKind}, sym_comps)
     end
 
-    if _is_alternating(Val(D), Val(R), data)
-        alt_comps = _alternating_components(Tensor{D,R}, data)
-        return _construct_tensor(Tensor{D,R,AltKind}, alt_comps)
+    if isalternating(Val(D), Val(R), data)
+        alt_comps = alternating_components(Tensor{D,R}, data)
+        return construct_tensor(Tensor{D,R,AltKind}, alt_comps)
     end
 
     return Tensor{D,R,NoKind,typeof(data)}(data)
 end
 
-@generated function _is_symmetric(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
+@generated function issymmetric(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
     check = Expr(:&&)
 
     for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
@@ -344,7 +419,7 @@ end
     return check
 end
 
-@generated function _is_alternating(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
+@generated function isalternating(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
     check = Expr(:&&)
 
     for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
@@ -375,7 +450,7 @@ end
     return check
 end
 
-@generated function _is_diagonal(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
+@generated function isdiagonal(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
     check = Expr(:&&)
     for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
         I = Tuple(idx)
@@ -387,7 +462,7 @@ end
     return check
 end
 
-@generated function _diagonal_from_symmetric(::Type{Tensor{D,R}}, v::NTuple{N,STerm}) where {D,R,N}
+@generated function diagonal_from_symmetric(::Type{Tensor{D,R}}, v::NTuple{N,STerm}) where {D,R,N}
     expr = Expr(:tuple)
     for idx in 1:D
         I = ntuple(_ -> idx, Val(R))
@@ -397,7 +472,7 @@ end
     return expr
 end
 
-@generated function _symmetric_components(::Type{Tensor{D,R}}, v::NTuple{N,STerm}) where {D,R,N}
+@generated function symmetric_components(::Type{Tensor{D,R}}, v::NTuple{N,STerm}) where {D,R,N}
     expr = Expr(:tuple)
     foreach_nondecreasing(Val(D), Val(R)) do I
         i = linear_index(NoKind, Val(D), I...)
@@ -406,7 +481,7 @@ end
     return expr
 end
 
-@generated function _alternating_components(::Type{Tensor{D,R}}, v::NTuple{N,STerm}) where {D,R,N}
+@generated function alternating_components(::Type{Tensor{D,R}}, v::NTuple{N,STerm}) where {D,R,N}
     expr = Expr(:tuple)
     foreach_increasing(Val(D), Val(R)) do I
         i = linear_index(NoKind, Val(D), I...)

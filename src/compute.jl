@@ -24,6 +24,17 @@ end
 to_expr(::SUniform{Value}, bnd) where {Value} = Value
 to_expr(::SIndex{i}, bnd) where {i} = :(I[$i])
 
+function to_expr(term::STensor, bnd)
+    idx = _expr_idx(bnd, term)
+    isnothing(idx) && return expr
+    dtype = bnd.data[idx]
+    if dtype <: Number
+        return :(b.data[$idx])
+    else
+        error("unsupported data type $dtype for term $term")
+    end
+end
+
 function to_expr(expr::SExpr{Ind}, bnd)
     arg = argument(expr)
     inds = indices(expr)

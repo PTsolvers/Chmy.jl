@@ -17,3 +17,7 @@ end
 struct Curl{Op} <: AbstractCurl
     op::Op
 end
+
+tensorrank(::Gradient) = 0
+tensorrank(::Divergence) = 0
+tensorrank(::Curl) = 0
