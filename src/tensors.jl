@@ -323,6 +323,7 @@ function texpr(op::Gradient, d::Val, args::Tuple{STerm})
     return :($result)
 end
 
+# TODO: generalise to tensor fields
 function compute_scalar_gradient(∂::PartialDerivative, s::STerm, d::Val)
     return Vec(ntuple(i -> ∂(s, i), d)...)
 end
