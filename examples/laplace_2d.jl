@@ -81,7 +81,7 @@ function laplace_2d(nx, ny)
     # iterative loop
     for iter in 1:50_000
         # compute residual
-        begin
+        @inbounds begin
             # inner points
             for j in 2:Ny-1, i in 2:Nx-1
                 R[i, j] = compute(r_c, B, i, j)
@@ -113,4 +113,4 @@ function laplace_2d(nx, ny)
     return
 end
 
-laplace_2d(51, 51)
+laplace_2d(101, 101)
