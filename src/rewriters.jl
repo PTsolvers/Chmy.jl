@@ -246,5 +246,6 @@ tried in the given order, and the first matching pair is applied.
 """
 function subs(expr::STerm, kvs::Pair...)
     rules = map(SubsRule, kvs)
-    return simplify(Postwalk(Chain(rules))(expr))
+    # TODO: think how to wrap this in simplify but still have BCs
+    return Postwalk(Chain(rules))(expr)
 end

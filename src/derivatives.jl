@@ -12,6 +12,10 @@ end
 
 LiftedPartialDerivative{I}(op::STerm) where {I} = LiftedPartialDerivative{I,typeof(op)}(op)
 
+# TODO: figure out where to put this
+tensorrank(::LiftedPartialDerivative, ::Any) = 0
+tensorrank(::LiftedPartialDerivative) = 0
+
 function stencil_rule(∂::LiftedPartialDerivative{I}, args, loc, inds) where {I}
     return lift(∂.op, args, loc, inds, Val(I))
 end

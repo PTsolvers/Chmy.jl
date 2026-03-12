@@ -14,9 +14,11 @@ termrank(::SRef) = 5
 termrank(::SFun) = 6
 termrank(::SUniform) = 7
 termrank(::SExpr) = 8
-termrank(::Gradient) = 9
-termrank(::Divergence) = 10
-termrank(::Curl) = 11
+# TODO: separate hadling of tensor and scalar operators
+termrank(::LiftedPartialDerivative) = 9
+termrank(::Gradient) = 10
+termrank(::Divergence) = 11
+termrank(::Curl) = 12
 
 headrank(::Call) = 1
 headrank(::Comp) = 2
@@ -27,6 +29,8 @@ headrank(expr::SExpr) = headrank(head(expr))
 isless_lex(::SIndex{I}, ::SIndex{J}) where {I,J} = isless(I, J)
 isless_lex(::SRef{F1}, ::SRef{F2}) where {F1,F2} = isless(F1, F2)
 isless_lex(x::SFun, y::SFun) = isless(nameof(x.f), nameof(y.f))
+# TODO: make general API for differential operators
+isless_lex(::LiftedPartialDerivative{I}, ::LiftedPartialDerivative{J}) where {I,J} = isless(I, J)
 function isless_lex(x::STensor, y::STensor)
     rx = tensorrank(x)
     ry = tensorrank(y)

@@ -317,15 +317,27 @@ function texpr(op::SRef, d::Val, args::NTuple{N,STerm}) where {N}
     return Expr(:call, texpr(op, d), map(arg -> texpr(arg, d), args)...)
 end
 
+# TODO: API for converting tensor calculus differential operators to the component form
 function texpr(op::Gradient, d::Val, args::Tuple{STerm})
     arg = only(args)
     result = compute_scalar_gradient(PartialDerivative(op.op), arg, d)
     return :($result)
 end
 
+function texpr(op::Divergence, d::Val{D}, args::Tuple{STerm}) where {D}
+    arg = Tensor{D}(only(args))
+    result = compute_vector_divergence(PartialDerivative(op.op), arg, d)
+    return :($result)
+end
+
 # TODO: generalise to tensor fields
 function compute_scalar_gradient(∂::PartialDerivative, s::STerm, d::Val)
     return Vec(ntuple(i -> ∂(s, i), d)...)
+end
+
+# TODO: generalise to tensor fields
+function compute_vector_divergence(∂::PartialDerivative, v::Vec, d::Val)
+    return +(ntuple(i -> ∂(v[i], i), d)...)
 end
 
 function texpr(expr::SExpr{Comp}, d::Val)

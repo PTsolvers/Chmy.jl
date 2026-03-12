@@ -10,9 +10,7 @@
 using Chmy
 using CairoMakie: Figure, Axis, Colorbar, DataAspect, heatmap!
 
-nx, ny = 51, 51
-
-# function laplace_2d(nx, ny)
+function laplace_2d(nx, ny)
     # grid
     grid = Grid(nx, ny)
     inds = indices(grid)
@@ -26,17 +24,17 @@ nx, ny = 51, 51
     # main equation definition (spelled out)
     f = SScalar(:f)
     q = -grad(f)
-    r = -divg(q)
-    Tensor{2}(r)
-    r_c = lower_stencil(r[p, p][inds...])
+    r = Tensor{2}(-divg(q))
+    r_c = lower_stencil(r[s, s][inds...])
+    qv = Tensor{2}(q)
 
     ## boundary conditions
     # values at bottom and top boundaries
-    f_b = f[p, p][inds[1], inds[2]-1]
-    f_t = f[p, p][inds[1], inds[2]+1]
+    f_b = f[s, s][inds[1], inds[2]-1]
+    f_t = f[s, s][inds[1], inds[2]+1]
     # fluxes at left and right boundaries
-    q_l = lower_stencil(q[1][s, p][inds[1]-1, inds[2]])
-    q_r = lower_stencil(q[1][s, p][inds[1], inds[2]])
+    q_l = lower_stencil(qv[1][p, s][inds[1], inds[2]])
+    q_r = lower_stencil(qv[1][p, s][inds[1]+1, inds[2]])
     # side boundary conditions
     bc_l = q_l => SUniform(0)
     bc_r = q_r => SUniform(0)
@@ -53,12 +51,21 @@ nx, ny = 51, 51
     r_tl = subs(r_t, bc_l)
     r_tr = subs(r_t, bc_r)
 
-    bc = (l=r_l, r=r_r, b=r_b, t=r_t, bl=r_bl, br=r_br, tl=r_tl, tr=r_tr)
+    r_c = simplify(r_c)
+
+    bc = (l  = simplify(r_l),
+          r  = simplify(r_r),
+          b  = simplify(r_b),
+          t  = simplify(r_t),
+          bl = simplify(r_bl),
+          br = simplify(r_br),
+          tl = simplify(r_tl),
+          tr = simplify(r_tr))
 
     # arrays
-    R = zeros(dims(grid, p, p))
-    B = Binding(f[p, p] => rand(dims(grid, p, p)...))
-    F = B[f[p, p]]
+    R = zeros(dims(grid, s, s))
+    B = Binding(f[s, s] => rand(dims(grid, s, s)...))
+    F = B[f[s, s]]
 
     # visualisation
     fig = Figure(; size=(650, 270))
@@ -69,29 +76,31 @@ nx, ny = 51, 51
     cb = (Colorbar(fig[1, 1][1, 2], plt[1]),
           Colorbar(fig[1, 2][1, 2], plt[2]))
 
+    Nx, Ny = dims(grid, s, s)
+
     # iterative loop
     for iter in 1:50_000
         # compute residual
-        @inbounds begin
+        begin
             # inner points
-            for j in 2:ny-1, i in 2:nx-1
+            for j in 2:Ny-1, i in 2:Nx-1
                 R[i, j] = compute(r_c, B, i, j)
             end
             # x sides
-            for j in 2:ny-1
+            for j in 2:Ny-1
                 R[1, j]  = compute(bc.l, B, 1, j)
-                R[nx, j] = compute(bc.r, B, nx, j)
+                R[Nx, j] = compute(bc.r, B, Nx, j)
             end
             # y sides
-            for i in 2:nx-1
+            for i in 2:Nx-1
                 R[i, 1]  = compute(bc.b, B, i, 1)
-                R[i, ny] = compute(bc.t, B, i, ny)
+                R[i, Ny] = compute(bc.t, B, i, Ny)
             end
             # corners
             R[1, 1]   = compute(bc.bl, B, 1, 1)
-            R[nx, 1]  = compute(bc.br, B, nx, 1)
-            R[1, ny]  = compute(bc.tl, B, 1, ny)
-            R[nx, ny] = compute(bc.tr, B, nx, ny)
+            R[Nx, 1]  = compute(bc.br, B, Nx, 1)
+            R[1, Ny]  = compute(bc.tl, B, 1, Ny)
+            R[Nx, Ny] = compute(bc.tr, B, Nx, Ny)
         end
         # update solution
         @. F += 0.25 * R
@@ -102,6 +111,6 @@ nx, ny = 51, 51
     display(fig)
 
     return
-# end
+end
 
-# laplace_2d(51, 51)
+laplace_2d(51, 51)
