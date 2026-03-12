@@ -43,6 +43,9 @@ end
 
 struct StaggeredCentralDifference <: AbstractDerivative end
 
+tensorrank(::AbstractDerivative, ::Any) = 0
+tensorrank(::AbstractDerivative) = 0
+
 function stencil_rule(::StaggeredCentralDifference, args::Tuple{STerm}, loc::Tuple{Point}, inds::Tuple{STerm})
     f, i = only(args), only(inds)
     l = Segment()
