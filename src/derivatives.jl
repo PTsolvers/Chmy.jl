@@ -12,10 +12,6 @@ end
 
 LiftedPartialDerivative{I}(op::STerm) where {I} = LiftedPartialDerivative{I,typeof(op)}(op)
 
-# TODO: figure out where to put this
-tensorrank(::LiftedPartialDerivative, ::Any) = 0
-tensorrank(::LiftedPartialDerivative) = 0
-
 function stencil_rule(∂::LiftedPartialDerivative{I}, args, loc, inds) where {I}
     return lift(∂.op, args, loc, inds, Val(I))
 end
@@ -42,9 +38,6 @@ function stencil_rule(::CentralDifference, args::Tuple{STerm}, inds::Tuple{STerm
 end
 
 struct StaggeredCentralDifference <: AbstractDerivative end
-
-tensorrank(::AbstractDerivative, ::Any) = 0
-tensorrank(::AbstractDerivative) = 0
 
 function stencil_rule(::StaggeredCentralDifference, args::Tuple{STerm}, loc::Tuple{Point}, inds::Tuple{STerm})
     f, i = only(args), only(inds)

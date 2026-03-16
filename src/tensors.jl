@@ -125,6 +125,7 @@ Return the rank of the tensor represented by the symbolic expression `expr`.
 """
 function tensorrank end
 
+# tensor rank of operation depends on the operation
 tensorrank(expr::SExpr{Call}) = tensorrank(operation(expr), arguments(expr)...)
 tensorrank(::SExpr{Comp}) = 0
 tensorrank(::SExpr{Loc}) = 0
@@ -156,6 +157,9 @@ tensorrank(::SRef{:diag}, t)   = 1
 tensorrank(::Gradient, t)   = tensorrank(t) + 1
 tensorrank(::Divergence, t) = tensorrank(t) - 1
 tensorrank(::Curl, t)       = 1
+
+tensorrank(::AbstractDerivative, t) = 0
+tensorrank(::AbstractPartialDerivative, t) = 0
 
 struct Tensor{D,R,K,C}
     components::C
@@ -307,29 +311,23 @@ end
 
 texpr(expr::STerm, ::Val) = expr
 texpr(s::SScalar, ::Val) = s
-
 texpr(::SRef{F}, ::Val) where {F} = F
 texpr(s::Union{STensor,SZeroTensor,SIdTensor}, ::Val{D}) where {D} = :(Tensor{$D}($s))
-
 texpr(expr::SExpr{Call}, d::Val) = texpr(operation(expr), d, arguments(expr))
-
 function texpr(op::SRef, d::Val, args::NTuple{N,STerm}) where {N}
     return Expr(:call, texpr(op, d), map(arg -> texpr(arg, d), args)...)
 end
-
 # TODO: API for converting tensor calculus differential operators to the component form
 function texpr(op::Gradient, d::Val, args::Tuple{STerm})
     arg = only(args)
     result = compute_scalar_gradient(PartialDerivative(op.op), arg, d)
     return :($result)
 end
-
 function texpr(op::Divergence, d::Val{D}, args::Tuple{STerm}) where {D}
     arg = Tensor{D}(only(args))
     result = compute_vector_divergence(PartialDerivative(op.op), arg, d)
     return :($result)
 end
-
 # TODO: generalise to tensor fields
 function compute_scalar_gradient(∂::PartialDerivative, s::STerm, d::Val)
     return Vec(ntuple(i -> ∂(s, i), d)...)

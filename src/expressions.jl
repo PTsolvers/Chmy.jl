@@ -65,6 +65,12 @@ function (f::SFun)(args::Vararg{STerm})
 end
 
 struct SIndex{I} <: STerm end
+
+"""
+    SIndex(i)
+
+Create a static index for spatial dimension i.
+"""
 SIndex(I::Integer) = SIndex{I}()
 
 struct SExpr{H,C} <: STerm
