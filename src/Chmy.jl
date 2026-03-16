@@ -45,6 +45,9 @@ include("rewriters.jl")
 export Binding, push, binding_types
 include("binding.jl")
 
+export isless_lex
+include("isless_lex.jl")
+
 export canonicalize, simplify
 include("canonicalize.jl")
 

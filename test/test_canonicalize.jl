@@ -1,3 +1,5 @@
+import Chmy: makeop
+
 @testset "canonicalize" begin
     a = SScalar(:a)
     b = SScalar(:b)
