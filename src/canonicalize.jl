@@ -30,6 +30,7 @@ headrank(::Loc)        = 0x3
 headrank(h::SExprHead) = 0x4 + objectid(h)
 headrank(expr::SExpr)  = headrank(head(expr))
 
+# comparing STerms lexicogrpaphically
 isless_lex(::SIndex{I}, ::SIndex{J}) where {I,J} = isless(I, J)
 isless_lex(::SRef{F1}, ::SRef{F2}) where {F1,F2} = isless(F1, F2)
 isless_lex(x::SFun, y::SFun) = isless(nameof(x.f), nameof(y.f))
