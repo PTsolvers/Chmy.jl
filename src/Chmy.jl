@@ -26,7 +26,7 @@ include("grids.jl")
 export AbstractDerivative, AbstractPartialDerivative, CentralDifference, StaggeredCentralDifference, PartialDerivative
 include("derivatives.jl")
 
-export DifferentialOperator, AbstractGradient, AbstractDivergence, AbstractCurl
+export DifferentialOperator
 export Gradient, Divergence, Curl
 include("calculus.jl")
 

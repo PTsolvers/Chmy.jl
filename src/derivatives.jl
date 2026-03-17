@@ -12,6 +12,8 @@ end
 
 LiftedPartialDerivative{I}(op::STerm) where {I} = LiftedPartialDerivative{I,typeof(op)}(op)
 
+(∂::LiftedPartialDerivative)(arg::STerm) = SExpr(Call(), ∂, arg)
+
 function stencil_rule(∂::LiftedPartialDerivative{I}, args, loc, inds) where {I}
     return lift(∂.op, args, loc, inds, Val(I))
 end
@@ -23,7 +25,10 @@ end
 struct PartialDerivative{Op}
     op::Op
 end
-(p::PartialDerivative)(arg::STerm, i::Integer) = SExpr(Call(), LiftedPartialDerivative{i}(p.op), arg)
+
+Base.getindex(∂::PartialDerivative, i::Integer) = LiftedPartialDerivative{i}(∂.op)
+
+(∂::PartialDerivative)(arg::STerm, i::Integer) = ∂[i](arg)
 
 struct CentralDifference <: AbstractDerivative end
 
