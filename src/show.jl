@@ -70,7 +70,7 @@ function show_static(io, expr::SExpr, prec::Int)
                 end
                 parens = needs_parens(expr, prec)
                 parens && print(io, '(')
-                show_list(io, args, sep, op_prec)
+                show_list(io, args, sep, op_prec, opname)
                 parens && print(io, ')')
             end
         elseif opname == :adjoint
@@ -122,12 +122,21 @@ function show_static(io, expr::SExpr, prec::Int)
     return
 end
 
-function show_list(io, items, sep, prec)
+function show_list(io, items, sep, prec, parent_opname=nothing)
     for (i, item) in enumerate(items)
         i > 1 && print(io, sep)
-        show_static(io, item, prec)
+        show_static(io, item, child_precedence(parent_opname, item, prec))
     end
     return
+end
+
+child_precedence(::Nothing, item, prec) = prec
+
+function child_precedence(parent_opname::Symbol, item, prec)
+    if parent_opname in (:+, :-) && isunaryminus(item)
+        return prec - 1
+    end
+    return prec
 end
 
 function needs_parens(expr, prec)
