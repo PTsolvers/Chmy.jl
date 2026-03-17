@@ -136,7 +136,7 @@ function _lower_loc(t::STerm, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where
     if iscall(t)
         return stencil_rule(operation(t), arguments(t), loc, inds)
     else
-        error("malformed static expression")
+        error("malformed static expression $t")
     end
 end
 
@@ -146,7 +146,7 @@ function _lower_ind(t::STerm, inds::NTuple{N,STerm}) where {N}
     if iscall(t)
         return stencil_rule(operation(t), arguments(t), inds)
     else
-        error("malformed static expression")
+        error("malformed static expression $t")
     end
 end
 
