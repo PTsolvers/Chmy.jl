@@ -42,7 +42,7 @@ export AbstractRule, Passthrough, Chain, Prewalk, Postwalk, Fixpoint
 export stencil_rule, lower_stencil, lift, subs
 include("rewriters.jl")
 
-export Binding, push, binding_types
+export Binding, push, binding_types, pairstuple
 include("binding.jl")
 
 export isless_lex
