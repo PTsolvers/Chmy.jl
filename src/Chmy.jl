@@ -3,6 +3,8 @@ module Chmy
 using KernelAbstractions
 import LinearAlgebra: ⋅, ×, tr, det, diag, transpose
 
+import Base: broadcasted
+
 # re-export from LinearAlgebra
 export ⋅, ×, tr, det, diag, transpose
 
