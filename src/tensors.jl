@@ -312,6 +312,7 @@ end
 texpr(expr::STerm, ::Val) = expr
 texpr(s::SScalar, ::Val) = s
 texpr(::SRef{F}, ::Val) where {F} = F
+texpr(sf::SFun, ::Val) = sf.f
 texpr(s::Union{STensor,SZeroTensor,SIdTensor}, ::Val{D}) where {D} = :(Tensor{$D}($s))
 texpr(expr::SExpr{Call}, d::Val) = texpr(operation(expr), d, arguments(expr))
 function texpr(op::SRef, d::Val, args::NTuple{N,STerm}) where {N}

@@ -136,6 +136,12 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test tσ[1, 1] === -p + tau[1, 1]
         @test tσ[1, 2] === tau[1, 2]
         @test tσ[2, 2] === -p + tau[2, 2]
+
+        st = sin.(2tau)
+        tst = Tensor{2}(st)
+        @test tst[1, 1] === sin(2tau[1, 1])
+        @test tst[1, 2] === sin(2tau[1, 2])
+        @test tst[2, 2] === sin(2tau[2, 2])
     end
 
     @testset "expression tensor rank inference" begin
