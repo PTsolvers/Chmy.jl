@@ -34,6 +34,7 @@ import Chmy: makeop
         @test a * b^(-SUniform(1)) === makeop(:/, a, b)
         @test (-a)^SUniform(2) === makeop(:^, a, SUniform(2))
         @test (-a)^SUniform(3) === makeop(:-, makeop(:^, a, SUniform(3)))
+        @test (-a)^SUniform(3 // 2) === makeop(:^, makeop(:-, a), SUniform(3 // 2))
         @test a^b * a^c === makeop(:^, a, makeop(:+, b, c))
         @test a^(-SUniform(2)) * a^(-b) === makeop(:^, a, makeop(:-, makeop(:-, b), SUniform(2)))
         @test (SUniform(2) * a)^SUniform(3) === makeop(:*, SUniform(8), makeop(:^, a, SUniform(3)))
