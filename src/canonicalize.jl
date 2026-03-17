@@ -249,7 +249,7 @@ function canonicalize_sum(expr::SExpr{Call})
 end
 
 struct CanonicalizeRule <: AbstractRule end
-function (::CanonicalizeRule)(expr::SExpr{Call})
+Base.@assume_effects :foldable function (::CanonicalizeRule)(expr::SExpr{Call})
     op = operation(expr)
     # normalize multiplicative and additive families with dedicated passes
     if op === SRef(:*) || op === SRef(:/) || op === SRef(:inv) || op === SRef(:^)
