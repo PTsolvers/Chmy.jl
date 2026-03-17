@@ -60,6 +60,8 @@ Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff,
         if isinteger(p)
             isodd(p) && (coeff = -coeff)
             coeff, binding = collect_powers(only(arguments(term)), coeff, binding, npow)
+        else
+            binding = addpower(binding, term, npow)
         end
     elseif op === SRef(:^)
         # fold nested powers by multiplying exponents
