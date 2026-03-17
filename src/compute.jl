@@ -19,7 +19,7 @@ to_expr(expr::SExpr{Call}, bnd) = Expr(:call, map(arg -> to_expr(arg, bnd), chil
 to_expr(::SUniform{Value}, bnd) where {Value} = Value
 to_expr(::SIndex{i}, bnd) where {i} = :(I[$i])
 function to_expr(term::STensor, bnd)
-    idx = _expr_idx(bnd, term)
+    idx = expr_idx(bnd, term)
     isnothing(idx) && return expr
     dtype = bnd.data[idx]
     if dtype <: Number
@@ -31,7 +31,7 @@ end
 function to_expr(expr::SExpr{Ind}, bnd)
     arg = argument(expr)
     inds = indices(expr)
-    idx = _expr_idx(bnd, arg)
+    idx = expr_idx(bnd, arg)
     isnothing(idx) && return expr
     dtype = bnd.data[idx]
     if dtype <: Number

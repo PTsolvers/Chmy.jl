@@ -9,13 +9,13 @@ function Binding(kvs::Vararg{Pair,N}) where {N}
     return Binding(exprs, data)
 end
 
-_expr_idx(bnd::Binding, expr) = findfirst(Base.Fix2(===, expr), bnd.exprs)
+expr_idx(bnd::Binding, expr) = findfirst(Base.Fix2(===, expr), bnd.exprs)
 
 Base.length(bnd::Binding) = length(bnd.exprs)
 
-Base.getindex(bnd::Binding, expr) = bnd.data[_expr_idx(bnd, expr)]
+Base.getindex(bnd::Binding, expr) = bnd.data[expr_idx(bnd, expr)]
 
-Base.haskey(bnd::Binding, expr) = !isnothing(_expr_idx(bnd, expr))
+Base.haskey(bnd::Binding, expr) = !isnothing(expr_idx(bnd, expr))
 
 Base.get(bnd::Binding, expr, default) = haskey(bnd, expr) ? bnd[expr] : default
 
@@ -30,7 +30,7 @@ function push(bnd::Binding, kv::Pair)
         data = (bnd.data..., kv.second)
         return Binding(exprs, data)
     else
-        idx = _expr_idx(bnd, kv.first)
+        idx = expr_idx(bnd, kv.first)
         data = ntuple(i -> i == idx ? kv.second : bnd.data[i], Val(length(bnd.data)))
         return Binding(bnd.exprs, data)
     end
