@@ -3,6 +3,11 @@ struct Binding{Exprs,Data}
     data::Data
 end
 
+"""
+    Binding(pairs...)
+
+Create immutable dictionary mapping Chmy expressions to data. Used in the `compute` function.
+"""
 function Binding(kvs::Vararg{Pair,N}) where {N}
     exprs = ntuple(i -> kvs[i].first, Val(N))
     data = ntuple(i -> kvs[i].second, Val(N))
