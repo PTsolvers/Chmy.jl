@@ -288,7 +288,7 @@ lower_stencil(D(f)[s][i])
 
 # ╔═╡ 955d22ed-938a-4a2d-9a67-35aa8a8b82b0
 md"""
-Partial derivatives are subtypes of the `AbstractPartialDerivative{I}` type, and they inculde the information of the direction `I` of derivation.
+Partial derivatives are subtypes of the `AbstractPartialDerivative{I}` type, and they include the information of the direction `I` of derivation.
 
 However, in most applications, we want to define the derivative rule in 1D, and then "lift" the derivation to nD. For that, Chmy provides the type `PartialDerivative` which wraps a regular 1D derivative and lifts the derivation to nD:
 """
@@ -507,7 +507,7 @@ md"""
 
 Chmy DSL is quite expressive, but unfortunately limited to the static computations, without complex control flow such as if statements or loops.
 
-It is possible to use your custom functions in Chmy expresisons by using the `SFun` wrapper:
+It is possible to use your custom functions in Chmy expressions by using the `SFun` wrapper:
 """
 
 # ╔═╡ 17b67dfe-47fb-47fe-8498-2fb2fd739a71
@@ -551,7 +551,7 @@ md"""
 
 Chmy doesn't provide any special functionality for imposing boundary conditions yet. In the future, there might be high-level API for common cases, but it is possible to implement boundary conditions of arbitrary complexity just by utilising the symbolic manipulation.
 
-In this setup, we specify homogenuous Neumann boundary conditions at $i = 1$ and $i = N_x$, and Dirichlet boundary conditions at $j = 1$ and $j = N_y$:
+In this setup, we specify homogeneous Neumann boundary conditions at $i = 1$ and $i = N_x$, and Dirichlet boundary conditions at $j = 1$ and $j = N_y$:
 """
 
 # ╔═╡ 29c066ff-be81-415b-ad36-54a38190a7e1
