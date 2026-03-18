@@ -345,7 +345,7 @@ end
     return ex
 end
 Tensor{D}(sf::SFun) where {D} = sf.f
-function Tensor{D}(sf::SFun, args::Vararg{STerm}) where {D}
+function Tensor{D}(sf::SFun, args::Vararg{Any,N}) where {D,N}
     return sf.f(tuplemap(Tensor{D}, args)...)
 end
 Tensor{D}(s::SUniform) where {D} = s
