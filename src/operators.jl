@@ -519,4 +519,5 @@ The co-Gramian of a second-rank tensor, defined as `t ⋅ t'`.
 end
 
 # custom broadcasting for tensors
+# TODO: replace with a generated function
 Base.Broadcast.broadcasted(f::F, arg::Tensor{D,R,K}) where {F,D,R,K} = Tensor{D,R,K}(tuplemap(f, arg.components)...)
