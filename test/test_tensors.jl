@@ -82,8 +82,8 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test alt[2, 1] === -a
         @test alt[1, 1] === SUniform(0)
 
-        @test Tensor{2,2}(SUniform(1), SUniform(0), SUniform(0), SUniform(1)) isa SIdTensor{2}
-        @test Tensor{2,2,DiagKind}(SUniform(0), SUniform(0)) isa SZeroTensor{2}
+        @test Tensor{2,2}(SUniform(1), SUniform(0), SUniform(0), SUniform(1)) isa IdTensor{2,2}
+        @test Tensor{2,2,DiagKind}(SUniform(0), SUniform(0)) isa ZeroTensor{2,2}
 
         @test_throws ErrorException Tensor{2,2,SymKind}(a, b)
     end
@@ -130,12 +130,27 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
 
         p = SScalar(:p)
         I = SIdTensor{2}()
+        negI = @inferred Tensor{2}(-p * I)
+        @test negI isa DiagTensor{2,2}
+        @test negI[1, 1] === -p
+        @test negI[2, 2] === -p
+
         σ = -p * I + tau
         tσ = Tensor{2}(σ)
         @test tσ isa SymTensor{2,2}
         @test tσ[1, 1] === -p + tau[1, 1]
         @test tσ[1, 2] === tau[1, 2]
         @test tσ[2, 2] === -p + tau[2, 2]
+
+        rawI = IdTensor{2,2}()
+        left_scaled = @inferred(p * rawI)
+        right_scaled = @inferred(rawI * p)
+        @test left_scaled isa DiagTensor{2,2}
+        @test left_scaled[1, 1] === p
+        @test left_scaled[2, 2] === p
+        @test right_scaled isa DiagTensor{2,2}
+        @test right_scaled[1, 1] === p
+        @test right_scaled[2, 2] === p
 
         st = sin.(2tau)
         tst = Tensor{2}(st)

@@ -32,7 +32,7 @@ include("calculus.jl")
 
 export STensor, SScalar, SVec
 export SSymTensor, SAltTensor, SDiagTensor, SZeroTensor, SIdTensor
-export Tensor, SymTensor, AltTensor, DiagTensor, Vec
+export Tensor, SymTensor, AltTensor, DiagTensor, Vec, ZeroTensor, IdTensor
 export tensorrank, tensorkind, name
 export isalternating, issymmetric, isdiag
 include("tensors.jl")

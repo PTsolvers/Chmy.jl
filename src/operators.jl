@@ -244,10 +244,18 @@ Base.ifelse(cond::STerm, x::Number, y::Number) = ifelse(cond, SUniform(x), SUnif
 
 # tensor operations
 Base.:+(t::Tensor) = t
-Base.:-(t::Tensor{D,R,K}) where {D,R,K} = Tensor{D,R,K}(map(-, t.components)...)
 
-Base.:+(t1::Tensor{D,R,K}, t2::Tensor{D,R,K}) where {D,R,K} = Tensor{D,R,K}(map(+, t1.components, t2.components)...)
-Base.:-(t1::Tensor{D,R,K}, t2::Tensor{D,R,K}) where {D,R,K} = Tensor{D,R,K}(map(-, t1.components, t2.components)...)
+@generated function Base.:-(t::Tensor{D,R}) where {D,R}
+    comps = Expr(:tuple)
+    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+        I = Tuple(idx)
+        push!(comps.args, :(-t[$(I...)]))
+    end
+    quote
+        @inline
+        return Tensor{D,R}($comps...)
+    end
+end
 
 @generated function Base.:+(t1::Tensor{D,R}, t2::Tensor{D,R}) where {D,R}
     comps = Expr(:tuple)
@@ -275,17 +283,64 @@ end
 
 const NumberOrTerm = Union{Number,STerm}
 
-Base.:*(s::NumberOrTerm, t::Tensor{D,O,S}) where {D,O,S} = Tensor{D,O,S}(map(x -> s * x, t.components)...)
-Base.:*(t::Tensor{D,O,S}, s::NumberOrTerm) where {D,O,S} = Tensor{D,O,S}(map(x -> x * s, t.components)...)
-
-Base.:/(t::Tensor{D,O,S}, s::NumberOrTerm) where {D,O,S} = Tensor{D,O,S}(map(x -> x / s, t.components)...)
-Base.://(t::Tensor{D,O,S}, s::NumberOrTerm) where {D,O,S} = Tensor{D,O,S}(map(x -> x // s, t.components)...)
-Base.:÷(t::Tensor{D,O,S}, s::NumberOrTerm) where {D,O,S} = Tensor{D,O,S}(map(x -> x ÷ s, t.components)...)
+@generated function Base.:*(s::NumberOrTerm, t::Tensor{D,R}) where {D,R}
+    comps = Expr(:tuple)
+    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+        I = Tuple(idx)
+        push!(comps.args, :(s * t[$(I...)]))
+    end
+    quote
+        @inline
+        return Tensor{D,R}($comps...)
+    end
+end
+@generated function Base.:*(t::Tensor{D,R}, s::NumberOrTerm) where {D,R}
+    comps = Expr(:tuple)
+    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+        I = Tuple(idx)
+        push!(comps.args, :(t[$(I...)] * s))
+    end
+    quote
+        @inline
+        return Tensor{D,R}($comps...)
+    end
+end
+@generated function Base.:/(t::Tensor{D,R}, s::NumberOrTerm) where {D,R}
+    comps = Expr(:tuple)
+    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+        I = Tuple(idx)
+        push!(comps.args, :(t[$(I...)] / s))
+    end
+    quote
+        @inline
+        return Tensor{D,R}($comps...)
+    end
+end
+@generated function Base.://(t::Tensor{D,R}, s::NumberOrTerm) where {D,R}
+    comps = Expr(:tuple)
+    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+        I = Tuple(idx)
+        push!(comps.args, :(t[$(I...)] // s))
+    end
+    quote
+        @inline
+        return Tensor{D,R}($comps...)
+    end
+end
+@generated function Base.:÷(t::Tensor{D,R}, s::NumberOrTerm) where {D,R}
+    comps = Expr(:tuple)
+    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+        I = Tuple(idx)
+        push!(comps.args, :(t[$(I...)] ÷ s))
+    end
+    quote
+        @inline
+        return Tensor{D,R}($comps...)
+    end
+end
 
 @generated function ⊡(t1::Tensor{D,2}, t2::Tensor{D,2}) where {D}
-    idx1(i, j) = linear_index(t1, i, j)
-    idx2(i, j) = linear_index(t2, i, j)
-    ex_p = Tuple(:(t1.components[$(idx1(i, j))] * t2.components[$(idx2(i, j))]) for i in 1:D, j in 1:D)
+    ex_p = Tuple(:(t1[$i, $j] * t2[$i, $j]) for i in 1:D, j in 1:D)
     ex_c = Expr(:call, :+, ex_p...)
     quote
         @inline
@@ -295,8 +350,7 @@ end
 
 ⋅(v1::Vec{D}, v2::Vec{D}) where {D} = +(ntuple(i -> v1[i] * v2[i], Val(D))...)
 @generated function ⋅(t::Tensor{D,2}, v::Vec{D}) where {D}
-    idx(i, j) = linear_index(t, i, j)
-    vc(i) = Expr(:call, :+, Tuple(:(t.components[$(idx(i, j))] * v.components[$j]) for j in 1:D)...)
+    vc(i) = Expr(:call, :+, Tuple(:(t[$i, $j] * v[$j]) for j in 1:D)...)
     ex = Expr(:call, :(Vec{$D}), Tuple(vc(i) for i in 1:D)...)
     quote
         @inline
@@ -304,9 +358,7 @@ end
     end
 end
 @generated function ⋅(t1::Tensor{D,2}, t2::Tensor{D,2}) where {D}
-    idx1(i, j) = linear_index(t1, i, j)
-    idx2(i, j) = linear_index(t2, i, j)
-    vc(i, j) = Expr(:call, :+, Tuple(:(t1.components[$(idx1(i, k))] * t2.components[$(idx2(k, j))]) for k in 1:D)...)
+    vc(i, j) = Expr(:call, :+, Tuple(:(t1[$i, $k] * t2[$k, $j]) for k in 1:D)...)
     ex = Expr(:call, :(Tensor{$D,2}), Tuple(vc(i, j) for i in 1:D, j in 1:D)...)
     quote
         @inline
@@ -323,7 +375,7 @@ end
 @generated function ⊗(v1::Vec{D}, v2::Vec{D}) where {D}
     ex = Expr(:call, :(Tensor{$D,2}))
     for j in 1:D, i in 1:D
-        push!(ex.args, :(v1.components[$i] * v2.components[$j]))
+        push!(ex.args, :(v1[$i] * v2[$j]))
     end
     quote
         @inline
@@ -339,15 +391,14 @@ Base.transpose(t::SymTensor{2}) = t
 Base.transpose(t::AltTensor{2}) = -t
 Base.transpose(t::DiagTensor{2}) = t
 @generated function Base.transpose(t::Tensor{D,2}) where {D}
-    idx(i, j) = linear_index(t, i, j)
-    ex = Expr(:call, :(Tensor{$D,2}), Tuple(:(t.components[$(idx(j, i))]) for i in 1:D, j in 1:D)...)
+    ex = Expr(:call, :(Tensor{$D,2}), Tuple(:(t[$j, $i]) for i in 1:D, j in 1:D)...)
     quote
         @inline
         return $ex
     end
 end
 
-Base.adjoint(S::Tensor) = transpose(S)
+Base.adjoint(S::Tensor{D,2}) where {D} = transpose(S)
 
 det(t::Tensor{2,2}) = t[1, 1] * t[2, 2] - t[1, 2] * t[2, 1]
 det(t::SymTensor{2,2}) = t[1, 1] * t[2, 2] - t[1, 2]^2
@@ -402,14 +453,13 @@ function adj(t::AltTensor{2,3})
                           c13, c23, c33)
 end
 
-Base.inv(t::Tensor) = adj(t) / det(t)
+Base.inv(t::Tensor{D,2}) where {D} = adj(t) / det(t)
 
 sym(t::SymTensor) = t
 @generated function sym(t::Tensor{D,2}) where {D}
-    idx(i, j) = linear_index(t, i, j)
     ex = Expr(:call, :(SymTensor{2,$D}))
     for j in 1:D, i in j:D
-        push!(ex.args, :((t.components[$(idx(i, j))] + t.components[$(idx(j, i))]) // 2))
+        push!(ex.args, :((t[$i, $j] + t[$j, $i]) // 2))
     end
     quote
         @inline
@@ -418,10 +468,9 @@ sym(t::SymTensor) = t
 end
 
 @generated function asym(t::Tensor{D,2}) where {D}
-    idx(i, j) = linear_index(t, i, j)
     ex = Expr(:call, :(AltTensor{2,$D}))
     for j in 1:D, i in j+1:D
-        push!(ex.args, :((t.components[$(idx(i, j))] - t.components[$(idx(j, i))]) // 2))
+        push!(ex.args, :((t[$i, $j] - t[$j, $i]) // 2))
     end
     quote
         @inline
@@ -435,12 +484,11 @@ end
 The Gramian of a second-rank tensor, defined as `t' ⋅ t`.
 """
 @generated function gram(t::Tensor{D,2}) where {D}
-    idx(i, j) = linear_index(t, i, j)
     ex = Expr(:call, :(SymTensor{2,$D}))
     for j in 1:D, i in j:D
         comp = Expr(:call, :+)
         for k in 1:D
-            push!(comp.args, :(t.components[$(idx(i, k))] * t.components[$(idx(j, k))]))
+            push!(comp.args, :(t[$i, $k] * t[$j, $k]))
         end
         push!(ex.args, comp)
     end
@@ -456,12 +504,11 @@ end
 The co-Gramian of a second-rank tensor, defined as `t ⋅ t'`.
 """
 @generated function cogram(t::Tensor{D,2}) where {D}
-    idx(i, j) = linear_index(t, i, j)
     ex = Expr(:call, :(SymTensor{2,$D}))
     for j in 1:D, i in j:D
         comp = Expr(:call, :+)
         for k in 1:D
-            push!(comp.args, :(t.components[$(idx(k, i))] * t.components[$(idx(k, j))]))
+            push!(comp.args, :(t[$k, $i] * t[$k, $j]))
         end
         push!(ex.args, comp)
     end
@@ -472,4 +519,4 @@ The co-Gramian of a second-rank tensor, defined as `t ⋅ t'`.
 end
 
 # custom broadcasting for tensors
-Base.Broadcast.broadcasted(f::F, arg::Tensor{D,R,K}) where {F,D,R,K} = Tensor{D,R,K}(map(f, arg.components)...)
+Base.Broadcast.broadcasted(f::F, arg::Tensor{D,R,K}) where {F,D,R,K} = Tensor{D,R,K}(tuplemap(f, arg.components)...)

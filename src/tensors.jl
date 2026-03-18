@@ -4,15 +4,19 @@ struct NoKind <: TensorKind end
 struct SymKind <: TensorKind end
 struct AltKind <: TensorKind end
 struct DiagKind <: TensorKind end
+struct ZeroKind <: TensorKind end
+struct IdKind <: TensorKind end
 
-struct STensor{R,K,N} <: STerm end
+abstract type AbstractSTensor{R,K} <: STerm end
 
-tensorrank(::STensor{R}) where {R} = R
-tensorkind(::STensor{<:Any,K}) where {K} = K
+tensorrank(::AbstractSTensor{R}) where {R} = R
+tensorkind(::AbstractSTensor{<:Any,K}) where {K} = K
+
+struct STensor{R,K,N} <: AbstractSTensor{R,K} end
+
 name(::STensor{<:Any,<:Any,N}) where {N} = N
 
 tensorrank(::SIndex) = 0
-
 tensorrank(::SUniform) = 0
 tensorkind(::SUniform) = NoKind
 
@@ -56,7 +60,7 @@ const SDiagTensor{R} = STensor{R,DiagKind}
 
 Construct the zero tensor of rank `R`.
 """
-struct SZeroTensor{R} <: STerm end
+struct SZeroTensor{R} <: AbstractSTensor{R,ZeroKind} end
 SZeroTensor{0}() = SUniform(0)
 
 """
@@ -64,7 +68,7 @@ SZeroTensor{0}() = SUniform(0)
 
 Construct the identity tensor of rank `R`.
 """
-struct SIdTensor{R} <: STerm end
+struct SIdTensor{R} <: AbstractSTensor{R,IdKind} end
 SIdTensor{0}() = SUniform(1)
 
 tensorrank(::SZeroTensor{R}) where {R} = R
@@ -106,7 +110,7 @@ function Base.getindex(t::SDiagTensor{R,D}, I::Vararg{SUniform,R}) where {R,D}
 end
 function Base.getindex(t::SSymTensor{R}, I::Vararg{SUniform,R}) where {R}
     J = ssort(I; lt=isless_lex)
-    SExpr(Comp(), t, J...)
+    return SExpr(Comp(), t, J...)
 end
 function Base.getindex(t::SAltTensor{R}, I::Vararg{SUniform,R}) where {R}
     J = ssort(I; lt=isless_lex)
@@ -115,7 +119,7 @@ function Base.getindex(t::SAltTensor{R}, I::Vararg{SUniform,R}) where {R}
     return iseven(sinversion_count(I)) ? v : -v
 end
 function Base.getindex(t::STensor{R}, I::Vararg{SUniform,R}) where {R}
-    SExpr(Comp(), t, I...)
+    return SExpr(Comp(), t, I...)
 end
 
 """
@@ -184,6 +188,8 @@ ncomponents(::Type{NoKind}, ::Val{D}, ::Val{R}) where {D,R} = D^R
 ncomponents(::Type{SymKind}, ::Val{D}, ::Val{R}) where {D,R} = binomial(D + R - 1, R)
 ncomponents(::Type{AltKind}, ::Val{D}, ::Val{R}) where {D,R} = binomial(D, R)
 ncomponents(::Type{DiagKind}, ::Val{D}, ::Val{R}) where {D,R} = D
+ncomponents(::Type{ZeroKind}, ::Val{D}, ::Val{R}) where {D,R} = 0
+ncomponents(::Type{IdKind}, ::Val{D}, ::Val{R}) where {D,R} = 0
 
 """
     SymTensor{D,R}(data...)
@@ -211,13 +217,15 @@ const DiagTensor{D,R} = Tensor{D,R,DiagKind}
 
 Construct a vector of dimension `D` with the given components.
 """
-const Vec{D} = Tensor{D,1}
+const Vec{D} = Tensor{D,1,NoKind}
+
+const ZeroTensor{D,R} = Tensor{D,R,ZeroKind}
+const IdTensor{D,R} = Tensor{D,R,IdKind}
 
 isidentity(::STerm) = false
 isidentity(::SIdTensor) = true
 
 isstaticzero(::SZeroTensor) = true
-isstaticzero(t::Tensor) = all(isstaticzero, t.components)
 
 linear_index(t::Tensor, I::Vararg{Int}) = linear_index(typeof(t), I...)
 linear_index(::Type{<:Tensor{D,R,K}}, I::Vararg{Int,R}) where {D,R,K} = linear_index(K, Val(D), I...)
@@ -247,6 +255,8 @@ function Base.getindex(t::AltTensor{D,R}, I::Vararg{Int,R}) where {D,R}
     v = t.components[linear_index(AltKind, Val(D), J...)]
     return iseven(inversion_count(I)) ? v : -v
 end
+Base.getindex(::ZeroTensor{D,R}, I::Vararg{Int,R}) where {D,R} = SUniform(0)
+Base.getindex(::IdTensor{D,R}, I::Vararg{Int,R}) where {D,R} = all(==(I[1]), I) ? SUniform(1) : SUniform(0)
 
 Vec(data::Vararg{STerm,M}) where {M} = Vec{M}(data...)
 
@@ -259,9 +269,11 @@ The kind of the tensor is automatically determined based on the symmetries of th
 Tensor{D,R}(data::Vararg{STerm,M}) where {D,R,M} = Tensor{D,R,NoKind}(data...)
 function Tensor{D,R,K}(data::Vararg{STerm,M}) where {D,R,K,M}
     N = ncomponents(K, Val(D), Val(R))
-    M == N || error("expected $N components to construct order-$R $(K) Tensor, got $M")
+    M == N || error("expected $N components to construct rank-$R $(K) Tensor, got $M")
     construct_tensor(Tensor{D,R,K}, data)
 end
+ZeroTensor{D,R}() where {D,R} = Tensor{D,R,ZeroKind,Tuple{}}(())
+IdTensor{D,R}() where {D,R} = Tensor{D,R,IdKind,Tuple{}}(())
 
 """
     Tensor{D}(s::STensor)
@@ -299,97 +311,54 @@ Tensor{D}(s::SScalar) where {D} = s
     return ex
 end
 
-raw_tensor(::Type{Tensor{D,R,K}}, data::NTuple{N,STerm}) where {D,R,K,N} = Tensor{D,R,K,typeof(data)}(data)
-@generated function Tensor{D}(::SZeroTensor{R}) where {D,R}
-    data = Expr(:tuple, ntuple(_ -> :(SUniform(0)), Val(D))...)
-    return :(raw_tensor(Tensor{$D,$R,DiagKind}, $data))
+Tensor{D}(::SZeroTensor{R}) where {D,R} = ZeroTensor{D,R}()
+Tensor{D}(::SIdTensor{R}) where {D,R} = IdTensor{D,R}()
+function Tensor{D}(expr::SExpr{Call}) where {D}
+    args = tuplemap(Tensor{D}, arguments(expr))
+    op = operation(expr)
+    return Tensor{D}(op, args...)
 end
-@generated function Tensor{D}(::SIdTensor{R}) where {D,R}
-    data = Expr(:tuple, ntuple(_ -> :(SUniform(1)), Val(D))...)
-    return :(raw_tensor(Tensor{$D,$R,DiagKind}, $data))
+Tensor{D}(expr::SExpr{Comp}) where {D} = expr
+function Tensor{D}(expr::SExpr{Ind}) where {D}
+    arg = Tensor{D}(argument(expr))
+    return arg[indices(expr)...]
 end
-
-texpr(expr::STerm, ::Val) = expr
-texpr(s::SScalar, ::Val) = s
-texpr(::SRef{F}, ::Val) where {F} = F
-texpr(sf::SFun, ::Val) = sf.f
-texpr(s::Union{STensor,SZeroTensor,SIdTensor}, ::Val{D}) where {D} = :(Tensor{$D}($s))
-texpr(expr::SExpr{Call}, d::Val) = texpr(operation(expr), d, arguments(expr))
-function texpr(op::SRef, d::Val, args::NTuple{N,STerm}) where {N}
-    return Expr(:call, texpr(op, d), map(arg -> texpr(arg, d), args)...)
+Tensor{D}(grad::Gradient, s::STerm) where {D} = Vec(ntuple(i -> grad.op[i](s), D)...)
+function Tensor{D}(grad::Gradient, v::Vec{D}) where {D}
+    # TODO
 end
-# TODO: API for converting tensor calculus differential operators to the component form
-function texpr(grad::Gradient, d::Val, args::Tuple{STerm})
-    arg = only(args)
-    result = compute_scalar_gradient(grad.op, arg, d)
-    return :($result)
+function Tensor{D}(divg::Divergence, v::Vec{D}) where {D}
+    return +(ntuple(i -> divg.op[i](v[i]), D)...)
 end
-function texpr(divg::Divergence, d::Val{D}, args::Tuple{STerm}) where {D}
-    arg = Tensor{D}(only(args))
-    result = compute_vector_divergence(divg.op, arg, d)
-    return :($result)
+function Tensor{D}(divg::Divergence, t::Tensor{D,R}) where {D,R}
+    # TODO
 end
-# TODO: generalise to tensor fields
-function compute_scalar_gradient(∂, s::STerm, d::Val)
-    return Vec(ntuple(i -> ∂[i](s), d)...)
+function Tensor{D}(curl::Curl, v::Vec{D}) where {D}
+    # TODO
 end
-
-# TODO: generalise to tensor fields
-function compute_vector_divergence(∂, v::Vec, d::Val)
-    return +(ntuple(i -> ∂[i](v[i]), d)...)
-end
-
-function texpr(expr::SExpr{Comp}, d::Val)
-    return Expr(:ref,
-                _tensor_index_base_expr(argument(expr), d),
-                map(_tensor_index_value_expr, indices(expr))...)
-end
-
-function texpr(expr::SExpr{Ind}, d::Val)
-    return Expr(:ref,
-                texpr(argument(expr), d),
-                map(_tensor_dynamic_index_expr, indices(expr))...)
-end
-
-_tensor_index_base_expr(s::STensor, ::Val{D}) where {D} = :(Tensor{$D}($s))
-_tensor_index_base_expr(expr::STerm, d::Val) = texpr(expr, d)
-
-function _tensor_index_value_expr(::SUniform{Value}) where {Value}
-    Value isa Integer || error("component index must be an integer, got $Value")
-    return Int(Value)
-end
-_tensor_index_value_expr(i::STerm) = error("unsupported component index $i")
-
-_tensor_dynamic_index_expr(i::SUniform) = _tensor_index_value_expr(i)
-function _tensor_dynamic_index_expr(::SIndex)
-    error("cannot convert indexed symbolic expression with placeholder indices to components")
-end
-_tensor_dynamic_index_expr(i::STerm) = error("unsupported symbolic index $i")
-
-"""
-    Tensor{D}(expr::STerm)
-
-Convert a symbolic tensor expression `expr` to dimension-`D` component form by
-expanding symbolic tensor leaves and evaluating the expression with `Tensor`
-operations. Scalar symbolic values (including `SUniform` and `SScalar`) are
-preserved as symbolic terms.
-"""
-@generated function Tensor{D}(expr::STerm) where {D}
-    expri = expr.instance
-    return quote
-        Base.@_propagate_inbounds_meta
-        $(texpr(expri, Val(D)))
+@generated function Tensor{D}(::SRef{F}, args::Vararg{Any,N}) where {D,F,N}
+    ex = Expr(:call, F)
+    for arg in args
+        argi = arg.instance
+        push!(ex.args, :($argi))
     end
+    return ex
 end
+Tensor{D}(sf::SFun) where {D} = sf.f
+function Tensor{D}(sf::SFun, args::Vararg{STerm}) where {D}
+    return sf.f(tuplemap(Tensor{D}, args)...)
+end
+Tensor{D}(s::SUniform) where {D} = s
+Tensor{D}(expr::SExpr) where {D} = SExpr(head(expr), tuplemap(Tensor{D}, children(expr))...)
 
 # construct the most specific tensor type based on the symmetries of the components
 function construct_tensor(::Type{Tensor{D,R,DiagKind}}, data::NTuple{N,STerm}) where {D,R,N}
-    all(isstaticzero, data) && return SZeroTensor{R}()
-    all(isstaticone, data) && return SIdTensor{R}()
+    all(isstaticzero, data) && return ZeroTensor{D,R}()
+    all(isstaticone, data) && return IdTensor{D,R}()
     return Tensor{D,R,DiagKind,typeof(data)}(data)
 end
 function construct_tensor(::Type{Tensor{D,R,AltKind}}, data::NTuple{N,STerm}) where {D,R,N}
-    all(isstaticzero, data) && return SZeroTensor{R}()
+    all(isstaticzero, data) && return ZeroTensor{D,R}()
     return Tensor{D,R,AltKind,typeof(data)}(data)
 end
 function construct_tensor(::Type{Tensor{D,R,SymKind}}, data::NTuple{N,STerm}) where {D,R,N}
@@ -400,6 +369,8 @@ function construct_tensor(::Type{Tensor{D,R,SymKind}}, data::NTuple{N,STerm}) wh
     return Tensor{D,R,SymKind,typeof(data)}(data)
 end
 function construct_tensor(::Type{Tensor{D,R,NoKind}}, data::NTuple{N,STerm}) where {D,R,N}
+    all(isstaticzero, data) && return ZeroTensor{D,R}()
+
     if issymmetric(Val(D), Val(R), data)
         sym_comps = symmetric_components(Tensor{D,R}, data)
         return construct_tensor(Tensor{D,R,SymKind}, sym_comps)
@@ -414,6 +385,8 @@ function construct_tensor(::Type{Tensor{D,R,NoKind}}, data::NTuple{N,STerm}) whe
 end
 
 @generated function issymmetric(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
+    R < 2 && return :(false)
+
     check = Expr(:&&)
 
     for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
@@ -432,6 +405,8 @@ end
 end
 
 @generated function isalternating(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
+    R < 2 && return :(false)
+
     check = Expr(:&&)
 
     for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
@@ -463,6 +438,7 @@ end
 end
 
 @generated function isdiagonal(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
+    R < 2 && return :(false)
     check = Expr(:&&)
     for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
         I = Tuple(idx)

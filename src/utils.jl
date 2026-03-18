@@ -31,3 +31,23 @@ _increasing(f, ::Val{0}, ub, I) = f(I)
         _increasing(f, Val(r - 1), j - 1, Ij)
     end
 end
+
+tuplemap(f, xs) = map(f, xs)
+tuplemap(f, xs, ys) = map(f, xs, ys)
+
+@generated function tuplemap(f, xs::T) where {T<:Tuple}
+    ex = Expr(:tuple)
+    for i in 1:length(T.parameters)
+        push!(ex.args, :(f(xs[$i])))
+    end
+    return ex
+end
+
+@generated function tuplemap(f, xs::TX, ys::TY) where {TX<:Tuple,TY<:Tuple}
+    length(TX.parameters) == length(TY.parameters) || error("tuple lengths must match")
+    ex = Expr(:tuple)
+    for i in 1:length(TX.parameters)
+        push!(ex.args, :(f(xs[$i], ys[$i])))
+    end
+    return ex
+end
