@@ -1,72 +1,53 @@
-"""
-    Dim(D)
+function inversion_count(t::NTuple{N}) where {N}
+    s = 0
+    for i in 1:N-1, j in i+1:N
+        s += t[i] > t[j]
+    end
+    return s
+end
 
-Return Dim{D}() which contains no run-time data like `Val`.
-Used to statically dispatch on the spatial dimension of the computational grid.
-"""
-struct Dim{D} end
-Dim(D::Integer) = Dim{D}()
+@inline function foreach_nondecreasing(f, ::Val{D}, ::Val{R}) where {D,R}
+    I0 = ntuple(_ -> 1, Val(R))
+    _nondecreasing(f, Val(R), D, I0)
+end
 
-"""
-    Side(S)
+@inline function foreach_increasing(f, ::Val{D}, ::Val{R}) where {D,R}
+    I0 = ntuple(identity, Val(R))
+    _increasing(f, Val(R), D, I0)
+end
 
-Return Side{S}() which contains no run-time data like `Val`.
-Used to statically dispatch on the left (Side(1)) or right (Side(2)) sides of the computational domain.
-"""
-struct Side{S} end
-Side(S::Integer) = Side{S}()
-
-const Left  = Side{1}()
-const Right = Side{2}()
-
-"""
-    remove_dim(dim::Dim, A::NTuple)
-
-Remove the dimension specified by `dim` from the tuple `A`.
-"""
-@inline function remove_dim(::Dim{D}, A::NTuple{N}) where {D,N}
-    ntuple(Val(N - 1)) do I
-        Base.@_inline_meta
-        I < D ? A[I] : A[I+1]
+_nondecreasing(f, ::Val{0}, ub, I) = f(I)
+@inline function _nondecreasing(f, ::Val{r}, ub, I) where {r}
+    for j in 1:ub
+        Ij = Base.setindex(I, j, r)
+        _nondecreasing(f, Val(r - 1), j, Ij)
     end
 end
 
-@inline remove_dim(::Dim{1}, I::NTuple{1}) = 1
-
-"""
-    remove_dim(dim::Dim, I::CartesianIndex)
-
-Remove the dimension specified by `dim` from the CartesianIndex `I`.
-"""
-@inline remove_dim(dim, I::CartesianIndex) = remove_dim(dim, Tuple(I)) |> CartesianIndex
-
-"""
-    insert_dim(dim::Dim, A::NTuple, i)
-
-Takes a tuple `A` and inserts a new element `i` at position specified by `dim`.
-"""
-@inline insert_dim(::Dim{D}, A::NTuple{N}, i) where {D,N} =
-    ntuple(Val(N + 1)) do I
-        Base.@_inline_meta
-        @inbounds (I < D) ? A[I] : (I == D) ? i : A[I-1]
+_increasing(f, ::Val{0}, ub, I) = f(I)
+@inline function _increasing(f, ::Val{r}, ub, I) where {r}
+    for j in 1:ub
+        Ij = Base.setindex(I, j, r)
+        _increasing(f, Val(r - 1), j - 1, Ij)
     end
+end
 
-"""
-    insert_dim(dim::Dim, I::CartesianIndex, i)
+tuplemap(f, xs) = map(f, xs)
+tuplemap(f, xs, ys) = map(f, xs, ys)
 
-Takes a CartesianIndex `I` and inserts a new element `i` at position specified by `dim`.
-"""
-@inline insert_dim(dim, I::CartesianIndex, i) = insert_dim(dim, Tuple(I), i) |> CartesianIndex
+@generated function tuplemap(f, xs::T) where {T<:Tuple}
+    ex = Expr(:tuple)
+    for i in 1:length(T.parameters)
+        push!(ex.args, :(f(xs[$i])))
+    end
+    return ex
+end
 
-struct Offset{O} end
-
-Offset(o::Vararg{Integer}) = Offset{o}()
-Offset(o::Tuple{Vararg{Integer}}) = Offset{o}()
-Offset(o::CartesianIndex) = Offset{o.I}()
-Offset() = Offset{0}()
-
-Base.:+(::Offset{O1}, ::Offset{O2}) where {O1,O2} = Offset((O1 .+ O2)...)
-Base.:+(::Offset{O}, tp::Tuple{Vararg{Integer}}) where {O} = O .+ tp
-Base.:+(::Offset{O}, tp::CartesianIndex) where {O} = CartesianIndex(O .+ Tuple(tp))
-
-Base.:+(tp, off::Offset) = off + tp
+@generated function tuplemap(f, xs::TX, ys::TY) where {TX<:Tuple,TY<:Tuple}
+    length(TX.parameters) == length(TY.parameters) || error("tuple lengths must match")
+    ex = Expr(:tuple)
+    for i in 1:length(TX.parameters)
+        push!(ex.args, :(f(xs[$i], ys[$i])))
+    end
+    return ex
+end
