@@ -113,6 +113,10 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         u = SVec(:u)
         v = SVec(:v)
         T = SSymTensor{2}(:T)
+        d = CentralDifference()
+        grad = Gradient(d)
+        divg = Divergence(d)
+        curl = Curl(d)
 
         expr = T ⋅ u + 2 * v
         tex = Tensor{2}(expr)
@@ -172,6 +176,33 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test tst[1, 1] === sin(2tau[1, 1])
         @test tst[1, 2] === sin(2tau[1, 2])
         @test tst[2, 2] === sin(2tau[2, 2])
+
+        gu = Tensor{2}(grad(u))
+        @test gu isa Tensor{2,2}
+        @test gu[1, 2] === grad.op[1](u[2])
+        @test gu[2, 1] === grad.op[2](u[1])
+
+        gT = Tensor{2}(grad(T))
+        @test gT isa Tensor{2,3}
+        @test gT[1, 1, 2] === grad.op[1](T[1, 2])
+        @test gT[2, 1, 2] === grad.op[2](T[1, 2])
+
+        divT = Tensor{2}(divg(T))
+        @test divT isa Vec{2}
+        @test divT[1] === divg.op[1](T[1, 1]) + divg.op[2](T[2, 1])
+        @test divT[2] === divg.op[1](T[1, 2]) + divg.op[2](T[2, 2])
+
+        w = SVec(:w)
+        curlw = Tensor{3}(curl(w))
+        @test curlw isa Vec{3}
+        @test curlw[1] === curl.op[2](w[3]) - curl.op[3](w[2])
+        @test curlw[2] === curl.op[3](w[1]) - curl.op[1](w[3])
+        @test curlw[3] === curl.op[1](w[2]) - curl.op[2](w[1])
+
+        curlu = Tensor{2}(curl(u))
+        @test curlu === curl.op[1](u[2]) - curl.op[2](u[1])
+
+        @test_throws ArgumentError Tensor{4}(curl(SVec(:z)))
     end
 
     @testset "expression tensor rank inference" begin
