@@ -152,6 +152,21 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test right_scaled[1, 1] === p
         @test right_scaled[2, 2] === p
 
+        zero_broadcast = @inferred Base.Broadcast.broadcasted(sin, ZeroTensor{2,2}())
+        @test zero_broadcast isa ZeroTensor{2,2}
+
+        id_broadcast = @inferred Base.Broadcast.broadcasted(sin, rawI)
+        @test id_broadcast isa DiagTensor{2,2}
+        @test !(id_broadcast isa IdTensor{2,2})
+        @test id_broadcast[1, 1] === sin(SUniform(1))
+        @test id_broadcast[1, 2] === SUniform(0)
+
+        widened = @inferred Base.Broadcast.broadcasted(exp, ZeroTensor{2,2}())
+        @test widened isa SymTensor{2,2}
+        @test !(widened isa ZeroTensor{2,2})
+        @test widened[1, 1] === exp(SUniform(0))
+        @test widened[1, 2] === exp(SUniform(0))
+
         st = sin.(2tau)
         tst = Tensor{2}(st)
         @test tst[1, 1] === sin(2tau[1, 1])

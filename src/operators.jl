@@ -294,48 +294,17 @@ const NumberOrTerm = Union{Number,STerm}
         return Tensor{D,R}($comps...)
     end
 end
-@generated function Base.:*(t::Tensor{D,R}, s::NumberOrTerm) where {D,R}
-    comps = Expr(:tuple)
-    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
-        I = Tuple(idx)
-        push!(comps.args, :(t[$(I...)] * s))
-    end
-    quote
-        @inline
-        return Tensor{D,R}($comps...)
-    end
-end
-@generated function Base.:/(t::Tensor{D,R}, s::NumberOrTerm) where {D,R}
-    comps = Expr(:tuple)
-    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
-        I = Tuple(idx)
-        push!(comps.args, :(t[$(I...)] / s))
-    end
-    quote
-        @inline
-        return Tensor{D,R}($comps...)
-    end
-end
-@generated function Base.://(t::Tensor{D,R}, s::NumberOrTerm) where {D,R}
-    comps = Expr(:tuple)
-    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
-        I = Tuple(idx)
-        push!(comps.args, :(t[$(I...)] // s))
-    end
-    quote
-        @inline
-        return Tensor{D,R}($comps...)
-    end
-end
-@generated function Base.:÷(t::Tensor{D,R}, s::NumberOrTerm) where {D,R}
-    comps = Expr(:tuple)
-    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
-        I = Tuple(idx)
-        push!(comps.args, :(t[$(I...)] ÷ s))
-    end
-    quote
-        @inline
-        return Tensor{D,R}($comps...)
+for op in (:*, :/, ://, :÷)
+    @eval @generated function Base.$op(t::Tensor{D,R}, s::NumberOrTerm) where {D,R}
+        comps = Expr(:tuple)
+        for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+            I = Tuple(idx)
+            push!(comps.args, Expr(:call, $(Meta.quot(op)), :(t[$(I...)]), :s))
+        end
+        quote
+            @inline
+            return Tensor{D,R}($comps...)
+        end
     end
 end
 
@@ -519,5 +488,14 @@ The co-Gramian of a second-rank tensor, defined as `t ⋅ t'`.
 end
 
 # custom broadcasting for tensors
-# TODO: replace with a generated function
-Base.Broadcast.broadcasted(f::F, arg::Tensor{D,R,K}) where {F,D,R,K} = Tensor{D,R,K}(tuplemap(f, arg.components)...)
+@generated function Base.Broadcast.broadcasted(f::F, arg::Tensor{D,R}) where {F,D,R}
+    ex = Expr(:call, :(Tensor{$D,$R}))
+    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+        I = Tuple(idx)
+        push!(ex.args, :(f(arg[$(I...)])))
+    end
+    quote
+        @inline
+        return $ex
+    end
+end
