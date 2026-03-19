@@ -418,54 +418,40 @@ end
 
 @generated function issymmetric(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
     R < 2 && return :(false)
-
     check = Expr(:&&)
-
     for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
         I = Tuple(idx)
         J = sort(I)
-
         I == J && continue
-
         i = linear_index(NoKind, Val(D), I...)
         j = linear_index(NoKind, Val(D), J...)
-
         push!(check.args, :(v[$i] === v[$j]))
     end
-
     return check
 end
 
 @generated function isalternating(::Val{D}, ::Val{R}, v::NTuple{N,STerm}) where {D,R,N}
     R < 2 && return :(false)
-
     check = Expr(:&&)
-
     for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
         I = Tuple(idx)
         J = sort(I)
-
         i = linear_index(NoKind, Val(D), I...)
-
         if !allunique(J)
             push!(check.args, :(isstaticzero(v[$i])))
             continue
         end
-
         j = linear_index(NoKind, Val(D), J...)
-
         if i == j
             I != J && push!(check.args, :(isstaticzero(v[$i])))
             continue
         end
-
         if iseven(inversion_count(I))
             push!(check.args, :(v[$i] === v[$j]))
         else
             push!(check.args, :(v[$i] === -v[$j]))
         end
     end
-
     return check
 end
 
