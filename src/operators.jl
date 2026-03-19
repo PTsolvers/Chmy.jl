@@ -352,9 +352,7 @@ end
     end
 end
 
-function tr(t::Tensor{D,2}) where {D}
-    return +(ntuple(i -> t[i, i], Val(D))...)
-end
+tr(t::Tensor{D,2}) where {D} = +(ntuple(i -> t[i, i], Val(D))...)
 
 Base.transpose(t::SymTensor{2}) = t
 Base.transpose(t::AltTensor{2}) = -t
