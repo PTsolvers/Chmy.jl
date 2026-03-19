@@ -282,6 +282,8 @@ Construct a dimension-`D` component representation of symbolic tensor `s`.
 The result has the same rank and the symmetries as `s`.
 """
 Tensor{D}(s::SScalar) where {D} = s
+Tensor{D}(::SZeroTensor{R}) where {D,R} = ZeroTensor{D,R}()
+Tensor{D}(::SIdTensor{R}) where {D,R} = IdTensor{D,R}()
 @generated function Tensor{D}(s::STensor{R,K}) where {D,R,K}
     ex = Expr(:call, :(Tensor{$D,$R,$K}))
     comp_expr(I) = :(s[$(map(i -> :(SUniform($i)), I)...)])
@@ -310,9 +312,6 @@ Tensor{D}(s::SScalar) where {D} = s
 
     return ex
 end
-
-Tensor{D}(::SZeroTensor{R}) where {D,R} = ZeroTensor{D,R}()
-Tensor{D}(::SIdTensor{R}) where {D,R} = IdTensor{D,R}()
 function Tensor{D}(expr::SExpr{Call}) where {D}
     args = tuplemap(Tensor{D}, arguments(expr))
     op = operation(expr)
@@ -402,17 +401,14 @@ function construct_tensor(::Type{Tensor{D,R,SymKind}}, data::NTuple{N,STerm}) wh
 end
 function construct_tensor(::Type{Tensor{D,R,NoKind}}, data::NTuple{N,STerm}) where {D,R,N}
     all(isstaticzero, data) && return ZeroTensor{D,R}()
-
     if issymmetric(Val(D), Val(R), data)
         sym_comps = symmetric_components(Tensor{D,R}, data)
         return construct_tensor(Tensor{D,R,SymKind}, sym_comps)
     end
-
     if isalternating(Val(D), Val(R), data)
         alt_comps = alternating_components(Tensor{D,R}, data)
         return construct_tensor(Tensor{D,R,AltKind}, alt_comps)
     end
-
     return Tensor{D,R,NoKind,typeof(data)}(data)
 end
 
