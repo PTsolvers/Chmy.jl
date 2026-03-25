@@ -16,6 +16,7 @@ variablename(::Point)   = :ᵖ
 variablename(::Segment) = :ˢ
 
 variablename(::AbstractDerivative) = :𝒟
+variablename(::AbstractAveraging)  = :ℐ
 variablename(::Gradient)           = :grad
 variablename(::Divergence)         = :divg
 variablename(::Curl)               = :curl
@@ -24,6 +25,10 @@ variablename(::SIndex{I}) where {I} = Symbol(:i, to_subscript(Val(I)))
 
 function variablename(::AbstractPartialDerivative{I}) where {I}
     return Symbol("∂", to_subscript(Val(I)))
+end
+
+function variablename(::AbstractPartialAveraging{I}) where {I}
+    return Symbol("ℐ", to_subscript(Val(I)))
 end
 
 Base.show(io::IO, term::STerm) = show_static(io, term, 0)

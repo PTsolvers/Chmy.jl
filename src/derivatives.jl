@@ -55,3 +55,6 @@ function stencil_rule(::StaggeredCentralDifference, args::Tuple{STerm}, loc::Tup
     l = Point()
     return f[l][i+1] - f[l][i]
 end
+
+tensorrank(::AbstractDerivative, t) = 0
+tensorrank(::AbstractPartialDerivative, t) = 0

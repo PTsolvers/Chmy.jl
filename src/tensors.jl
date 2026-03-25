@@ -158,13 +158,6 @@ tensorrank(::SRef{:gram}, t)   = 2
 tensorrank(::SRef{:cogram}, t) = 2
 tensorrank(::SRef{:diag}, t)   = 1
 
-tensorrank(::Gradient, t)   = tensorrank(t) + 1
-tensorrank(::Divergence, t) = tensorrank(t) - 1
-tensorrank(::Curl, t)       = 1
-
-tensorrank(::AbstractDerivative, t) = 0
-tensorrank(::AbstractPartialDerivative, t) = 0
-
 struct Tensor{D,R,K,C}
     components::C
 end
@@ -287,7 +280,6 @@ Tensor{D}(::SIdTensor{R}) where {D,R} = IdTensor{D,R}()
 @generated function Tensor{D}(s::STensor{R,K}) where {D,R,K}
     ex = Expr(:call, :(Tensor{$D,$R,$K}))
     comp_expr(I) = :(s[$(map(i -> :(SUniform($i)), I)...)])
-
     if K <: NoKind
         for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
             I = Tuple(idx)
@@ -309,7 +301,6 @@ Tensor{D}(::SIdTensor{R}) where {D,R} = IdTensor{D,R}()
     else
         error("unsupported tensor kind $K")
     end
-
     return ex
 end
 function Tensor{D}(expr::SExpr{Call}) where {D}
@@ -322,51 +313,6 @@ function Tensor{D}(expr::SExpr{Ind}) where {D}
     arg = Tensor{D}(argument(expr))
     return arg[indices(expr)...]
 end
-Tensor{D}(grad::Gradient, s::STerm) where {D} = Vec(ntuple(i -> grad.op[i](s), D)...)
-@generated function Tensor{D}(grad::Gradient, t::Tensor{D,R}) where {D,R}
-    ex = Expr(:call, :(Tensor{$D,$(R + 1)}))
-    for idx in CartesianIndices(ntuple(_ -> D, Val(R + 1)))
-        I = Tuple(idx)
-        push!(ex.args, :(grad.op[$(I[1])](t[$(I[2:end]...)])))
-    end
-    quote
-        @inline
-        return $ex
-    end
-end
-@generated function Tensor{D}(divg::Divergence, t::Tensor{D,R}) where {D,R}
-    if R == 1
-        ex = Expr(:call, :+)
-        for i in 1:D
-            push!(ex.args, :(divg.op[$i](t[$i])))
-        end
-    else
-        ex = Expr(:call, :(Tensor{$D,$(R - 1)}))
-        for idx in CartesianIndices(ntuple(_ -> D, Val(R - 1)))
-            I = Tuple(idx)
-            comp = Expr(:call, :+)
-            for i in 1:D
-                push!(comp.args, :(divg.op[$i](t[$i, $(I...)])))
-            end
-            push!(ex.args, comp)
-        end
-    end
-    quote
-        @inline
-        return $ex
-    end
-end
-function Tensor{D}(::Curl, ::Vec{D}) where {D}
-    throw(ArgumentError("curl is only supported for 2D and 3D vector fields, got dimension $D"))
-end
-function Tensor{2}(curl::Curl, v::Vec{2})
-    return curl.op[1](v[2]) - curl.op[2](v[1])
-end
-function Tensor{3}(curl::Curl, v::Vec{3})
-    return Vec{3}(curl.op[2](v[3]) - curl.op[3](v[2]),
-                  curl.op[3](v[1]) - curl.op[1](v[3]),
-                  curl.op[1](v[2]) - curl.op[2](v[1]))
-end
 @generated function Tensor{D}(::SRef{F}, args::Vararg{Any,N}) where {D,F,N}
     ex = Expr(:call, F)
     for arg in args
@@ -375,7 +321,6 @@ end
     end
     return ex
 end
-Tensor{D}(sf::SFun) where {D} = sf.f
 function Tensor{D}(sf::SFun, args::Vararg{Any,N}) where {D,N}
     return sf.f(tuplemap(Tensor{D}, args)...)
 end

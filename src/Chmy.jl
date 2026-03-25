@@ -23,13 +23,6 @@ include("spaces.jl")
 export Grid, dims
 include("grids.jl")
 
-export AbstractDerivative, AbstractPartialDerivative, CentralDifference, StaggeredCentralDifference, PartialDerivative
-include("derivatives.jl")
-
-export DifferentialOperator
-export Gradient, Divergence, Curl
-include("calculus.jl")
-
 export STensor, SScalar, SVec
 export SSymTensor, SAltTensor, SDiagTensor, SZeroTensor, SIdTensor
 export Tensor, SymTensor, AltTensor, DiagTensor, Vec, ZeroTensor, IdTensor
@@ -39,6 +32,16 @@ include("tensors.jl")
 
 export ⊡, ⊗, sym, asym, adj, gram, cogram
 include("operators.jl")
+
+export AbstractDerivative, AbstractPartialDerivative, CentralDifference, StaggeredCentralDifference, PartialDerivative
+include("derivatives.jl")
+
+export AbstractAveraging, AbstractPartialAveraging, StaggeredLinearAveraging, PartialAveraging
+include("averaging.jl")
+
+export DifferentialOperator
+export Gradient, Divergence, Curl
+include("calculus.jl")
 
 export AbstractRule, Passthrough, Chain, Prewalk, Postwalk, Fixpoint
 export stencil_rule, lower_stencil, lift, subs
