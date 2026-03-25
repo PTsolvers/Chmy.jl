@@ -43,3 +43,6 @@ function stencil_rule(::StaggeredLinearAveraging, args::Tuple{STerm}, loc::Tuple
     l = Point()
     return (f[l][i+1] + f[l][i]) // 2
 end
+
+tensorrank(::AbstractAveraging, t) = 0
+tensorrank(::AbstractPartialAveraging, t) = 0
