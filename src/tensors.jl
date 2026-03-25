@@ -313,6 +313,16 @@ function Tensor{D}(expr::SExpr{Ind}) where {D}
     arg = Tensor{D}(argument(expr))
     return arg[indices(expr)...]
 end
+Tensor{D}(s::SRef) where {D} = s
+Tensor{D}(sf::SFun) where {D} = sf
+function Tensor{D}(::SRef{:broadcasted}, op::SFun, args::Vararg{Any,N}) where {D,N}
+    all(arg -> tensorrank(arg) == 0, args) && return op.f(args...)
+    return Base.Broadcast.broadcasted(op.f, args...)
+end
+function Tensor{D}(::SRef{:broadcasted}, op::SRef{F}, args::Vararg{Any,N}) where {D,F,N}
+    all(arg -> tensorrank(arg) == 0, args) && return Tensor{D}(op, args...)
+    return Base.Broadcast.broadcasted(getfield(Base, F), args...)
+end
 @generated function Tensor{D}(::SRef{F}, args::Vararg{Any,N}) where {D,F,N}
     ex = Expr(:call, F)
     for arg in args
