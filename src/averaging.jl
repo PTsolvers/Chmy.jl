@@ -35,13 +35,13 @@ struct StaggeredLinearAveraging <: AbstractAveraging end
 function stencil_rule(::StaggeredLinearAveraging, args::Tuple{STerm}, loc::Tuple{Point}, inds::Tuple{STerm})
     f, i = only(args), only(inds)
     l = Segment()
-    return (f[l][i] + f[l][i-1]) // 2
+    return 1 // 2 * (f[l][i] + f[l][i-1])
 end
 
 function stencil_rule(::StaggeredLinearAveraging, args::Tuple{STerm}, loc::Tuple{Segment}, inds::Tuple{STerm})
     f, i = only(args), only(inds)
     l = Point()
-    return (f[l][i+1] + f[l][i]) // 2
+    return 1 // 2 * (f[l][i+1] + f[l][i])
 end
 
 tensorrank(::AbstractAveraging, t) = 0
