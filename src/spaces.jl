@@ -17,7 +17,8 @@ end
 Base.getindex(s::SUniform, ::Vararg{Space}) = s
 
 function Base.getindex(sub::SExpr{Ind}, loc::Vararg{Space})
+    length(loc) == 0 && return sub
     inds = indices(sub)
     arg  = argument(sub)
-    return SExpr(Ind(), SExpr(Loc(), arg, loc...), inds...)
+    return arg[loc...][inds...]
 end

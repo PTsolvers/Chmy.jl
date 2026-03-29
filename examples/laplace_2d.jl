@@ -10,10 +10,12 @@
 using Chmy
 using CairoMakie: Figure, Axis, Colorbar, DataAspect, heatmap!
 
-function laplace_2d(nx, ny)
+# function laplace_2d(nx, ny)
+    nx, ny = 10, 10
+
     # grid
     grid = Grid(nx, ny)
-    inds = indices(grid)
+    i, j = indices(grid)
 
     # operators
     p, s = Point(), Segment()
@@ -24,17 +26,16 @@ function laplace_2d(nx, ny)
     # main equation definition (spelled out)
     f = SScalar(:f)
     q = -grad(f)
-    r = Tensor{2}(-divg(q))
-    r_c = lower_stencil(r[s, s][inds...])
-    qv = Tensor{2}(q)
+    r = -divg(q)
+    r_c = r[s, s][i, j]
 
     ## boundary conditions
     # values at bottom and top boundaries
-    f_b = f[s, s][inds[1], inds[2]-1]
-    f_t = f[s, s][inds[1], inds[2]+1]
+    f_b = f[s, s][i, j-1]
+    f_t = f[s, s][i, j+1]
     # fluxes at left and right boundaries
-    q_l = lower_stencil(qv[1][p, s][inds[1], inds[2]])
-    q_r = lower_stencil(qv[1][p, s][inds[1]+1, inds[2]])
+    q_l = q[1][p, s][i, j]
+    q_r = q[1][p, s][i+1, j]
     # side boundary conditions
     bc_l = q_l => SUniform(0)
     bc_r = q_r => SUniform(0)
@@ -81,7 +82,7 @@ function laplace_2d(nx, ny)
     # iterative loop
     for iter in 1:50_000
         # compute residual
-        @inbounds begin
+        begin
             # inner points
             for j in 2:Ny-1, i in 2:Nx-1
                 R[i, j] = compute(r_c, B, i, j)
@@ -110,7 +111,7 @@ function laplace_2d(nx, ny)
     plt[2][1] = F
     display(fig)
 
-    return
-end
+#     return
+# end
 
-laplace_2d(101, 101)
+# laplace_2d(101, 101)

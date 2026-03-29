@@ -16,6 +16,9 @@ export isexpr, iscall, isind, isloc, head, children, operation, arguments, argum
 export value, isstaticzero, isstaticone
 include("expressions.jl")
 
+export AbstractRule, Passthrough, Chain, Prewalk, Postwalk, Fixpoint
+include("rewriters.jl")
+
 export Space, Segment, Point
 export scale, offset
 include("spaces.jl")
@@ -27,7 +30,6 @@ export STensor, SScalar, SVec
 export SSymTensor, SAltTensor, SDiagTensor, SZeroTensor, SIdTensor
 export Tensor, SymTensor, AltTensor, DiagTensor, Vec, ZeroTensor, IdTensor
 export tensorrank, tensorkind, name
-export isalternating, issymmetric, isdiag
 include("tensors.jl")
 
 export ⊡, ⊗, sym, asym, adj, gram, cogram
@@ -43,9 +45,8 @@ export DifferentialOperator
 export Gradient, Divergence, Curl
 include("calculus.jl")
 
-export AbstractRule, Passthrough, Chain, Prewalk, Postwalk, Fixpoint
-export stencil_rule, lower_stencil, lift, subs
-include("rewriters.jl")
+export stencil_rule 
+include("lowering.jl")
 
 export Binding, push, binding_types, pairstuple
 include("binding.jl")
@@ -56,8 +57,17 @@ include("isless_lex.jl")
 export canonicalize, simplify
 include("canonicalize.jl")
 
+export evaluate
+include("evaluate.jl")
+
 export compute, to_expr
 include("compute.jl")
+
+export lift
+include("lift.jl")
+
+export subs
+include("subs.jl")
 
 include("show.jl")
 

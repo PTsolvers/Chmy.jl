@@ -63,6 +63,8 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test t[2, 1] === b
         @test t[1, 2] === c
         @test t[2, 2] === d
+        @test t[SUniform(2), SUniform(1)] === b
+        @test t[2, 1] === t[SUniform(2), SUniform(1)]
 
         sym = Tensor{2,2}(a, b, b, c)
         @test sym isa SymTensor{2,2}
@@ -140,6 +142,8 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test negI[2, 2] === -p
 
         σ = -p * I + tau
+        @test σ[1, 1] === -p + tau[1, 1]
+        @test σ[1, 2] === tau[1, 2]
         tσ = Tensor{2}(σ)
         @test tσ isa SymTensor{2,2}
         @test tσ[1, 1] === -p + tau[1, 1]
@@ -181,6 +185,7 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test gu isa Tensor{2,2}
         @test gu[1, 2] === grad.op[1](u[2])
         @test gu[2, 1] === grad.op[2](u[1])
+        @test Tensor{2}(grad(u)[1, 2]) === grad.op[1](u[2])
 
         gT = Tensor{2}(grad(T))
         @test gT isa Tensor{2,3}
@@ -203,6 +208,21 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test curlu === curl.op[1](u[2]) - curl.op[2](u[1])
 
         @test_throws ArgumentError Tensor{4}(curl(SVec(:z)))
+
+        q = -grad(p)
+        @test Tensor{3}(q[1]) === -grad.op[1](p)
+    end
+
+    @testset "automatic scalar indexing" begin
+        f = SScalar(:f)
+        D = StaggeredCentralDifference()
+        grad = Gradient(D)
+        divg = Divergence(D)
+        s = Segment()
+        i, j = SIndex(1), SIndex(2)
+
+        expr = divg(grad(f))
+        @test expr[s, s][i, j] === Tensor{2}(expr)[s, s][i, j]
     end
 
     @testset "expression tensor rank inference" begin

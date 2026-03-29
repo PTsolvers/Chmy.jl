@@ -62,20 +62,18 @@ import Chmy: makeop
         @test sameterm(Fixpoint(chain)(c), c)
     end
 
-    @testset "stencil_rule and lower_stencil" begin
-        @test sameterm(stencil_rule(SRef(:+), (a, b), (i, j)),
-                       a[i, j] + b[i, j])
+    @testset "stencil_rule" begin
+        @test sameterm(stencil_rule(SRef(:+), (a, b), (i, j)), a[i, j] + b[i, j])
+        @test sameterm(stencil_rule(SRef(:+), (a, b), (seg, pt), (i, j)), a[seg, pt][i, j] + b[seg, pt][i, j])
+    end
 
-        @test sameterm(stencil_rule(SRef(:+), (a, b), (seg, pt), (i, j)),
-                       a[seg, pt][i, j] + b[seg, pt][i, j])
+    @testset "immediate indexing" begin
+        @test sameterm((a+b)[i, j], a[i, j] + b[i, j])
 
-        @test sameterm(lower_stencil((a+b)[i, j]),
-                       a[i, j] + b[i, j])
+        @test sameterm((a[seg, pt]+b)[i, j], b[i, j] + a[seg, pt][i, j])
 
-        @test sameterm(lower_stencil((a[seg, pt]+b)[i, j]),
-                       b[i, j] + a[seg, pt][i, j])
-
-        @test sameterm(lower_stencil(a[seg][i]), a[seg][i])
+        @test sameterm(a[seg][i], a[seg][i])
+        @test sameterm(sin(a + b)[seg, pt], sin(a[seg, pt] + b[seg, pt]))
     end
 
     @testset "lift" begin
@@ -92,7 +90,7 @@ import Chmy: makeop
     @testset "subs" begin
         @test sameterm(subs(a, a => c), c)
         @test sameterm(subs(a + b, a => c), makeop(:+, c, b))
-        @test sameterm(subs((a+b)[i], a => c), makeop(:+, c, b)[i])
+        @test sameterm(subs((a+b)[i], a[i] => c[i]), makeop(:+, c[i], b[i]))
         @test sameterm(subs(a + b, a => c, b => a), makeop(:+, c, a))
         @test sameterm(subs(a, a => b, a => c), b)
     end

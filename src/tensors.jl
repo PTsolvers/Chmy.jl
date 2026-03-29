@@ -100,10 +100,20 @@ function sinversion_count(I::NTuple{N,SUniform}) where {N}
 end
 
 Base.getindex(s::SScalar) = s
+function Base.getindex(t::AbstractSTensor{R}, loc::Vararg{Space,N}) where {R,N}
+    N == 0 && return t
+    R == 0 || throw(ArgumentError("location indexing requires a scalar term; take tensor components first"))
+    return SExpr(Loc(), t, loc...)
+end
+function Base.getindex(t::AbstractSTensor{R}, inds::Vararg{STerm,N}) where {R,N}
+    N == 0 && return t
+    R == 0 && return SExpr(Ind(), t, inds...)
+    throw(ArgumentError("tensor terms with rank > 0 can only be component-indexed by SUniforms"))
+end
 Base.getindex(::SZeroTensor{R}, I::Vararg{IntegerOrSUniform,R}) where {R} = SUniform(0)
-Base.getindex(t::SIdTensor{R}, I::Vararg{IntegerOrSUniform,R}) where {R} = Base.getindex(t, map(SUniform, I)...)
+Base.getindex(t::SIdTensor{R}, I::Vararg{IntegerOrSUniform,R}) where {R} = Base.getindex(t, tuplemap(STerm, I)...)
 Base.getindex(::SIdTensor{R}, I::Vararg{SUniform,R}) where {R} = all(x -> x === I[1], I) ? SUniform(1) : SUniform(0)
-Base.getindex(t::STensor{R}, I::Vararg{IntegerOrSUniform,R}) where {R} = Base.getindex(t, map(SUniform, I)...)
+Base.getindex(t::STensor{R}, I::Vararg{IntegerOrSUniform,R}) where {R} = Base.getindex(t, tuplemap(STerm, I)...)
 function Base.getindex(t::SDiagTensor{R,D}, I::Vararg{SUniform,R}) where {R,D}
     all(x -> x === I[1], I) || return SUniform(0)
     return SExpr(Comp(), t, I...)
@@ -237,20 +247,43 @@ function linear_index(::Type{DiagKind}, ::Val{D}, I::Vararg{Int,O}) where {O,D}
     return I[1]
 end
 
-Base.getindex(t::Tensor{D,R,K}, I::Vararg{Int,R}) where {D,R,K} = t.components[linear_index(K, Val(D), I...)]
-function Base.getindex(t::DiagTensor{D,R}, I::Vararg{Int,R}) where {D,R}
-    all(==(I[1]), I) || return SUniform(0)
-    return t.components[I[1]]
+function Base.getindex(t::Tensor{D,R}, ::Vararg{Space,N}) where {D,R,N}
+    N == 0 && return t
+    throw(ArgumentError("location indexing requires a scalar term; take tensor components first"))
 end
-function Base.getindex(t::AltTensor{D,R}, I::Vararg{Int,R}) where {D,R}
-    allunique(I) || return SUniform(0)
-    J = sort(I)
-    v = t.components[linear_index(AltKind, Val(D), J...)]
-    return iseven(inversion_count(I)) ? v : -v
+function Base.getindex(t::Tensor{D,R}, ::Vararg{STerm,N}) where {D,R,N}
+    N == 0 && return t
+    throw(ArgumentError("tensors can only be component-indexed by SUniforms"))
 end
-Base.getindex(::ZeroTensor{D,R}, I::Vararg{Int,R}) where {D,R} = SUniform(0)
-Base.getindex(::IdTensor{D,R}, I::Vararg{Int,R}) where {D,R} = all(==(I[1]), I) ? SUniform(1) : SUniform(0)
+Base.getindex(t::Tensor{D,R}, I::Vararg{IntegerOrSUniform,R}) where {D,R} = t[tuplemap(STerm, I)...]
 
+function uniform_int(i::SUniform)
+    isstaticinteger(i) || throw(ArgumentError("tensor indices must be integer-valued SUniforms"))
+    return Int(value(i))
+end
+
+function Base.getindex(t::Tensor{D,R,K}, I::Vararg{SUniform,R}) where {D,R,K}
+    return t.components[linear_index(K, Val(D), map(uniform_int, I)...)]
+end
+function Base.getindex(t::DiagTensor{D,R}, I::Vararg{SUniform,R}) where {D,R}
+    J = map(uniform_int, I)
+    all(==(J[1]), J) || return SUniform(0)
+    return t.components[J[1]]
+end
+function Base.getindex(t::AltTensor{D,R}, I::Vararg{SUniform,R}) where {D,R}
+    J = map(uniform_int, I)
+    allunique(J) || return SUniform(0)
+    K = sort(J)
+    v = t.components[linear_index(AltKind, Val(D), K...)]
+    return iseven(inversion_count(J)) ? v : -v
+end
+function Base.getindex(::ZeroTensor{D,R}, I::Vararg{SUniform,R}) where {D,R}
+    return SUniform(0)
+end
+function Base.getindex(::IdTensor{D,R}, I::Vararg{SUniform,R}) where {D,R}
+    J = map(uniform_int, I)
+    return all(==(J[1]), J) ? SUniform(1) : SUniform(0)
+end
 Vec(data::Vararg{STerm,M}) where {M} = Vec{M}(data...)
 
 """
@@ -308,10 +341,17 @@ function Tensor{D}(expr::SExpr{Call}) where {D}
     op = operation(expr)
     return Tensor{D}(op, args...)
 end
-Tensor{D}(expr::SExpr{Comp}) where {D} = expr
+function Tensor{D}(expr::SExpr{Comp}) where {D}
+    arg = Tensor{D}(argument(expr))
+    return arg[tuplemap(Tensor{D}, indices(expr))...]
+end
+function Tensor{D}(expr::SExpr{Loc}) where {D}
+    arg = Tensor{D}(argument(expr))
+    return arg[location(expr)...]
+end
 function Tensor{D}(expr::SExpr{Ind}) where {D}
     arg = Tensor{D}(argument(expr))
-    return arg[indices(expr)...]
+    return arg[tuplemap(Tensor{D}, indices(expr))...]
 end
 Tensor{D}(s::SRef) where {D} = s
 Tensor{D}(sf::SFun) where {D} = sf
@@ -333,6 +373,9 @@ end
 end
 function Tensor{D}(sf::SFun, args::Vararg{Any,N}) where {D,N}
     return sf.f(tuplemap(Tensor{D}, args)...)
+end
+function Tensor{D}(op::STerm, args::Vararg{Any,N}) where {D,N}
+    return evaluate(SExpr(Call(), op, args...))
 end
 Tensor{D}(s::SUniform) where {D} = s
 Tensor{D}(expr::SExpr) where {D} = SExpr(head(expr), tuplemap(Tensor{D}, children(expr))...)
