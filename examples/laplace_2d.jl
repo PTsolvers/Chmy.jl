@@ -10,9 +10,7 @@
 using Chmy
 using CairoMakie: Figure, Axis, Colorbar, DataAspect, heatmap!
 
-# function laplace_2d(nx, ny)
-    nx, ny = 10, 10
-
+function laplace_2d(nx, ny)
     # grid
     grid = Grid(nx, ny)
     i, j = indices(grid)
@@ -111,7 +109,7 @@ using CairoMakie: Figure, Axis, Colorbar, DataAspect, heatmap!
     plt[2][1] = F
     display(fig)
 
-#     return
-# end
+    return
+end
 
-# laplace_2d(101, 101)
+laplace_2d(101, 101)
