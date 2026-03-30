@@ -4,8 +4,8 @@
 Declare symbolic scalar fields.
 
 ```julia
-@scalars p T
-@scalars p @uniform(dx, dy)
+@scalars a b
+@scalars a @uniform(b, c)
 ```
 """
 macro scalars(args...)
@@ -18,7 +18,7 @@ end
 Declare symbolic vector fields.
 
 ```julia
-@vectors V q
+@vectors u v
 @uniform @vectors u v
 ```
 """
@@ -27,7 +27,7 @@ macro vectors(args...)
 end
 
 """
-    @tensors R A @sym(S) @diag(D) ...
+    @tensors R x y ...
 
 Declare symbolic tensors of rank `R`.
 
@@ -35,8 +35,8 @@ Plain names create generic tensors. Qualifiers such as [`@sym`](@ref),
 [`@diag`](@ref), and [`@alt`](@ref) select specialized tensor kinds.
 
 ```julia
-@tensors 2 A @sym(τ, ε) @diag(G)
-@uniform @tensors 2 @sym(τ)
+@tensors 2 A @sym(B, C) @diag(D)
+@uniform @tensors 2 @sym(U)
 ```
 """
 macro tensors(args...)
@@ -53,11 +53,11 @@ Mark declarations as spatially uniform.
 or wrap a `begin ... end` block containing declaration macros.
 
 ```julia
-@uniform @scalars dx dy
-@scalars p @uniform(dx, dy)
+@uniform @scalars a b
+@scalars a @uniform(b, c)
 @uniform begin
-    @scalars dx dy
-    @vectors V q
+    @scalars a b
+    @vectors u v
 end
 ```
 """
@@ -76,13 +76,13 @@ end
     @sym x
     @sym(x, y, ...)
 
-Mark tensor as symmetric.
+Mark tensors as symmetric.
 
 This qualifier is only valid inside [`@tensors`](@ref).
 
 ```julia
-@tensors 2 @sym(τ, ε)
-@uniform @tensors 2 @sym(τ)
+@tensors 2 @sym(A, B)
+@uniform @tensors 2 @sym(C)
 ```
 """
 macro sym(args...)
@@ -93,13 +93,13 @@ end
     @diag x
     @diag(x, y, ...)
 
-Mark tensor as diagonal.
+Mark tensors as diagonal.
 
 This qualifier is only valid inside [`@tensors`](@ref).
 
 ```julia
-@tensors 2 @diag(G)
-@tensors 2 A @uniform(@diag(H))
+@tensors 2 @diag(D)
+@tensors 2 A @uniform(@diag(E))
 ```
 """
 macro diag(args...)
@@ -110,7 +110,7 @@ end
     @alt x
     @alt(x, y, ...)
 
-Mark tensor as alternating.
+Mark tensors as alternating.
 
 This qualifier is only valid inside [`@tensors`](@ref).
 
