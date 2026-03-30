@@ -24,6 +24,15 @@ import Chmy: makeop
         @test subs(expr, inner => c) === node(makeop(:*, c, d))
     end
 
+    @testset "node_unwrap removes wrappers and reevaluates" begin
+        a = SScalar(:a)
+        b = SScalar(:b)
+        expr = a + node(a + b)
+
+        @test node_unwrap(expr) === makeop(:+, makeop(:*, SUniform(2), a), b)
+        @test node_unwrap(node(a + b)) === a + b
+    end
+
     @testset "tensor expansion inherits nodes" begin
         v = SVec(:v)
         tv = Tensor{2}(node(v))

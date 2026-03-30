@@ -13,7 +13,7 @@ include("staticcoef.jl")
 
 export STerm, SExprHead, Call, Comp, Loc, Ind, Node, SUniform, SRef, SFun, SIndex, SExpr
 export isexpr, iscall, isind, isloc, head, children, operation, arguments, argument, arity, indices, location
-export node
+export node, node_unwrap
 export value, isstaticzero, isstaticone
 include("expressions.jl")
 

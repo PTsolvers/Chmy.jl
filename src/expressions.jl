@@ -112,6 +112,23 @@ node(term::SUniform) = term
 node(term::STerm) = SExpr(Node(), term)
 node(term) = node(STerm(term))
 
+"""
+    node_unwrap(term)
+
+Recursively remove all `Node` wrappers from `term` and symbolically evaluate the
+rebuilt expression.
+
+This is the inverse of [`node`](@ref) for expression trees: once the wrappers
+are gone, ordinary Chmy expression construction rules are re-applied, so the
+result may be simplified or re-canonicalized.
+"""
+node_unwrap(term::STerm) = term
+node_unwrap(expr::SExpr{Node}) = node_unwrap(argument(expr))
+function node_unwrap(expr::SExpr)
+    rebuilt = SExpr(head(expr), tuplemap(node_unwrap, children(expr))...)
+    return evaluate(rebuilt)
+end
+
 SExpr(::Call, ::SRef{:*}, x::STerm) = x
 SExpr(::Call, ::SRef{:+}, x::STerm) = x
 
