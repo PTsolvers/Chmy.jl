@@ -89,6 +89,23 @@ SExpr(head::SExprHead, children::Vararg{STerm}) = SExpr(head, children)
 Wrap `term` in a `Node` expression.
 
 `Node` keeps the wrapped subtree structurally intact during expression evaluation.
+
+## Examples
+
+```jldoctest
+julia> using Chmy
+
+julia> a, b = SScalar(:a), SScalar(:b)
+(a, b)
+
+julia> a + (a + b)
+StaticExpression:
+ 2a + b
+
+julia> a + node(a + b)
+StaticExpression:
+ a + (a + b)
+```
 """
 node(term::SExpr{Node}) = term
 node(term::SUniform) = term
