@@ -109,6 +109,21 @@ function component(::SRef{:*}, args::Tuple{Vararg{STerm}}, I, t)
     new_args = ntuple(k -> k == j ? args[k][I...] : args[k], Val(length(args)))
     return *(new_args...)
 end
+function component(::SRef{:/}, args::Tuple{STerm,STerm}, I, t)
+    a, b = args
+    tensorrank(a) > 0 && tensorrank(b) == 0 && return a[I...] / b
+    return SExpr(Comp(), t, I...)
+end
+function component(::SRef{://}, args::Tuple{STerm,STerm}, I, t)
+    a, b = args
+    tensorrank(a) > 0 && tensorrank(b) == 0 && return a[I...] // b
+    return SExpr(Comp(), t, I...)
+end
+function component(::SRef{:÷}, args::Tuple{STerm,STerm}, I, t)
+    a, b = args
+    tensorrank(a) > 0 && tensorrank(b) == 0 && return a[I...] ÷ b
+    return SExpr(Comp(), t, I...)
+end
 
 # default rule is to take the component of the whole expression
 component(::STerm, ::Tuple{Vararg{STerm}}, I, t) = SExpr(Comp(), t, I...)

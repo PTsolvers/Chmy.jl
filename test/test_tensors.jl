@@ -223,6 +223,7 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         σ = -p * I + tau
         @test σ[1, 1] === -p + tau[1, 1]
         @test σ[1, 2] === tau[1, 2]
+        @test (v / p)[1] === v[1] / p
         tσ = Tensor{2}(σ)
         @test tσ isa SymTensor{2,2}
         @test tσ[1, 1] === -p + tau[1, 1]

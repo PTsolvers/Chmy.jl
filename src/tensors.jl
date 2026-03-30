@@ -198,6 +198,9 @@ tensorrank(::SRef{:broadcasted}, op, args...) = maximum(map(tensorrank, args))
 
 tensorrank(::SRef{:+}, args...) = tensorrank(first(args))
 tensorrank(::SRef{:*}, args...) = maximum(tensorrank, args)
+tensorrank(::SRef{:/}, a, b)    = tensorrank(a)
+tensorrank(::SRef{://}, a, b)   = tensorrank(a)
+tensorrank(::SRef{:÷}, a, b)    = tensorrank(a)
 tensorrank(::SRef{:-}, a)       = tensorrank(a)
 tensorrank(::SRef{:-}, a, b)    = tensorrank(a)
 tensorrank(::SRef{:⋅}, a, b)    = tensorrank(a) + tensorrank(b) - 2
