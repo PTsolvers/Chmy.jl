@@ -5,6 +5,7 @@ iscall(::STerm) = false
 iscomp(::STerm) = false
 isind(::STerm)  = false
 isloc(::STerm)  = false
+isnode(::STerm) = false
 
 isstaticzero(::STerm) = false
 isstaticone(::STerm) = false
@@ -18,6 +19,8 @@ struct Comp <: SExprHead end
 struct Loc <: SExprHead end
 
 struct Ind <: SExprHead end
+
+struct Node <: SExprHead end
 
 struct SUniform{Value} <: STerm end
 SUniform(value) = SUniform{value}()
@@ -80,6 +83,18 @@ end
 
 SExpr(head::SExprHead, children::Vararg{STerm}) = SExpr(head, children)
 
+"""
+    node(term)
+
+Wrap `term` in a `Node` expression.
+
+`Node` keeps the wrapped subtree structurally intact during expression evaluation.
+"""
+node(term::SExpr{Node}) = term
+node(term::SUniform) = term
+node(term::STerm) = SExpr(Node(), term)
+node(term) = node(STerm(term))
+
 SExpr(::Call, ::SRef{:*}, x::STerm) = x
 SExpr(::Call, ::SRef{:+}, x::STerm) = x
 
@@ -104,6 +119,9 @@ operation(expr::SExpr{Call}) = first(expr.children)
 arguments(expr::SExpr{Call}) = Base.tail(expr.children)
 arity(expr::SExpr{Call}) = length(arguments(expr))
 
+isnode(expr::SExpr) = expr.head isa Node
+argument(expr::SExpr{Node}) = only(expr.children)
+
 iscomp(expr::SExpr) = expr.head isa Comp
 argument(expr::SExpr{Comp}) = first(expr.children)
 indices(expr::SExpr{Comp}) = Base.tail(expr.children)
@@ -118,6 +136,21 @@ location(expr::SExpr{Loc}) = Base.tail(expr.children)
 
 # indexing with static expressions
 Base.getindex(t::STerm, inds::Vararg{STerm}) = SExpr(Ind(), t, inds...)
+
+# `Node` is transparent to indexing, but the indexed result stays wrapped so the
+# protected subtree can still be matched later by substitution rules.
+function Base.getindex(expr::SExpr{Node}, I::Vararg{Integer,N}) where {N}
+    N == 0 && return expr
+    return expr[tuplemap(STerm, I)...]
+end
+function Base.getindex(expr::SExpr{Node}, inds::Vararg{SUniform,N}) where {N}
+    N == 0 && return expr
+    return node(argument(expr)[inds...])
+end
+function Base.getindex(expr::SExpr{Node}, inds::Vararg{STerm,N}) where {N}
+    N == 0 && return expr
+    return node(argument(expr)[inds...])
+end
 
 # for uniforms s[inds...] = s
 Base.getindex(s::SUniform, ::Vararg{STerm}) = s

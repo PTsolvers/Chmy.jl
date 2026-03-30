@@ -11,8 +11,9 @@ export ⋅, ×, tr, det, diag, transpose
 include("utils.jl")
 include("staticcoef.jl")
 
-export STerm, SExprHead, Call, Comp, Loc, Ind, SUniform, SRef, SFun, SIndex, SExpr
+export STerm, SExprHead, Call, Comp, Loc, Ind, Node, SUniform, SRef, SFun, SIndex, SExpr
 export isexpr, iscall, isind, isloc, head, children, operation, arguments, argument, arity, indices, location
+export node
 export value, isstaticzero, isstaticone
 include("expressions.jl")
 

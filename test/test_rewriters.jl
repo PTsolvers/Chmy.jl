@@ -89,9 +89,9 @@ import Chmy: makeop
 
     @testset "subs" begin
         @test sameterm(subs(a, a => c), c)
-        @test sameterm(subs(a + b, a => c), makeop(:+, c, b))
-        @test sameterm(subs((a+b)[i], a[i] => c[i]), makeop(:+, c[i], b[i]))
-        @test sameterm(subs(a + b, a => c, b => a), makeop(:+, c, a))
+        @test sameterm(subs(a + b, a => c), makeop(:+, b, c))
+        @test sameterm(subs((a+b)[i], a[i] => c[i]), makeop(:+, b[i], c[i]))
+        @test sameterm(subs(a + b, a => c, b => a), makeop(:+, a, c))
         @test sameterm(subs(a, a => b, a => c), b)
     end
 end

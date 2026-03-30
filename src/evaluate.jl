@@ -52,3 +52,4 @@ Base.@assume_effects :foldable evaluate(expr::SExpr{Call}) = evaluate(operation(
 Base.@assume_effects :foldable evaluate(expr::SExpr{Loc}) = evaluate(argument(expr))[tuplemap(evaluate, location(expr))...]
 Base.@assume_effects :foldable evaluate(expr::SExpr{Comp}) = evaluate(argument(expr))[tuplemap(evaluate, indices(expr))...]
 Base.@assume_effects :foldable evaluate(expr::SExpr{Ind}) = evaluate(argument(expr))[tuplemap(evaluate, indices(expr))...]
+Base.@assume_effects :foldable evaluate(expr::SExpr{Node}) = node(evaluate(argument(expr)))

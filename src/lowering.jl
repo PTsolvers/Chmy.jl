@@ -99,7 +99,7 @@ function lower_loc(t::STerm, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where 
     isa(t, SUniform) && return t
     (!isexpr(t) || iscomp(t)) && return SExpr(Ind(), SExpr(Loc(), t, loc...), inds...)
     if iscall(t)
-        return stencil_rule(operation(t), arguments(t), loc, inds)
+        return evaluate(stencil_rule(operation(t), arguments(t), loc, inds))
     else
         error("malformed static expression $t")
     end
@@ -109,7 +109,7 @@ function lower_ind(t::STerm, inds::NTuple{N,STerm}) where {N}
     isa(t, SUniform) && return t
     (!isexpr(t) || iscomp(t)) && return SExpr(Ind(), t, inds...)
     if iscall(t)
-        return stencil_rule(operation(t), arguments(t), inds)
+        return evaluate(stencil_rule(operation(t), arguments(t), inds))
     else
         error("malformed static expression $t")
     end

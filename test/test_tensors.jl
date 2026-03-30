@@ -218,11 +218,12 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         D = StaggeredCentralDifference()
         grad = Gradient(D)
         divg = Divergence(D)
-        s = Segment()
+        p, s = Point(), Segment()
         i, j = SIndex(1), SIndex(2)
 
         expr = divg(grad(f))
         @test expr[s, s][i, j] === Tensor{2}(expr)[s, s][i, j]
+        @test (-grad(f))[1][p, s][i, j] === -f[s, s][i, j] + f[s, s][i - 1, j]
     end
 
     @testset "expression tensor rank inference" begin

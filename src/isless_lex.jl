@@ -22,7 +22,8 @@ headrank(::Call)       = 0x0
 headrank(::Comp)       = 0x1
 headrank(::Ind)        = 0x2
 headrank(::Loc)        = 0x3
-headrank(h::SExprHead) = 0x4 + objectid(h)
+headrank(::Node)       = 0x4
+headrank(h::SExprHead) = 0x5 + objectid(h)
 headrank(expr::SExpr)  = headrank(head(expr))
 
 # comparing STerms lexicographically

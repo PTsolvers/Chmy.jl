@@ -16,6 +16,13 @@ end
 
 Base.getindex(s::SUniform, ::Vararg{Space}) = s
 
+# `Node` is transparent to location indexing, but the resulting term stays
+# wrapped so later substitutions can still target the protected subtree.
+function Base.getindex(expr::SExpr{Node}, loc::Vararg{Space,N}) where {N}
+    N == 0 && return expr
+    return node(argument(expr)[loc...])
+end
+
 function Base.getindex(sub::SExpr{Ind}, loc::Vararg{Space})
     length(loc) == 0 && return sub
     inds = indices(sub)

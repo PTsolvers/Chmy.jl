@@ -23,7 +23,9 @@ function laplace_2d(nx, ny)
 
     # main equation definition (spelled out)
     f = SScalar(:f)
-    q = -grad(f)
+    # Keep flux components structurally intact so boundary substitutions can
+    # still match them after the residual is simplified.
+    q = node(-grad(f))
     r = -divg(q)
     r_c = r[s, s][i, j]
 
@@ -50,16 +52,14 @@ function laplace_2d(nx, ny)
     r_tl = subs(r_t, bc_l)
     r_tr = subs(r_t, bc_r)
 
-    r_c = simplify(r_c)
-
-    bc = (l  = simplify(r_l),
-          r  = simplify(r_r),
-          b  = simplify(r_b),
-          t  = simplify(r_t),
-          bl = simplify(r_bl),
-          br = simplify(r_br),
-          tl = simplify(r_tl),
-          tr = simplify(r_tr))
+    bc = (l  = r_l,
+          r  = r_r,
+          b  = r_b,
+          t  = r_t,
+          bl = r_bl,
+          br = r_br,
+          tl = r_tl,
+          tr = r_tr)
 
     # arrays
     R = zeros(dims(grid, s, s))
@@ -80,27 +80,25 @@ function laplace_2d(nx, ny)
     # iterative loop
     for iter in 1:50_000
         # compute residual
-        begin
-            # inner points
-            for j in 2:Ny-1, i in 2:Nx-1
-                R[i, j] = compute(r_c, B, i, j)
-            end
-            # x sides
-            for j in 2:Ny-1
-                R[1, j]  = compute(bc.l, B, 1, j)
-                R[Nx, j] = compute(bc.r, B, Nx, j)
-            end
-            # y sides
-            for i in 2:Nx-1
-                R[i, 1]  = compute(bc.b, B, i, 1)
-                R[i, Ny] = compute(bc.t, B, i, Ny)
-            end
-            # corners
-            R[1, 1]   = compute(bc.bl, B, 1, 1)
-            R[Nx, 1]  = compute(bc.br, B, Nx, 1)
-            R[1, Ny]  = compute(bc.tl, B, 1, Ny)
-            R[Nx, Ny] = compute(bc.tr, B, Nx, Ny)
+        # inner points
+        for j in 2:Ny-1, i in 2:Nx-1
+            R[i, j] = compute(r_c, B, i, j)
         end
+        # x sides
+        for j in 2:Ny-1
+            R[1, j]  = compute(bc.l, B, 1, j)
+            R[Nx, j] = compute(bc.r, B, Nx, j)
+        end
+        # y sides
+        for i in 2:Nx-1
+            R[i, 1]  = compute(bc.b, B, i, 1)
+            R[i, Ny] = compute(bc.t, B, i, Ny)
+        end
+        # corners
+        R[1, 1]   = compute(bc.bl, B, 1, 1)
+        R[Nx, 1]  = compute(bc.br, B, Nx, 1)
+        R[1, Ny]  = compute(bc.tl, B, 1, Ny)
+        R[Nx, Ny] = compute(bc.tr, B, Nx, Ny)
         # update solution
         @. F += 0.25 * R
     end
