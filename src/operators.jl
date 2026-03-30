@@ -80,9 +80,9 @@ end
 for op in (://, :÷)
     @eval function Base.$op(a::STerm, b::STerm)
         (isstaticzero(a) && isstaticzero(b)) && throw(ArgumentError("division of zero by zero"))
-        isstaticzero(a) && return SUniform(0)
+        isstaticzero(a) && return SLiteral(0)
         isstaticone(b) && return a
-        a === b && return SUniform(1)
+        a === b && return SLiteral(1)
         return canonop($(Meta.quot(op)), a, b)
     end
 end
@@ -90,8 +90,8 @@ end
 # mixed symbolic-numeric binary operations
 for op in (:+, :-, :*, :max, :min, :/, ://, :÷, :^, :<, :<=, :>, :>=, :(==), :!=, :&, :|, :xor)
     @eval begin
-        Base.$op(a::Number, b::STerm) = $op(SUniform(a), b)
-        Base.$op(a::STerm, b::Number) = $op(a, SUniform(b))
+        Base.$op(a::Number, b::STerm) = $op(SLiteral(a), b)
+        Base.$op(a::STerm, b::Number) = $op(a, SLiteral(b))
     end
 end
 
@@ -188,7 +188,7 @@ end
 The antisymmetric part of a second-rank tensor, defined as `(t - t') / 2`.
 """
 function asym(t::STerm)
-    tensorrank(t) == 0 && return SUniform(0)
+    tensorrank(t) == 0 && return SLiteral(0)
     return canonop(:asym, t)
 end
 
@@ -208,7 +208,7 @@ function Base.:-(arg::STerm)
     end
     return makeop(:-, arg)
 end
-Base.:-(arg::SUniform{0}) = arg
+Base.:-(arg::SLiteral{0}) = arg
 Base.:-(arg::SZeroTensor) = arg
 
 for op in (:sqrt, :abs,
@@ -232,15 +232,15 @@ function Base.Broadcast.broadcasted(f, args::Vararg{STerm})
     return canonop(:broadcasted, SFun(f), args...)
 end
 function Base.Broadcast.broadcasted(::typeof(Base.literal_pow), f, t::STerm, n::Val{N}) where {N}
-    return canonop(:broadcasted, SRef(:^), t, SUniform(N))
+    return canonop(:broadcasted, SRef(:^), t, SLiteral(N))
 end
-Base.Broadcast.broadcasted(f, a::STerm, b::Number) = Base.Broadcast.broadcasted(f, a, SUniform(b))
-Base.Broadcast.broadcasted(f, a::Number, b::STerm) = Base.Broadcast.broadcasted(f, SUniform(a), b)
+Base.Broadcast.broadcasted(f, a::STerm, b::Number) = Base.Broadcast.broadcasted(f, a, SLiteral(b))
+Base.Broadcast.broadcasted(f, a::Number, b::STerm) = Base.Broadcast.broadcasted(f, SLiteral(a), b)
 
 Base.ifelse(cond::STerm, x::STerm, y::STerm) = canonop(:ifelse, cond, x, y)
-Base.ifelse(cond::STerm, x::Number, y::STerm) = ifelse(cond, SUniform(x), y)
-Base.ifelse(cond::STerm, x::STerm, y::Number) = ifelse(cond, x, SUniform(y))
-Base.ifelse(cond::STerm, x::Number, y::Number) = ifelse(cond, SUniform(x), SUniform(y))
+Base.ifelse(cond::STerm, x::Number, y::STerm) = ifelse(cond, SLiteral(x), y)
+Base.ifelse(cond::STerm, x::STerm, y::Number) = ifelse(cond, x, SLiteral(y))
+Base.ifelse(cond::STerm, x::Number, y::Number) = ifelse(cond, SLiteral(x), SLiteral(y))
 
 # tensor operations
 Base.:+(t::Tensor) = t
@@ -376,7 +376,7 @@ function det(t::Tensor{3,2})
     t[1, 3] * (t[2, 1] * t[3, 2] - t[2, 2] * t[3, 1])
 end
 
-det(::AltTensor{2,3}) = SUniform(0)
+det(::AltTensor{2,3}) = SLiteral(0)
 
 diag(t::Tensor{D,2}) where {D} = Vec(ntuple(i -> t[i, i], Val(D))...)
 

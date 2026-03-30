@@ -3,7 +3,7 @@ termrank(::SIndex)      = 0x0
 termrank(::STensor)     = 0x1
 termrank(::SZeroTensor) = 0x2
 termrank(::SIdTensor)   = 0x3
-termrank(::SUniform)    = 0x4
+termrank(::SLiteral)    = 0x4
 termrank(::SExpr)       = 0x5
 termrank(t::STerm)      = 0x6 + objectid(t)
 

@@ -1,17 +1,17 @@
 # static evaluation
 isstatic(::STerm) = false
-isstatic(::SUniform) = true
+isstatic(::SLiteral) = true
 isstatic(expr::SExpr{Call}) = all(isstatic, arguments(expr))
 
-seval(term::STerm) = isstatic(term) ? SUniform(compute(term)) : term
+seval(term::STerm) = isstatic(term) ? SLiteral(compute(term)) : term
 
 # monomial representation of products for canonicalization
 struct Monomial{S,B}
     coeff::S
     powers::B
 end
-Monomial(::SUniform{C}) where {C} = Monomial(StaticCoeff(C), Binding())
-Monomial(term::STerm) = Monomial(StaticCoeff(1), Binding(term => SUniform(1)))
+Monomial(::SLiteral{C}) where {C} = Monomial(StaticCoeff(C), Binding())
+Monomial(term::STerm) = Monomial(StaticCoeff(1), Binding(term => SLiteral(1)))
 function Monomial(expr::SExpr{Call})
     coeff, powers = collect_powers(expr)
     kv = ssort(pairstuple(powers); lt=isless_lex, by=first)
@@ -33,7 +33,7 @@ function addpower(binding, term, power)
     end
 end
 
-collect_powers(term) = collect_powers(term, StaticCoeff(1), Binding(), SUniform(1))
+collect_powers(term) = collect_powers(term, StaticCoeff(1), Binding(), SLiteral(1))
 Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff, binding, npow)
     op = operation(term)
     if op === SRef(:*)
@@ -120,19 +120,19 @@ function abs_product_expr(m::Monomial)
     c = abs(m.coeff)
 
     if isempty(num)
-        isempty(den) && return SUniform(c)
+        isempty(den) && return SLiteral(c)
         isone(c) && return makeop(:inv, makeop(:*, den...))
-        return makeop(:/, SUniform(c), makeop(:*, den...))
+        return makeop(:/, SLiteral(c), makeop(:*, den...))
     end
 
     if isempty(den)
         isone(c) && return makeop(:*, num...)
-        return makeop(:*, SUniform(c), num...)
+        return makeop(:*, SLiteral(c), num...)
     end
 
     expr = makeop(:/, makeop(:*, num...), makeop(:*, den...))
 
-    return isone(c) ? expr : makeop(:*, SUniform(c), expr)
+    return isone(c) ? expr : makeop(:*, SLiteral(c), expr)
 end
 
 function STerm(monomial::Monomial)
@@ -140,7 +140,7 @@ function STerm(monomial::Monomial)
     return isnegative(monomial.coeff) ? -abs_expr : abs_expr
 end
 
-degree(monomial::Monomial) = isconstant(monomial) ? SUniform(0) : +(values(monomial.powers)...)
+degree(monomial::Monomial) = isconstant(monomial) ? SLiteral(0) : +(values(monomial.powers)...)
 
 # align monomials to the same ordered base set before grevlex comparison
 function base_union(mx::Monomial, my::Monomial)
@@ -152,20 +152,20 @@ end
 base_union(x, y, ::Tuple{}, ::Tuple{}) = Binding(x...), Binding(y...)
 function base_union(x, y, ::Tuple{}, ty)
     fy = first(ty)
-    base_union((x..., fy[1] => SUniform(0)), (y..., fy), (), Base.tail(ty))
+    base_union((x..., fy[1] => SLiteral(0)), (y..., fy), (), Base.tail(ty))
 end
 function base_union(x, y, tx, ::Tuple{})
     fx = first(tx)
-    base_union((x..., fx), (y..., fx[1] => SUniform(0)), Base.tail(tx), ())
+    base_union((x..., fx), (y..., fx[1] => SLiteral(0)), Base.tail(tx), ())
 end
 function base_union(x, y, tx, ty)
     fx, fy = first(tx), first(ty)
     if fx[1] === fy[1]
         return base_union((x..., fx), (y..., fy), Base.tail(tx), Base.tail(ty))
     elseif isless_lex(fx[1], fy[1])
-        return base_union((x..., fx), (y..., fx[1] => SUniform(0)), Base.tail(tx), ty)
+        return base_union((x..., fx), (y..., fx[1] => SLiteral(0)), Base.tail(tx), ty)
     else
-        return base_union((x..., fy[1] => SUniform(0)), (y..., fy), tx, Base.tail(ty))
+        return base_union((x..., fy[1] => SLiteral(0)), (y..., fy), tx, Base.tail(ty))
     end
 end
 

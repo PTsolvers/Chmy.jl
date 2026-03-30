@@ -22,10 +22,15 @@ struct Ind <: SExprHead end
 
 struct Node <: SExprHead end
 
-struct SUniform{Value} <: STerm end
-SUniform(value) = SUniform{value}()
+"""
+    SLiteral(value)
 
-function SUniform(value::Real)
+Construct a symbolic compile-time literal value.
+"""
+struct SLiteral{Value} <: STerm end
+SLiteral(value) = SLiteral{value}()
+
+function SLiteral(value::Real)
     isbits(value) || error("value must be isbits")
     if isinteger(value)
         value = Int(value)
@@ -35,19 +40,19 @@ function SUniform(value::Real)
     if isone(value)
         value = 1
     end
-    return sgn ? SUniform{value}() : -SUniform{value}()
+    return sgn ? SLiteral{value}() : -SLiteral{value}()
 end
 
-SUniform(::StaticCoeff{Value}) where {Value} = SUniform(Value)
+SLiteral(::StaticCoeff{Value}) where {Value} = SLiteral(Value)
 
-isstaticuniform(s::STerm) = s isa SUniform
+isstaticliteral(s::STerm) = s isa SLiteral
 
-value(::SUniform{Value}) where {Value} = Value
+value(::SLiteral{Value}) where {Value} = Value
 
-isstaticzero(s::SUniform) = iszero(value(s))
-isstaticone(s::SUniform) = isone(value(s))
+isstaticzero(s::SLiteral) = iszero(value(s))
+isstaticone(s::SLiteral) = isone(value(s))
 
-isstaticinteger(s::SUniform) = isinteger(value(s))
+isstaticinteger(s::SLiteral) = isinteger(value(s))
 
 struct SRef{F} <: STerm end
 SRef(f::Symbol) = SRef{f}()
@@ -108,7 +113,7 @@ StaticExpression:
 ```
 """
 node(term::SExpr{Node}) = term
-node(term::SUniform) = term
+node(term::SLiteral) = term
 node(term::STerm) = SExpr(Node(), term)
 node(term) = node(STerm(term))
 
@@ -177,7 +182,7 @@ function Base.getindex(expr::SExpr{Node}, I::Vararg{Integer,N}) where {N}
     N == 0 && return expr
     return expr[tuplemap(STerm, I)...]
 end
-function Base.getindex(expr::SExpr{Node}, inds::Vararg{SUniform,N}) where {N}
+function Base.getindex(expr::SExpr{Node}, inds::Vararg{SLiteral,N}) where {N}
     N == 0 && return expr
     return node(argument(expr)[inds...])
 end
@@ -186,12 +191,12 @@ function Base.getindex(expr::SExpr{Node}, inds::Vararg{STerm,N}) where {N}
     return node(argument(expr)[inds...])
 end
 
-# for uniforms s[inds...] = s
-Base.getindex(s::SUniform, ::Vararg{STerm}) = s
+# Literals ignore symbolic indexing because they have no spatial dependence.
+Base.getindex(s::SLiteral, ::Vararg{STerm}) = s
 
 # conversion to STerm
 STerm(v::STerm) = v
-STerm(v) = isbits(v) ? SUniform(v) : error("value must be isbits")
+STerm(v) = isbits(v) ? SLiteral(v) : error("value must be isbits")
 
 # TermInterfaces.jl maketerm implementation
 maketerm(::Type{SExpr}, head, children, ::Nothing) = SExpr(head, children...)

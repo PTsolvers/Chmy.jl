@@ -19,17 +19,17 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test name(v) === :v
 
         @test a[] === a
-        @test SZeroTensor{0}() === SUniform(0)
-        @test SIdTensor{0}() === SUniform(1)
+        @test SZeroTensor{0}() === SLiteral(0)
+        @test SIdTensor{0}() === SLiteral(1)
 
-        @test SZeroTensor{2}()[1, 2] === SUniform(0)
-        @test SIdTensor{2}()[1, 1] === SUniform(1)
-        @test SIdTensor{2}()[1, 2] === SUniform(0)
+        @test SZeroTensor{2}()[1, 2] === SLiteral(0)
+        @test SIdTensor{2}()[1, 1] === SLiteral(1)
+        @test SIdTensor{2}()[1, 2] === SLiteral(0)
 
         @test s[2, 1] === s[1, 2]
-        @test d[1, 2] === SUniform(0)
-        @test d[2, 2] === d[SUniform(2), SUniform(2)]
-        @test A[1, 1] === SUniform(0)
+        @test d[1, 2] === SLiteral(0)
+        @test d[2, 2] === d[SLiteral(2), SLiteral(2)]
+        @test A[1, 1] === SLiteral(0)
         @test A[2, 1] === makeop(:-, A[1, 2])
     end
 
@@ -63,8 +63,8 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test t[2, 1] === b
         @test t[1, 2] === c
         @test t[2, 2] === d
-        @test t[SUniform(2), SUniform(1)] === b
-        @test t[2, 1] === t[SUniform(2), SUniform(1)]
+        @test t[SLiteral(2), SLiteral(1)] === b
+        @test t[2, 1] === t[SLiteral(2), SLiteral(1)]
 
         sym = Tensor{2,2}(a, b, b, c)
         @test sym isa SymTensor{2,2}
@@ -72,20 +72,20 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test sym[1, 2] === b
         @test sym[2, 1] === b
 
-        diag = Tensor{2,2}(a, SUniform(0), SUniform(0), c)
+        diag = Tensor{2,2}(a, SLiteral(0), SLiteral(0), c)
         @test diag isa DiagTensor{2,2}
         @test diag[1, 1] === a
-        @test diag[1, 2] === SUniform(0)
+        @test diag[1, 2] === SLiteral(0)
         @test diag[2, 2] === c
 
-        alt = Tensor{3,2}(SUniform(0), -a, -b, a, SUniform(0), -c, b, c, SUniform(0))
+        alt = Tensor{3,2}(SLiteral(0), -a, -b, a, SLiteral(0), -c, b, c, SLiteral(0))
         @test alt isa AltTensor{3,2}
         @test alt[1, 2] === a
         @test alt[2, 1] === -a
-        @test alt[1, 1] === SUniform(0)
+        @test alt[1, 1] === SLiteral(0)
 
-        @test Tensor{2,2}(SUniform(1), SUniform(0), SUniform(0), SUniform(1)) isa IdTensor{2,2}
-        @test Tensor{2,2,DiagKind}(SUniform(0), SUniform(0)) isa ZeroTensor{2,2}
+        @test Tensor{2,2}(SLiteral(1), SLiteral(0), SLiteral(0), SLiteral(1)) isa IdTensor{2,2}
+        @test Tensor{2,2,DiagKind}(SLiteral(0), SLiteral(0)) isa ZeroTensor{2,2}
 
         @test_throws ErrorException Tensor{2,2,SymKind}(a, b)
     end
@@ -106,8 +106,8 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test ts[2, 1] === s[1, 2]
         @test ta[1, 2] === A[1, 2]
         @test ta[2, 1] === makeop(:-, A[1, 2])
-        @test ta[1, 1] === SUniform(0)
-        @test td[1, 2] === SUniform(0)
+        @test ta[1, 1] === SLiteral(0)
+        @test td[1, 2] === SLiteral(0)
         @test td[3, 3] === d[3, 3]
     end
 
@@ -131,7 +131,7 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test Tensor{3}(tau[1, 1]) === tau[1, 1]
         @test Tensor{3}(tau[1, 1] + tau[2, 2]) === tau[1, 1] + tau[2, 2]
 
-        @test Tensor{4}(SUniform(3)) === SUniform(3)
+        @test Tensor{4}(SLiteral(3)) === SLiteral(3)
         @test Tensor{4}(SScalar(:p)) === SScalar(:p)
 
         p = SScalar(:p)
@@ -166,14 +166,14 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         id_broadcast = @inferred Base.Broadcast.broadcasted(sin, rawI)
         @test id_broadcast isa DiagTensor{2,2}
         @test !(id_broadcast isa IdTensor{2,2})
-        @test id_broadcast[1, 1] === sin(SUniform(1))
-        @test id_broadcast[1, 2] === SUniform(0)
+        @test id_broadcast[1, 1] === sin(SLiteral(1))
+        @test id_broadcast[1, 2] === SLiteral(0)
 
         widened = @inferred Base.Broadcast.broadcasted(exp, ZeroTensor{2,2}())
         @test widened isa SymTensor{2,2}
         @test !(widened isa ZeroTensor{2,2})
-        @test widened[1, 1] === exp(SUniform(0))
-        @test widened[1, 2] === exp(SUniform(0))
+        @test widened[1, 1] === exp(SLiteral(0))
+        @test widened[1, 2] === exp(SLiteral(0))
 
         st = sin.(2tau)
         tst = Tensor{2}(st)

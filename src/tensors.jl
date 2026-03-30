@@ -17,8 +17,8 @@ struct STensor{R,K,N} <: AbstractSTensor{R,K} end
 name(::STensor{<:Any,<:Any,N}) where {N} = N
 
 tensorrank(::SIndex) = 0
-tensorrank(::SUniform) = 0
-tensorkind(::SUniform) = NoKind
+tensorrank(::SLiteral) = 0
+tensorkind(::SLiteral) = NoKind
 
 """
     STensor{R,K}(name)
@@ -61,7 +61,7 @@ const SDiagTensor{R} = STensor{R,DiagKind}
 Construct the zero tensor of rank `R`.
 """
 struct SZeroTensor{R} <: AbstractSTensor{R,ZeroKind} end
-SZeroTensor{0}() = SUniform(0)
+SZeroTensor{0}() = SLiteral(0)
 
 """
     SIdTensor{R}()
@@ -69,7 +69,7 @@ SZeroTensor{0}() = SUniform(0)
 Construct the identity tensor of rank `R`.
 """
 struct SIdTensor{R} <: AbstractSTensor{R,IdKind} end
-SIdTensor{0}() = SUniform(1)
+SIdTensor{0}() = SLiteral(1)
 
 tensorrank(::SZeroTensor{R}) where {R} = R
 tensorrank(::SIdTensor{R}) where {R} = R
@@ -88,14 +88,14 @@ Construct a symbolic vector of dimension `D` with the given name.
 """
 const SVec = STensor{1,NoKind}
 
-const IntegerOrSUniform = Union{Integer,SUniform}
+const IntegerOrSLiteral = Union{Integer,SLiteral}
 
-sallunique(I::Tuple{SUniform}) = true
+sallunique(I::Tuple{SLiteral}) = true
 function sallunique(I)
     I[1] === I[2] && return false
     return sallunique(Base.tail(I))
 end
-function sinversion_count(I::NTuple{N,SUniform}) where {N}
+function sinversion_count(I::NTuple{N,SLiteral}) where {N}
     return inversion_count(map(value, I))
 end
 
@@ -108,27 +108,27 @@ end
 function Base.getindex(t::AbstractSTensor{R}, inds::Vararg{STerm,N}) where {R,N}
     N == 0 && return t
     R == 0 && return SExpr(Ind(), t, inds...)
-    throw(ArgumentError("tensor terms with rank > 0 can only be component-indexed by SUniforms"))
+    throw(ArgumentError("tensor terms with rank > 0 can only be component-indexed by SLiterals"))
 end
-Base.getindex(::SZeroTensor{R}, I::Vararg{IntegerOrSUniform,R}) where {R} = SUniform(0)
-Base.getindex(t::SIdTensor{R}, I::Vararg{IntegerOrSUniform,R}) where {R} = Base.getindex(t, tuplemap(STerm, I)...)
-Base.getindex(::SIdTensor{R}, I::Vararg{SUniform,R}) where {R} = all(x -> x === I[1], I) ? SUniform(1) : SUniform(0)
-Base.getindex(t::STensor{R}, I::Vararg{IntegerOrSUniform,R}) where {R} = Base.getindex(t, tuplemap(STerm, I)...)
-function Base.getindex(t::SDiagTensor{R,D}, I::Vararg{SUniform,R}) where {R,D}
-    all(x -> x === I[1], I) || return SUniform(0)
+Base.getindex(::SZeroTensor{R}, I::Vararg{IntegerOrSLiteral,R}) where {R} = SLiteral(0)
+Base.getindex(t::SIdTensor{R}, I::Vararg{IntegerOrSLiteral,R}) where {R} = Base.getindex(t, tuplemap(STerm, I)...)
+Base.getindex(::SIdTensor{R}, I::Vararg{SLiteral,R}) where {R} = all(x -> x === I[1], I) ? SLiteral(1) : SLiteral(0)
+Base.getindex(t::STensor{R}, I::Vararg{IntegerOrSLiteral,R}) where {R} = Base.getindex(t, tuplemap(STerm, I)...)
+function Base.getindex(t::SDiagTensor{R,D}, I::Vararg{SLiteral,R}) where {R,D}
+    all(x -> x === I[1], I) || return SLiteral(0)
     return SExpr(Comp(), t, I...)
 end
-function Base.getindex(t::SSymTensor{R}, I::Vararg{SUniform,R}) where {R}
+function Base.getindex(t::SSymTensor{R}, I::Vararg{SLiteral,R}) where {R}
     J = ssort(I; lt=isless_lex)
     return SExpr(Comp(), t, J...)
 end
-function Base.getindex(t::SAltTensor{R}, I::Vararg{SUniform,R}) where {R}
+function Base.getindex(t::SAltTensor{R}, I::Vararg{SLiteral,R}) where {R}
     J = ssort(I; lt=isless_lex)
-    sallunique(J) || return SUniform(0)
+    sallunique(J) || return SLiteral(0)
     v = SExpr(Comp(), t, J...)
     return iseven(sinversion_count(I)) ? v : -v
 end
-function Base.getindex(t::STensor{R}, I::Vararg{SUniform,R}) where {R}
+function Base.getindex(t::STensor{R}, I::Vararg{SLiteral,R}) where {R}
     return SExpr(Comp(), t, I...)
 end
 
@@ -254,36 +254,36 @@ function Base.getindex(t::Tensor{D,R}, ::Vararg{Space,N}) where {D,R,N}
 end
 function Base.getindex(t::Tensor{D,R}, ::Vararg{STerm,N}) where {D,R,N}
     N == 0 && return t
-    throw(ArgumentError("tensors can only be component-indexed by SUniforms"))
+    throw(ArgumentError("tensors can only be component-indexed by SLiterals"))
 end
-Base.getindex(t::Tensor{D,R}, I::Vararg{IntegerOrSUniform,R}) where {D,R} = t[tuplemap(STerm, I)...]
+Base.getindex(t::Tensor{D,R}, I::Vararg{IntegerOrSLiteral,R}) where {D,R} = t[tuplemap(STerm, I)...]
 
-function uniform_int(i::SUniform)
-    isstaticinteger(i) || throw(ArgumentError("tensor indices must be integer-valued SUniforms"))
+function literal_int(i::SLiteral)
+    isstaticinteger(i) || throw(ArgumentError("tensor indices must be integer-valued SLiterals"))
     return Int(value(i))
 end
 
-function Base.getindex(t::Tensor{D,R,K}, I::Vararg{SUniform,R}) where {D,R,K}
-    return t.components[linear_index(K, Val(D), map(uniform_int, I)...)]
+function Base.getindex(t::Tensor{D,R,K}, I::Vararg{SLiteral,R}) where {D,R,K}
+    return t.components[linear_index(K, Val(D), map(literal_int, I)...)]
 end
-function Base.getindex(t::DiagTensor{D,R}, I::Vararg{SUniform,R}) where {D,R}
-    J = map(uniform_int, I)
-    all(==(J[1]), J) || return SUniform(0)
+function Base.getindex(t::DiagTensor{D,R}, I::Vararg{SLiteral,R}) where {D,R}
+    J = map(literal_int, I)
+    all(==(J[1]), J) || return SLiteral(0)
     return t.components[J[1]]
 end
-function Base.getindex(t::AltTensor{D,R}, I::Vararg{SUniform,R}) where {D,R}
-    J = map(uniform_int, I)
-    allunique(J) || return SUniform(0)
+function Base.getindex(t::AltTensor{D,R}, I::Vararg{SLiteral,R}) where {D,R}
+    J = map(literal_int, I)
+    allunique(J) || return SLiteral(0)
     K = sort(J)
     v = t.components[linear_index(AltKind, Val(D), K...)]
     return iseven(inversion_count(J)) ? v : -v
 end
-function Base.getindex(::ZeroTensor{D,R}, I::Vararg{SUniform,R}) where {D,R}
-    return SUniform(0)
+function Base.getindex(::ZeroTensor{D,R}, I::Vararg{SLiteral,R}) where {D,R}
+    return SLiteral(0)
 end
-function Base.getindex(::IdTensor{D,R}, I::Vararg{SUniform,R}) where {D,R}
-    J = map(uniform_int, I)
-    return all(==(J[1]), J) ? SUniform(1) : SUniform(0)
+function Base.getindex(::IdTensor{D,R}, I::Vararg{SLiteral,R}) where {D,R}
+    J = map(literal_int, I)
+    return all(==(J[1]), J) ? SLiteral(1) : SLiteral(0)
 end
 Vec(data::Vararg{STerm,M}) where {M} = Vec{M}(data...)
 
@@ -313,7 +313,7 @@ Tensor{D}(::SZeroTensor{R}) where {D,R} = ZeroTensor{D,R}()
 Tensor{D}(::SIdTensor{R}) where {D,R} = IdTensor{D,R}()
 @generated function Tensor{D}(s::STensor{R,K}) where {D,R,K}
     ex = Expr(:call, :(Tensor{$D,$R,$K}))
-    comp_expr(I) = :(s[$(map(i -> :(SUniform($i)), I)...)])
+    comp_expr(I) = :(s[$(map(i -> :(SLiteral($i)), I)...)])
     if K <: NoKind
         for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
             I = Tuple(idx)
@@ -381,7 +381,7 @@ end
 function Tensor{D}(op::STerm, args::Vararg{Any,N}) where {D,N}
     return evaluate(SExpr(Call(), op, args...))
 end
-Tensor{D}(s::SUniform) where {D} = s
+Tensor{D}(s::SLiteral) where {D} = s
 Tensor{D}(expr::SExpr) where {D} = SExpr(head(expr), tuplemap(Tensor{D}, children(expr))...)
 
 # `Tensor{D}` expands higher-rank `Node` expressions component-wise, so wrapping

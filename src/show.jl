@@ -7,7 +7,7 @@ function to_subscript(::Val{i}) where {i}
     end
 end
 
-variablename(::SUniform{Value}) where {Value} = Value
+variablename(::SLiteral{Value}) where {Value} = Value
 
 variablename(sf::SFun)            = nameof(sf.f)
 variablename(::SRef{F}) where {F} = F
@@ -125,8 +125,8 @@ end
 function operator_separator(display_opname::Symbol, parent_opname::Symbol, args)
     if parent_opname == :* &&
        length(args) == 2 &&
-       args[1] isa SUniform &&
-       !(args[2] isa SUniform) &&
+       args[1] isa SLiteral &&
+       !(args[2] isa SLiteral) &&
        !isexpr(args[2]) &&
        variablename(args[1]) isa Union{AbstractFloat,Integer}
         return ""

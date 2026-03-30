@@ -12,9 +12,9 @@ function stencil_rule(op::Union{SRef,SFun}, args::Tuple{Vararg{STerm}}, inds::NT
     return SExpr(Call(), op, map(x -> x[inds...], args)...)
 end
 
-Base.getindex(term::STerm, I::Vararg{IntegerOrSUniform,N}) where {N} = term[tuplemap(STerm, I)...]
+Base.getindex(term::STerm, I::Vararg{IntegerOrSLiteral,N}) where {N} = term[tuplemap(STerm, I)...]
 
-function Base.getindex(expr::SExpr{Call}, I::Vararg{SUniform,N}) where {N}
+function Base.getindex(expr::SExpr{Call}, I::Vararg{SLiteral,N}) where {N}
     N == 0 && return expr
     R = tensorrank(expr)
     R == 0 && return lower_ind(Tensor{N}(expr), I)
@@ -22,7 +22,7 @@ function Base.getindex(expr::SExpr{Call}, I::Vararg{SUniform,N}) where {N}
     return component(expr, I)
 end
 
-function Base.getindex(expr::SExpr{Comp}, I::Vararg{SUniform,N}) where {N}
+function Base.getindex(expr::SExpr{Comp}, I::Vararg{SLiteral,N}) where {N}
     N == 0 && return expr
     return lower_ind(Tensor{N}(expr), I)
 end
@@ -34,7 +34,7 @@ end
 
 function Base.getindex(expr::SExpr{Call}, inds::Vararg{STerm,N}) where {N}
     N == 0 && return expr
-    tensorrank(expr) == 0 || throw(ArgumentError("tensor expression '$expr' can only be component-indexed by SUniforms"))
+    tensorrank(expr) == 0 || throw(ArgumentError("tensor expression '$expr' can only be component-indexed by SLiterals"))
     return lower_ind(Tensor{N}(expr), inds)
 end
 
@@ -54,8 +54,8 @@ function Base.getindex(expr::SExpr{Comp}, loc::Vararg{Space,N}) where {N}
     return locate_scalar(Tensor{N}(expr), loc)
 end
 
-component(t::STerm, I::NTuple{N,SUniform}) where {N} = SExpr(Comp(), t, I...)
-Base.@assume_effects :foldable function component(t::SExpr{Call}, I::NTuple{N,SUniform}) where {N}
+component(t::STerm, I::NTuple{N,SLiteral}) where {N} = SExpr(Comp(), t, I...)
+Base.@assume_effects :foldable function component(t::SExpr{Call}, I::NTuple{N,SLiteral}) where {N}
     return component(operation(t), arguments(t), I, t)
 end
 component(::SRef{:+}, args::Tuple{Vararg{STerm}}, I, t) = +(map(arg -> arg[I...], args)...)
@@ -87,7 +87,7 @@ ispointwise(::STerm) = false
 ispointwise(::Union{SRef,SFun}) = true
 
 function locate_scalar(t::STerm, loc::NTuple{N,Space}) where {N}
-    isa(t, SUniform) && return t
+    isa(t, SLiteral) && return t
     if iscall(t) && ispointwise(operation(t))
         return SExpr(Call(), operation(t), map(x -> x[loc...], arguments(t))...)
     else
@@ -96,7 +96,7 @@ function locate_scalar(t::STerm, loc::NTuple{N,Space}) where {N}
 end
 
 function lower_loc(t::STerm, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where {N}
-    isa(t, SUniform) && return t
+    isa(t, SLiteral) && return t
     (!isexpr(t) || iscomp(t)) && return SExpr(Ind(), SExpr(Loc(), t, loc...), inds...)
     if iscall(t)
         return evaluate(stencil_rule(operation(t), arguments(t), loc, inds))
@@ -106,7 +106,7 @@ function lower_loc(t::STerm, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where 
 end
 
 function lower_ind(t::STerm, inds::NTuple{N,STerm}) where {N}
-    isa(t, SUniform) && return t
+    isa(t, SLiteral) && return t
     (!isexpr(t) || iscomp(t)) && return SExpr(Ind(), t, inds...)
     if iscall(t)
         return evaluate(stencil_rule(operation(t), arguments(t), inds))

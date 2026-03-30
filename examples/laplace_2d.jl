@@ -37,10 +37,10 @@ function laplace_2d(nx, ny)
     q_l = q[1][p, s][i, j]
     q_r = q[1][p, s][i+1, j]
     # side boundary conditions
-    bc_l = q_l => SUniform(0)
-    bc_r = q_r => SUniform(0)
-    bc_b = f_b => SUniform(+1)
-    bc_t = f_t => SUniform(-1)
+    bc_l = q_l => SLiteral(0)
+    bc_r = q_r => SLiteral(0)
+    bc_b = f_b => SLiteral(+1)
+    bc_t = f_t => SLiteral(-1)
     # side residuals
     r_l = subs(r_c, bc_l)
     r_r = subs(r_c, bc_r)

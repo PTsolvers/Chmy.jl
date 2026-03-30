@@ -20,8 +20,8 @@ import Chmy: makeop
         @test isless_lex(Point(), Segment())
         @test !isless_lex(Segment(), Point())
 
-        @test isless_lex(SUniform(2), SUniform(3))
-        @test !isless_lex(SUniform(3), SUniform(2))
+        @test isless_lex(SLiteral(2), SLiteral(3))
+        @test !isless_lex(SLiteral(3), SLiteral(2))
 
         @test isless_lex(SIndex(1), a)
         @test !isless_lex(a, SIndex(1))
@@ -67,9 +67,9 @@ import Chmy: makeop
     end
 
     @testset "sorting contract" begin
-        terms = [sin(b), sin(a), cos(a), SUniform(2), a]
+        terms = [sin(b), sin(a), cos(a), SLiteral(2), a]
         sorted = sort(terms; lt=isless_lex)
-        expected = [a, SUniform(2), cos(a), sin(a), sin(b)]
+        expected = [a, SLiteral(2), cos(a), sin(a), sin(b)]
         @test length(sorted) == length(expected)
         @test all(((x, y),) -> x === y, zip(sorted, expected))
     end

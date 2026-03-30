@@ -29,7 +29,7 @@ import Chmy: makeop
         b = SScalar(:b)
         expr = a + node(a + b)
 
-        @test node_unwrap(expr) === makeop(:+, makeop(:*, SUniform(2), a), b)
+        @test node_unwrap(expr) === makeop(:+, makeop(:*, SLiteral(2), a), b)
         @test node_unwrap(node(a + b)) === a + b
     end
 
@@ -63,7 +63,7 @@ import Chmy: makeop
         expr = simplify(q + c + q)
 
         @test simplify(q) === node(makeop(:+, a, b))
-        @test simplify(subs(expr, simplify(q) => SUniform(0))) === c
+        @test simplify(subs(expr, simplify(q) => SLiteral(0))) === c
     end
 
     @testset "compute ignores the wrapper" begin

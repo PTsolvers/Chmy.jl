@@ -14,7 +14,7 @@ function Base.getindex(t::STerm, loc::Vararg{Space})
     SExpr(Loc(), t, loc...)
 end
 
-Base.getindex(s::SUniform, ::Vararg{Space}) = s
+Base.getindex(s::SLiteral, ::Vararg{Space}) = s
 
 # `Node` is transparent to location indexing, but the resulting term stays
 # wrapped so later substitutions can still target the protected subtree.

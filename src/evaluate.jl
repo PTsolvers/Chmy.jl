@@ -5,7 +5,7 @@ Symbolically evaluate a Chmy term.
 
 `evaluate` rebuilds expressions by recursively evaluating their children and then
 reapplying the symbolic operation. In contrast to [`compute`](@ref), it preserves
-symbolic objects such as `SUniform`, `SIndex`, and symbolic tensor/field terms.
+symbolic objects such as `SLiteral`, `SIndex`, and symbolic tensor/field terms.
 """
 evaluate(term::Tensor) = term
 evaluate(term::STerm) = term
