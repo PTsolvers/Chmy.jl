@@ -23,17 +23,7 @@
 
     @testset "expansion shape" begin
         ex = @macroexpand @uniform @tensors 2 @sym τ
-        @test ex == Expr(
-            :block,
-            Expr(
-                :(=),
-                :τ,
-                Expr(
-                    :call,
-                    Expr(:curly, GlobalRef(Chmy, :STensor), 2, GlobalRef(Chmy, :SymKind), true, QuoteNode(:τ)),
-                ),
-            ),
-        )
+        @test ex == Expr(:block, Expr(:(=), :τ, Expr(:call, Expr(:curly, GlobalRef(Chmy, :STensor), 2, GlobalRef(Chmy, :SymKind), true, QuoteNode(:τ)))))
     end
 
     @testset "uniform declarations" begin
@@ -76,20 +66,20 @@
 
     @testset "uniform blocks" begin
         @uniform begin
-            @scalars bx by
-            @vectors BV Bq
-            @tensors 2 BT @sym(BS, BE) @diag(BD) @alt(BA)
+            @scalars x y
+            @vectors v q
+            @tensors 2 A @sym(B, C) @diag(D) @alt(E)
         end
 
-        @test bx === SUScalar(:bx)
-        @test by === SUScalar(:by)
-        @test BV === SUVec(:BV)
-        @test Bq === SUVec(:Bq)
-        @test BT === STensor{2,Chmy.NoKind,true}(:BT)
-        @test BS === SUSymTensor{2}(:BS)
-        @test BE === SUSymTensor{2}(:BE)
-        @test BD === SUDiagTensor{2}(:BD)
-        @test BA === SUAltTensor{2}(:BA)
+        @test x === SUScalar(:x)
+        @test y === SUScalar(:y)
+        @test v === SUVec(:v)
+        @test q === SUVec(:q)
+        @test A === STensor{2,Chmy.NoKind,true}(:A)
+        @test B === SUSymTensor{2}(:B)
+        @test C === SUSymTensor{2}(:C)
+        @test D === SUDiagTensor{2}(:D)
+        @test E === SUAltTensor{2}(:E)
     end
 
     @testset "local scope" begin
@@ -121,7 +111,9 @@
         @test_throws ArgumentError @macroexpand @uniform(x, y)
         @test_throws ArgumentError @macroexpand @uniform x y
         @test_throws ArgumentError @macroexpand @uniform @sym(T)
-        @test_throws ArgumentError @macroexpand @uniform begin x = 1 end
+        @test_throws ArgumentError @macroexpand @uniform begin
+            x = 1
+        end
         @test_throws ArgumentError @macroexpand @sym(T)
         @test_throws ArgumentError @macroexpand @diag(T)
         @test_throws ArgumentError @macroexpand @alt(T)
