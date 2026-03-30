@@ -131,7 +131,6 @@ struct Declaration
 end
 
 const DECLARATION_MACROS = (Symbol("@scalars"), Symbol("@vectors"), Symbol("@tensors"))
-const KIND_REFS = (:NoKind, :SymKind, :DiagKind, :AltKind)
 const KIND_MACROS = Dict(Symbol("@sym") => :SymKind, Symbol("@diag") => :DiagKind, Symbol("@alt") => :AltKind)
 
 const STENSOR_REF = GlobalRef(@__MODULE__, :STensor)
