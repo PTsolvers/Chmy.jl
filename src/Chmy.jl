@@ -33,6 +33,9 @@ export Tensor, SymTensor, AltTensor, DiagTensor, Vec, ZeroTensor, IdTensor
 export tensorrank, tensorkind, name
 include("tensors.jl")
 
+export @scalars, @vectors, @tensors, @uniform, @sym, @diag, @alt
+include("macros.jl")
+
 export ⊡, ⊗, sym, asym, adj, gram, cogram
 include("operators.jl")
 
