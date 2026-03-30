@@ -33,6 +33,84 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test A[2, 1] === makeop(:-, A[1, 2])
     end
 
+    @testset "uniform symbolic tensors" begin
+        u = SUScalar(:u)
+        v = SUVec(:v)
+        T = SUSymTensor{2}(:T)
+        A = SUAltTensor{2}(:A)
+        d = SUDiagTensor{2}(:D)
+        w = SScalar(:w)
+        p, s = Point(), Segment()
+        i, j = SIndex(1), SIndex(2)
+        D = CentralDifference()
+        grad = Gradient(D)
+        divg = Divergence(D)
+        curl = Curl(D)
+
+        @test !isuniform(STensor{0,NoKind}(:a))
+        @test STensor{1,NoKind,true}(:u) === SUVec(:u)
+
+        @test isuniform(u)
+        @test isuniform(v)
+        @test isuniform(T)
+        @test isuniform(A)
+        @test isuniform(d)
+        @test isuniform(SZeroTensor{2}())
+        @test isuniform(SIdTensor{2}())
+        @test isuniform(sin(u) + 1)
+        @test isuniform(v[1])
+        @test !isuniform(w)
+        @test !isuniform(sin(w))
+        @test !isuniform(w[p][i])
+
+        @test u[p, s][i, j] === u
+        @test sin(u)[p, s][i, j] === sin(u)
+        @test v[1][p, s][i, j] === v[1]
+        @test_throws ArgumentError v[p]
+        @test_throws ArgumentError v[i]
+        @test_throws ArgumentError (v + v)[p]
+        @test_throws ArgumentError (v + v)[i]
+
+        @test !isuniform(D(u))
+        @test !isuniform(grad(u))
+        @test D(u)[i] === SLiteral(0)
+        @test D(sin(u))[i] === SLiteral(0)
+        @test grad(u)[1][i] === SLiteral(0)
+        @test grad(v)[1, 1][i] === SLiteral(0)
+        @test grad(T)[1, 1, 1][i] === SLiteral(0)
+        @test divg(v)[i] === SLiteral(0)
+        @test divg(T)[1][i] === SLiteral(0)
+        @test Tensor{2}(curl(v))[i, j] === SLiteral(0)
+    end
+
+    @testset "generic STerm indexing fallbacks" begin
+        i = SIndex(1)
+        p = Point()
+
+        lit = SLiteral(2)
+        ref = SRef(:f)
+        fun = SFun(sin)
+        diff = CentralDifference()
+
+        @test lit[i] === lit
+        @test lit[p] === lit
+        @test ref[i] === ref
+        @test ref[p] === ref
+        @test fun[i] === fun
+        @test fun[p] === fun
+
+        ind = diff[i]
+        loc = diff[p]
+
+        @test isind(ind)
+        @test argument(ind) === diff
+        @test only(indices(ind)) === i
+
+        @test isloc(loc)
+        @test argument(loc) === diff
+        @test only(location(loc)) === p
+    end
+
     @testset "tensor metadata and helper indices" begin
         @test ncomponents(NoKind, Val(3), Val(2)) == 9
         @test ncomponents(SymKind, Val(3), Val(2)) == 6
@@ -63,6 +141,7 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test t[2, 1] === b
         @test t[1, 2] === c
         @test t[2, 2] === d
+        @test_throws ArgumentError t[]
         @test t[SLiteral(2), SLiteral(1)] === b
         @test t[2, 1] === t[SLiteral(2), SLiteral(1)]
 
@@ -224,6 +303,22 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         expr = divg(grad(f))
         @test expr[s, s][i, j] === Tensor{2}(expr)[s, s][i, j]
         @test (-grad(f))[1][p, s][i, j] === -f[s, s][i, j] + f[s, s][i - 1, j]
+    end
+
+    @testset "uniform compute bindings" begin
+        u = SUScalar(:u)
+        v = SUVec(:v)
+        p, s = Point(), Segment()
+        i, j = SIndex(1), SIndex(2)
+
+        expr = (u + 1)[p, s][i, j]
+        component = v[1][p][i]
+
+        @test expr === u + 1
+        @test component === v[1]
+        @test compute(u[p, s][i, j], Binding(u => 2.0), 3, 4) == 2.0
+        @test compute(expr, Binding(expr => 7.0), 3, 4) == 7.0
+        @test compute(component, Binding(component => 5.0), 3) == 5.0
     end
 
     @testset "expression tensor rank inference" begin

@@ -13,7 +13,7 @@ include("staticcoef.jl")
 
 export STerm, SExprHead, Call, Comp, Loc, Ind, Node, SLiteral, SRef, SFun, SIndex, SExpr
 export isexpr, iscall, isind, isloc, head, children, operation, arguments, argument, arity, indices, location
-export node, node_unwrap
+export node, node_unwrap, isuniform
 export value, isstaticzero, isstaticone
 include("expressions.jl")
 
@@ -27,8 +27,8 @@ include("spaces.jl")
 export Grid, dims
 include("grids.jl")
 
-export STensor, SScalar, SVec
-export SSymTensor, SAltTensor, SDiagTensor, SZeroTensor, SIdTensor
+export STensor, SUTensor, SScalar, SUScalar, SVec, SUVec
+export SSymTensor, SUSymTensor, SAltTensor, SUAltTensor, SDiagTensor, SUDiagTensor, SZeroTensor, SIdTensor
 export Tensor, SymTensor, AltTensor, DiagTensor, Vec, ZeroTensor, IdTensor
 export tensorrank, tensorkind, name
 include("tensors.jl")

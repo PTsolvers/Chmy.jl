@@ -45,15 +45,9 @@ unwrap(expr::SExpr) = SExpr(head(expr), tuplemap(unwrap, children(expr))...)
 # Stub indexing intentionally preserves the user-written indexing
 # structure from the 1D stencil rule without triggering generic lowering.
 Base.getindex(stub::Stub, inds::Vararg{STerm}) = SExpr(Ind(), stub, inds...)
-
-function Base.getindex(stub::Stub, loc::Vararg{Space})
-    length(loc) == 0 && return stub
-    return SExpr(Loc(), stub, loc...)
-end
-
+Base.getindex(stub::Stub, loc::Vararg{Space}) = SExpr(Loc(), stub, loc...)
 # Keep nested `arg[loc...][inds...]` intact when the argument is a `Stub`.
 function Base.getindex(expr::SExpr{Loc,<:Tuple{Stub,Vararg}}, inds::Vararg{STerm,N}) where {N}
-    N == 0 && return expr
     return SExpr(Ind(), expr, inds...)
 end
 

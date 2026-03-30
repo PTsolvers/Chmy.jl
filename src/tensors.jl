@@ -7,60 +7,100 @@ struct DiagKind <: TensorKind end
 struct ZeroKind <: TensorKind end
 struct IdKind <: TensorKind end
 
-abstract type AbstractSTensor{R,K} <: STerm end
+abstract type AbstractSTensor{R,K,U} <: STerm end
 
 tensorrank(::AbstractSTensor{R}) where {R} = R
 tensorkind(::AbstractSTensor{<:Any,K}) where {K} = K
 
-struct STensor{R,K,N} <: AbstractSTensor{R,K} end
+struct STensor{R,K,U,N} <: AbstractSTensor{R,K,U} end
 
-name(::STensor{<:Any,<:Any,N}) where {N} = N
+name(::STensor{<:Any,<:Any,<:Any,N}) where {N} = N
 
 tensorrank(::SIndex) = 0
 tensorrank(::SLiteral) = 0
 tensorkind(::SLiteral) = NoKind
+isuniform(::AbstractSTensor{<:Any,<:Any,true}) = true
+
+"""
+    STensor{R,K,U}(name)
+
+Construct a symbolic tensor of rank `R`, kind `K`, and spatial uniformity `U`
+with the given name.
+"""
+STensor{R,K,U}(name::Symbol) where {R,K,U} = STensor{R,K,U,name}()
 
 """
     STensor{R,K}(name)
 
 Construct a symbolic tensor of rank `R` and kind `K` with the given name.
+
+This shorthand creates a spatially varying tensor; use [`STensor{R,K,true}`](@ref)
+or the `SU*` aliases for uniform symbolic tensors.
 """
-STensor{R,K}(name::Symbol) where {R,K} = STensor{R,K,name}()
+STensor{R,K}(name::Symbol) where {R,K} = STensor{R,K,false,name}()
 
 """
     STensor{R}(name)
 
 Construct a symbolic tensor of rank `R` and kind `NoKind` with the given name.
 """
-STensor{R}(name::Symbol) where {R} = STensor{R,NoKind,name}()
+STensor{R}(name::Symbol) where {R} = STensor{R,NoKind,false,name}()
+
+"""
+    SUTensor{R,K}(name)
+
+Construct a symbolic spatially uniform tensor of rank `R` and kind `K`.
+"""
+const SUTensor{R,K} = STensor{R,K,true}
 
 """
     SSymTensor{R}(name)
 
 Construct a symbolic symmetric tensor of rank `R` with the given name.
 """
-const SSymTensor{R} = STensor{R,SymKind}
+const SSymTensor{R} = STensor{R,SymKind,false}
+
+"""
+    SUSymTensor{R}(name)
+
+Construct a symbolic spatially uniform symmetric tensor of rank `R`.
+"""
+const SUSymTensor{R} = STensor{R,SymKind,true}
 
 """
     SAltTensor{R}(name)
 
 Construct a symbolic alternating tensor of rank `R` with the given name.
 """
-const SAltTensor{R} = STensor{R,AltKind}
+const SAltTensor{R} = STensor{R,AltKind,false}
+
+"""
+    SUAltTensor{R}(name)
+
+Construct a symbolic spatially uniform alternating tensor of rank `R`.
+"""
+const SUAltTensor{R} = STensor{R,AltKind,true}
 
 """
     SDiagTensor{R}(name)
 
 Construct a symbolic diagonal tensor of rank `R` with the given name.
 """
-const SDiagTensor{R} = STensor{R,DiagKind}
+const SDiagTensor{R} = STensor{R,DiagKind,false}
+
+"""
+    SUDiagTensor{R}(name)
+
+Construct a symbolic spatially uniform diagonal tensor of rank `R`.
+"""
+const SUDiagTensor{R} = STensor{R,DiagKind,true}
 
 """
     SZeroTensor{R}()
 
 Construct the zero tensor of rank `R`.
 """
-struct SZeroTensor{R} <: AbstractSTensor{R,ZeroKind} end
+struct SZeroTensor{R} <: AbstractSTensor{R,ZeroKind,true} end
 SZeroTensor{0}() = SLiteral(0)
 
 """
@@ -68,7 +108,7 @@ SZeroTensor{0}() = SLiteral(0)
 
 Construct the identity tensor of rank `R`.
 """
-struct SIdTensor{R} <: AbstractSTensor{R,IdKind} end
+struct SIdTensor{R} <: AbstractSTensor{R,IdKind,true} end
 SIdTensor{0}() = SLiteral(1)
 
 tensorrank(::SZeroTensor{R}) where {R} = R
@@ -79,14 +119,28 @@ tensorrank(::SIdTensor{R}) where {R} = R
 
 Construct a symbolic scalar with the given name.
 """
-const SScalar = STensor{0,NoKind}
+const SScalar = STensor{0,NoKind,false}
 
 """
-    SVec{D}(name)
+    SUScalar(name)
 
-Construct a symbolic vector of dimension `D` with the given name.
+Construct a symbolic spatially uniform scalar with the given name.
 """
-const SVec = STensor{1,NoKind}
+const SUScalar = STensor{0,NoKind,true}
+
+"""
+    SVec(name)
+
+Construct a symbolic vector with the given name.
+"""
+const SVec = STensor{1,NoKind,false}
+
+"""
+    SUVec(name)
+
+Construct a symbolic spatially uniform vector with the given name.
+"""
+const SUVec = STensor{1,NoKind,true}
 
 const IntegerOrSLiteral = Union{Integer,SLiteral}
 
@@ -99,20 +153,10 @@ function sinversion_count(I::NTuple{N,SLiteral}) where {N}
     return inversion_count(map(value, I))
 end
 
-Base.getindex(s::SScalar) = s
-function Base.getindex(t::AbstractSTensor{R}, loc::Vararg{Space,N}) where {R,N}
-    N == 0 && return t
-    R == 0 || throw(ArgumentError("location indexing requires a scalar term; take tensor components first"))
-    return SExpr(Loc(), t, loc...)
-end
-function Base.getindex(t::AbstractSTensor{R}, inds::Vararg{STerm,N}) where {R,N}
-    N == 0 && return t
-    R == 0 && return SExpr(Ind(), t, inds...)
-    throw(ArgumentError("tensor terms with rank > 0 can only be component-indexed by SLiterals"))
-end
 Base.getindex(::SZeroTensor{R}, I::Vararg{IntegerOrSLiteral,R}) where {R} = SLiteral(0)
 Base.getindex(t::SIdTensor{R}, I::Vararg{IntegerOrSLiteral,R}) where {R} = Base.getindex(t, tuplemap(STerm, I)...)
 Base.getindex(::SIdTensor{R}, I::Vararg{SLiteral,R}) where {R} = all(x -> x === I[1], I) ? SLiteral(1) : SLiteral(0)
+Base.getindex(t::STensor{0}, ::Vararg{IntegerOrSLiteral,0}) = t
 Base.getindex(t::STensor{R}, I::Vararg{IntegerOrSLiteral,R}) where {R} = Base.getindex(t, tuplemap(STerm, I)...)
 function Base.getindex(t::SDiagTensor{R,D}, I::Vararg{SLiteral,R}) where {R,D}
     all(x -> x === I[1], I) || return SLiteral(0)
@@ -248,14 +292,6 @@ function linear_index(::Type{DiagKind}, ::Val{D}, I::Vararg{Int,O}) where {O,D}
     return I[1]
 end
 
-function Base.getindex(t::Tensor{D,R}, ::Vararg{Space,N}) where {D,R,N}
-    N == 0 && return t
-    throw(ArgumentError("location indexing requires a scalar term; take tensor components first"))
-end
-function Base.getindex(t::Tensor{D,R}, ::Vararg{STerm,N}) where {D,R,N}
-    N == 0 && return t
-    throw(ArgumentError("tensors can only be component-indexed by SLiterals"))
-end
 Base.getindex(t::Tensor{D,R}, I::Vararg{IntegerOrSLiteral,R}) where {D,R} = t[tuplemap(STerm, I)...]
 
 function literal_int(i::SLiteral)
@@ -308,10 +344,10 @@ IdTensor{D,R}() where {D,R} = Tensor{D,R,IdKind,Tuple{}}(())
 Construct a dimension-`D` component representation of symbolic tensor `s`.
 The result has the same rank and the symmetries as `s`.
 """
-Tensor{D}(s::SScalar) where {D} = s
+Tensor{D}(s::STensor{0}) where {D} = s
 Tensor{D}(::SZeroTensor{R}) where {D,R} = ZeroTensor{D,R}()
 Tensor{D}(::SIdTensor{R}) where {D,R} = IdTensor{D,R}()
-@generated function Tensor{D}(s::STensor{R,K}) where {D,R,K}
+@generated function Tensor{D}(s::STensor{R,K,U}) where {D,R,K,U}
     ex = Expr(:call, :(Tensor{$D,$R,$K}))
     comp_expr(I) = :(s[$(map(i -> :(SLiteral($i)), I)...)])
     if K <: NoKind

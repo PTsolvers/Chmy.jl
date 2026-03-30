@@ -38,28 +38,45 @@ This is the lowering step used internally by [`compute`](@ref). Symbolic terms
 that appear in `binding` are replaced by reads from `binding.data`; unbound
 symbolic terms are left symbolic in the generated expression.
 """
-to_expr(expr::STerm, bnd) = expr
+# Exact bindings for uniform expressions can be substituted directly because any
+# location/grid indexing has already been erased symbolically.
+function direct_bound_expr(term::STerm, bnd)
+    idx = expr_idx(bnd, term)
+    isnothing(idx) && return nothing
+    dtype = bnd.data[idx]
+    if isuniform(term)
+        return :(b.data[$idx])
+    elseif term isa STensor
+        dtype <: Number || error("unsupported data type $dtype for term $term")
+        return :(b.data[$idx])
+    else
+        return nothing
+    end
+end
+
+to_expr(expr::STerm, bnd) = something(direct_bound_expr(expr, bnd), expr)
 to_expr(::SRef{F}, bnd) where {F} = F
 to_expr(sf::SFun, bnd) = sf.f
 
 # Calls are lowered structurally by recursively translating all children.
-to_expr(expr::SExpr{Call}, bnd) = Expr(:call, map(arg -> to_expr(arg, bnd), children(expr))...)
-to_expr(expr::SExpr{Node}, bnd) = to_expr(argument(expr), bnd)
+function to_expr(expr::SExpr{Call}, bnd)
+    direct = direct_bound_expr(expr, bnd)
+    !isnothing(direct) && return direct
+    return Expr(:call, map(arg -> to_expr(arg, bnd), children(expr))...)
+end
+function to_expr(expr::SExpr{Node}, bnd)
+    direct = direct_bound_expr(expr, bnd)
+    !isnothing(direct) && return direct
+    return to_expr(argument(expr), bnd)
+end
 to_expr(::SLiteral{Value}, bnd) where {Value} = Value
 to_expr(::SIndex{i}, bnd) where {i} = :(I[$i])
-function to_expr(term::STensor, bnd)
-    idx = expr_idx(bnd, term)
-    isnothing(idx) && return term
-    dtype = bnd.data[idx]
-    if dtype <: Number
-        return :(b.data[$idx])
-    else
-        error("unsupported data type $dtype for term $term")
-    end
-end
+to_expr(term::STensor, bnd) = something(direct_bound_expr(term, bnd), term)
 function to_expr(expr::SExpr{Ind}, bnd)
     arg = argument(expr)
     inds = indices(expr)
+    direct = direct_bound_expr(arg, bnd)
+    !isnothing(direct) && return direct
     idx = expr_idx(bnd, arg)
     isnothing(idx) && return expr
     dtype = bnd.data[idx]

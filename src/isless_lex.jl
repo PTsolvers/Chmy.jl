@@ -50,9 +50,9 @@ function isless_lex(x::STensor, y::STensor)
     nx = name(x)
     ny = name(y)
     nx == ny || return isless(nx, ny)
-    # Chmy requires tensors of the same name and rank to be equal
+    # Chmy requires tensors of the same name and rank to agree in all static metadata.
     if x !== y
-        throw(ArgumentError("tensors with the same name must have the same rank and kind"))
+        throw(ArgumentError("tensors with the same name must have the same rank, kind, and uniformity"))
     end
     return false
 end

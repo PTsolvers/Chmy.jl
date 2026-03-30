@@ -74,7 +74,8 @@ Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff,
     return coeff, binding
 end
 function collect_powers(term, coeff, binding, npow)
-    # fully static uniform literals can be folded into coeff at compile time
+    # Compile-time literal factors can be folded directly into the scalar
+    # coefficient of the monomial.
     if isstatic(term) && isstatic(npow)
         base = compute(term)
         powr = compute(npow)

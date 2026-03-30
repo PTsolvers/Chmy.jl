@@ -10,6 +10,14 @@ isnode(::STerm) = false
 isstaticzero(::STerm) = false
 isstaticone(::STerm) = false
 
+"""
+    isuniform(term)
+
+Return `true` if `term` is spatially uniform, so location and grid indexing do
+not change its value.
+"""
+isuniform(::STerm) = false
+
 abstract type SExprHead end
 
 struct Call <: SExprHead end
@@ -46,6 +54,7 @@ end
 SLiteral(::StaticCoeff{Value}) where {Value} = SLiteral(Value)
 
 isstaticliteral(s::STerm) = s isa SLiteral
+isuniform(::SLiteral) = true
 
 value(::SLiteral{Value}) where {Value} = Value
 
@@ -56,6 +65,7 @@ isstaticinteger(s::SLiteral) = isinteger(value(s))
 
 struct SRef{F} <: STerm end
 SRef(f::Symbol) = SRef{f}()
+isuniform(::SRef) = true
 
 struct SFun{F} <: STerm
     f::F
@@ -67,12 +77,14 @@ struct SFun{F} <: STerm
         end
     end
 end
+isuniform(::SFun) = true
 
 function (f::SFun)(args::Vararg{STerm})
     SExpr(Call(), f, args...)
 end
 
 struct SIndex{I} <: STerm end
+isuniform(::SIndex) = true
 
 """
     SIndex(i)
@@ -94,8 +106,6 @@ SExpr(head::SExprHead, children::Vararg{STerm}) = SExpr(head, children)
 Wrap `term` in a `Node` expression.
 
 `Node` keeps the wrapped subtree structurally intact during expression evaluation.
-
-## Examples
 
 ```jldoctest
 julia> using Chmy
@@ -152,6 +162,7 @@ isexpr(::SExpr) = true
 
 head(expr::SExpr) = expr.head
 children(expr::SExpr) = expr.children
+isuniform(expr::SExpr) = all(isuniform, children(expr))
 
 iscall(expr::SExpr) = expr.head isa Call
 operation(expr::SExpr{Call}) = first(expr.children)
@@ -173,26 +184,8 @@ isloc(expr::SExpr) = expr.head isa Loc
 argument(expr::SExpr{Loc}) = first(expr.children)
 location(expr::SExpr{Loc}) = Base.tail(expr.children)
 
-# indexing with static expressions
-Base.getindex(t::STerm, inds::Vararg{STerm}) = SExpr(Ind(), t, inds...)
-
-# `Node` is transparent to indexing, but the indexed result stays wrapped so the
-# protected subtree can still be matched later by substitution rules.
-function Base.getindex(expr::SExpr{Node}, I::Vararg{Integer,N}) where {N}
-    N == 0 && return expr
-    return expr[tuplemap(STerm, I)...]
-end
-function Base.getindex(expr::SExpr{Node}, inds::Vararg{SLiteral,N}) where {N}
-    N == 0 && return expr
-    return node(argument(expr)[inds...])
-end
-function Base.getindex(expr::SExpr{Node}, inds::Vararg{STerm,N}) where {N}
-    N == 0 && return expr
-    return node(argument(expr)[inds...])
-end
-
-# Literals ignore symbolic indexing because they have no spatial dependence.
-Base.getindex(s::SLiteral, ::Vararg{STerm}) = s
+# Zero-argument indexing is an identity for symbolic terms.
+Base.getindex(term::STerm) = term
 
 # conversion to STerm
 STerm(v::STerm) = v
