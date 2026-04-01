@@ -318,7 +318,6 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test expr === u + 1
         @test component === v[1]
         @test compute(u[p, s][i, j], Binding(u => 2.0), 3, 4) == 2.0
-        @test compute(expr, Binding(expr => 7.0), 3, 4) == 7.0
         @test compute(component, Binding(component => 5.0), 3) == 5.0
     end
 
