@@ -41,7 +41,6 @@ symbolic terms are left symbolic in the generated expression.
 function to_expr end
 
 function to_expr(expr::STerm, bnd)
-    isuniform(expr) || return expr
     idx = expr_idx(bnd, expr)
     isnothing(idx) && return expr
     dtype = bnd.data[idx]
