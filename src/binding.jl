@@ -102,3 +102,6 @@ Can be used to inspect Julia expressions generated from the Chmy expression.
 function binding_types(bnd::Binding)
     return Binding(bnd.exprs, ntuple(i -> typeof(bnd.data[i]), Val(length(bnd.data))))
 end
+
+# Implement Adapt.jl interface to allow passing bindngs to GPU kernels
+Adapt.adapt_structure(to, bnd::Binding) = Binding(bnd.exprs, Adapt.adapt(to, bnd.data))

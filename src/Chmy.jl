@@ -1,6 +1,8 @@
 module Chmy
 
 using KernelAbstractions
+import Adapt
+
 import LinearAlgebra: ⋅, ×, tr, det, diag, transpose
 
 import Base: broadcasted
@@ -49,7 +51,7 @@ export DifferentialOperator
 export Gradient, Divergence, Curl
 include("calculus.jl")
 
-export stencil_rule 
+export stencil_rule
 include("lowering.jl")
 
 export Binding, push, binding_types, pairstuple
