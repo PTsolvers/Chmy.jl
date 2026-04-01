@@ -306,6 +306,32 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test (-grad(f))[1][p, s][i, j] === -f[s, s][i, j] + f[s, s][i - 1, j]
     end
 
+    @testset "immediate lowering inference" begin
+        @scalars P
+        @vectors V
+        @uniform @scalars ρ β
+
+        D = StaggeredCentralDifference()
+        grad = Gradient(D)
+        divg = Divergence(D)
+        p, s = Point(), Segment()
+        i, j = SIndex(1), SIndex(2)
+
+        r_P = -divg(V) / β
+        r_V = -grad(P) / ρ
+
+        lower_pressure(r_P, s, i, j) = r_P[s, s][i, j]
+        lower_velocity(r_V, p, s, i, j) = r_V[1][p, s][i, j]
+
+        @inferred lower_pressure(r_P, s, i, j)
+        @inferred lower_velocity(r_V, p, s, i, j)
+
+        lower_pressure(r_P, s, i, j)
+        lower_velocity(r_V, p, s, i, j)
+        @test @allocated(lower_pressure(r_P, s, i, j)) == 0
+        @test @allocated(lower_velocity(r_V, p, s, i, j)) == 0
+    end
+
     @testset "uniform compute bindings" begin
         u = SUScalar(:u)
         v = SUVec(:v)

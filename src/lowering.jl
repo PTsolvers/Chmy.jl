@@ -131,7 +131,9 @@ component(::STerm, ::Tuple{Vararg{STerm}}, I, t) = SExpr(Comp(), t, I...)
 ispointwise(::STerm) = false
 ispointwise(::Union{SRef,SFun}) = true
 
-function locate_scalar(t::STerm, loc::NTuple{N,Space}) where {N}
+# Immediate symbolic lowering must stay compile-time foldable, otherwise nested
+# indexing of scalar expressions regresses to runtime work and type instability.
+Base.@assume_effects :foldable function locate_scalar(t::STerm, loc::NTuple{N,Space}) where {N}
     isuniform(t) && return t
     if iscall(t) && ispointwise(operation(t))
         return SExpr(Call(), operation(t), map(x -> x[loc...], arguments(t))...)
@@ -140,7 +142,7 @@ function locate_scalar(t::STerm, loc::NTuple{N,Space}) where {N}
     end
 end
 
-function lower_loc(t::STerm, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where {N}
+Base.@assume_effects :foldable function lower_loc(t::STerm, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where {N}
     isuniform(t) && return t
     (!isexpr(t) || iscomp(t)) && return SExpr(Ind(), SExpr(Loc(), t, loc...), inds...)
     if iscall(t)
@@ -150,7 +152,7 @@ function lower_loc(t::STerm, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where 
     end
 end
 
-function lower_ind(t::STerm, inds::NTuple{N,STerm}) where {N}
+Base.@assume_effects :foldable function lower_ind(t::STerm, inds::NTuple{N,STerm}) where {N}
     # Uniform expressions can be substituted directly during compute, so
     # runtime grid indices are irrelevant and must not be threaded further.
     isuniform(t) && return t
