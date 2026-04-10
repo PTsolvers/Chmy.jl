@@ -1,9 +1,27 @@
 # static evaluation
-isstatic(::STerm) = false
-isstatic(::SLiteral) = true
-isstatic(expr::SExpr{Call}) = all(isstatic, arguments(expr))
+isstaticconst(::STerm) = false
+isstaticconst(::SLiteral) = true
+isstaticconst(expr::SExpr{Call}) = all(isstaticconst, arguments(expr))
 
-seval(term::STerm) = isstatic(term) ? SLiteral(compute(term)) : term
+constval(v::SLiteral) = v
+function constval(expr::SExpr{Call})
+    if isstaticconst(expr)
+        return constval(operation(expr), tuplemap(constval, arguments(expr))...)
+    end
+    return expr
+end
+constval(t::STerm) = t
+
+@generated function constval(::SRef{F}, args::Vararg{SLiteral,N}) where {F,N}
+    expr = Expr(:call, F)
+    for i in 1:N
+        argsv = value(args[i].instance)
+        push!(expr.args, :($argsv))
+    end
+    return Expr(:call, :SLiteral, expr)
+end
+
+constval(op::SFun, args::Vararg{SLiteral,N}) where {N} = SLiteral(op.f(tuplemap(value, args)...))
 
 # monomial representation of products for canonicalization
 struct Monomial{S,B}
@@ -54,9 +72,9 @@ Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff,
         else
             binding = addpower(binding, term, npow)
         end
-    elseif isunaryminus(term) && isstatic(npow)
+    elseif isunaryminus(term) && isstaticconst(npow)
         # fold an unary minus into the coefficient for odd integer powers, e.g. a * (-x)^3 -> -a * x^3
-        p = compute(npow)
+        p = value(constval(npow))
         if isinteger(p)
             isodd(p) && (coeff = -coeff)
             coeff, binding = collect_powers(only(arguments(term)), coeff, binding, npow)
@@ -76,9 +94,9 @@ end
 function collect_powers(term, coeff, binding, npow)
     # Compile-time literal factors can be folded directly into the scalar
     # coefficient of the monomial.
-    if isstatic(term) && isstatic(npow)
-        base = compute(term)
-        powr = compute(npow)
+    if isstaticconst(term) && isstaticconst(npow)
+        base = value(constval(term))
+        powr = value(constval(npow))
         # preserve exact division of integers by promoting to Rational if possible
         if isinteger(base) && isinteger(powr) && powr < zero(powr)
             base = Rational(base)
@@ -96,7 +114,7 @@ function splitpower(num, den, base, npow)
         return num, den
     elseif isstaticone(npow)
         return (num..., base), den
-    elseif isstatic(npow) && compute(npow) < zero(compute(npow))
+    elseif isstaticconst(npow) && value(constval(npow)) < zero(value(constval(npow)))
         if isstaticone(-npow)
             return num, (den..., base)
         end
@@ -224,7 +242,6 @@ end
 build_tree(expr, ::Tuple{}) = expr
 function build_tree(expr, monomials)
     mon = first(monomials)
-    rest = Base.tail(monomials)
     # rebuild as `+`/`-` to preserve readable signs in the final tree
     if isnegative(mon.coeff)
         new_expr = makeop(:-, expr, abs_product_expr(mon))
@@ -233,7 +250,7 @@ function build_tree(expr, monomials)
     else
         new_expr = makeop(:+, expr, abs_product_expr(mon))
     end
-    return build_tree(new_expr, rest)
+    return build_tree(new_expr, Base.tail(monomials))
 end
 
 canonicalize_sum(term::STerm) = term
@@ -258,7 +275,7 @@ Base.@assume_effects :foldable function (::CanonicalizeRule)(expr::SExpr{Call})
     elseif op === SRef(:+) || op === SRef(:-)
         return canonicalize_sum(expr)
     else
-        return seval(expr)
+        return constval(expr)
     end
 end
 
