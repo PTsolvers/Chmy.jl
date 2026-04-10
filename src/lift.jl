@@ -8,18 +8,18 @@ dimension `I` and reinserting the fixed indices (and locations) in other axes.
 Base.@assume_effects :foldable function lift(op::STerm, args, inds::NTuple{N,STerm}, ::Val{I}) where {I,N}
     expr = stencil_rule(op, tuplemap(Stub, args), (inds[I],))
     rule = InsertRule(inds, Val(I), Val(N))
-    return evaluate(unwrap(Prewalk(rule)(expr)))
+    return evaluate(unstub(Prewalk(rule)(expr)))
 end
 Base.@assume_effects :foldable function lift(op::STerm, args, loc::NTuple{N,Space}, inds::NTuple{N,STerm}, ::Val{I}) where {I,N}
     expr = stencil_rule(op, tuplemap(Stub, args), (loc[I],), (inds[I],))
     rule = InsertRuleLoc(loc, inds, Val(I), Val(N))
-    return evaluate(unwrap(Prewalk(rule)(expr)))
+    return evaluate(unstub(Prewalk(rule)(expr)))
 end
 
 # Lifting embeds a 1D stencil rule into an N-dimensional indexing/location
 # context. The rule itself is still written using ordinary Chmy indexing syntax,
-# so we need a way to postpone the eager lowering until the full N-dimensional
-# indices and locations have been reconstructed.
+# so it uses a local `Stub` placeholder to postpone lowering until the full
+# N-dimensional indices and locations have been reconstructed.
 
 # `Stub` is a wrapper for scalar arguments while a 1D rule is being built.
 # If lifting used the original arguments directly, indexing inside a 1D stencil
@@ -34,19 +34,16 @@ struct Stub{T<:STerm} <: STerm
     end
 end
 
-tensorrank(::Stub) = 0
+tensorrank(stub::Stub) = tensorrank(stub.arg)
 
 # Recursively remove lift-local placeholders before the expression re-enters the
 # ordinary evaluation/indexing machinery.
-unwrap(term::STerm) = term
-unwrap(stub::Stub) = stub.arg
-unwrap(expr::SExpr) = SExpr(head(expr), tuplemap(unwrap, children(expr))...)
+unstub(term::STerm) = term
+unstub(stub::Stub) = stub.arg
+unstub(expr::SExpr) = SExpr(head(expr), tuplemap(unstub, children(expr))...)
 
-# Stub indexing intentionally preserves the user-written indexing
-# structure from the 1D stencil rule without triggering generic lowering.
 Base.getindex(stub::Stub, inds::Vararg{STerm}) = SExpr(Ind(), stub, inds...)
 Base.getindex(stub::Stub, loc::Vararg{Space}) = SExpr(Loc(), stub, loc...)
-# Keep nested `arg[loc...][inds...]` intact when the argument is a `Stub`.
 function Base.getindex(expr::SExpr{Loc,<:Tuple{Stub,Vararg}}, inds::Vararg{STerm,N}) where {N}
     return SExpr(Ind(), expr, inds...)
 end
