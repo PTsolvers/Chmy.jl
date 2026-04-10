@@ -4,8 +4,9 @@ termrank(::STensor)     = 0x1
 termrank(::SZeroTensor) = 0x2
 termrank(::SIdTensor)   = 0x3
 termrank(::SLiteral)    = 0x4
-termrank(::SExpr)       = 0x5
-termrank(t::STerm)      = 0x6 + objectid(t)
+termrank(::SNode)       = 0x5
+termrank(::SExpr)       = 0x6
+termrank(t::STerm)      = 0x7 + objectid(t)
 
 # operator terms
 oprank(::SRef)                    = 0x0
@@ -22,14 +23,14 @@ headrank(::Call)       = 0x0
 headrank(::Comp)       = 0x1
 headrank(::Ind)        = 0x2
 headrank(::Loc)        = 0x3
-headrank(::Node)       = 0x4
-headrank(h::SExprHead) = 0x5 + objectid(h)
+headrank(h::SExprHead) = 0x4 + objectid(h)
 headrank(expr::SExpr)  = headrank(head(expr))
 
 # comparing STerms lexicographically
 isless_lex(::SIndex{I}, ::SIndex{J}) where {I,J} = isless(I, J)
 isless_lex(::SRef{F1}, ::SRef{F2}) where {F1,F2} = isless(F1, F2)
 isless_lex(x::SFun, y::SFun) = isless(nameof(x.f), nameof(y.f))
+isless_lex(x::SNode, y::SNode) = isless_lex(argument(x), argument(y))
 isless_lex(::Point, ::Segment) = true
 isless_lex(::Segment, ::Point) = false
 
@@ -57,16 +58,14 @@ function isless_lex(x::STensor, y::STensor)
     return false
 end
 
+isless_lex(x::SLiteral, y::SLiteral) = isless(value(x), value(y))
+
 function isless_lex(x::STerm, y::STerm)
     x === y && return false
     # compare tensor ranks
     tx = tensorrank(x)
     ty = tensorrank(y)
     tx == ty || return isless(tx, ty)
-    # compare static terms at compile time
-    if isstatic(x) && isstatic(y)
-        return isless(compute(x), compute(y))
-    end
     # different kinds of terms are compared by their term rank
     rx = termrank(x)
     ry = termrank(y)

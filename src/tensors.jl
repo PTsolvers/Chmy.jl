@@ -188,7 +188,6 @@ tensorrank(expr::SExpr{Call}) = tensorrank(operation(expr), arguments(expr)...)
 tensorrank(::SExpr{Comp}) = 0
 tensorrank(::SExpr{Loc}) = 0
 tensorrank(::SExpr{Ind}) = 0
-tensorrank(expr::SExpr{Node}) = tensorrank(argument(expr))
 
 tensorrank(::SFun, args...) = 0
 tensorrank(::SRef, args...) = 0
@@ -347,6 +346,7 @@ IdTensor{D,R}() where {D,R} = Tensor{D,R,IdKind,Tuple{}}(())
 Construct a dimension-`D` component representation of symbolic tensor `s`.
 The result has the same rank and the symmetries as `s`.
 """
+Tensor{D}(t::Tensor{D}) where {D} = t
 Tensor{D}(s::STensor{0}) where {D} = s
 Tensor{D}(::SZeroTensor{R}) where {D,R} = ZeroTensor{D,R}()
 Tensor{D}(::SIdTensor{R}) where {D,R} = IdTensor{D,R}()
@@ -393,9 +393,6 @@ function Tensor{D}(expr::SExpr{Ind}) where {D}
     arg = Tensor{D}(argument(expr))
     return arg[tuplemap(Tensor{D}, indices(expr))...]
 end
-function Tensor{D}(expr::SExpr{Node}) where {D}
-    return node(Tensor{D}(argument(expr)))
-end
 Tensor{D}(s::SRef) where {D} = s
 Tensor{D}(sf::SFun) where {D} = sf
 function Tensor{D}(::SRef{:broadcasted}, op::SFun, args::Vararg{Any,N}) where {D,N}
@@ -422,14 +419,6 @@ function Tensor{D}(op::STerm, args::Vararg{Any,N}) where {D,N}
 end
 Tensor{D}(s::SLiteral) where {D} = s
 Tensor{D}(expr::SExpr) where {D} = SExpr(head(expr), tuplemap(Tensor{D}, children(expr))...)
-
-# `Tensor{D}` expands higher-rank `Node` expressions component-wise, so wrapping
-# a concrete tensor propagates `node` to each scalar component instead of
-# exposing the raw expressions.
-function node(tensor::Tensor{D,R,K}) where {D,R,K}
-    comps = tuplemap(node, tensor.components)
-    return construct_tensor(Tensor{D,R,K}, comps)
-end
 
 # construct the most specific tensor type based on the symmetries of the components
 function construct_tensor(::Type{Tensor{D,R,DiagKind}}, data::NTuple{N,STerm}) where {D,R,N}

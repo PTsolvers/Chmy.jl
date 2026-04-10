@@ -13,9 +13,9 @@ export ⋅, ×, tr, det, diag, transpose
 include("utils.jl")
 include("staticcoef.jl")
 
-export STerm, SExprHead, Call, Comp, Loc, Ind, Node, SLiteral, SRef, SFun, SIndex, SExpr
+export STerm, SExprHead, Call, Comp, Loc, Ind, SLiteral, SRef, SFun, SIndex, SExpr
 export isexpr, iscall, isind, isloc, head, children, operation, arguments, argument, arity, indices, location
-export node, node_unwrap, isuniform
+export isuniform, isliteral
 export value, isstaticzero, isstaticone
 include("expressions.jl")
 
@@ -35,7 +35,10 @@ export Tensor, SymTensor, AltTensor, DiagTensor, Vec, ZeroTensor, IdTensor
 export tensorrank, tensorkind, name
 include("tensors.jl")
 
-export @scalars, @vectors, @tensors, @uniform, @sym, @diag, @alt
+export SNode, node, unwrap
+include("snode.jl")
+
+export @scalars, @vectors, @tensors, @uniform, @sym, @diag, @alt, @id, @zero
 include("macros.jl")
 
 export ⊡, ⊗, sym, asym, adj, gram, cogram

@@ -11,10 +11,10 @@ indexed expressions can read from array-valued bindings using `inds...`.
 
 Calling `compute(expr)` uses an empty binding.
 """
-Base.@propagate_inbounds function compute(expr::STerm, binding::Binding, inds::Vararg{Integer,N}) where {N}
-    compute_expr(expr, binding, inds)
-end
-compute(expr::STerm) = compute(expr, Binding())
+Base.@propagate_inbounds compute(expr::STerm, binding::Binding, inds::Vararg{Integer,N}) where {N} = compute_unwrapped(unwrap(expr), binding, inds...)
+Base.@propagate_inbounds compute(expr::STerm) = compute(expr, Binding())
+
+Base.@propagate_inbounds compute_unwrapped(expr::STerm, binding::Binding, inds::Vararg{Integer,N}) where {N} = compute_expr(expr, binding, inds)
 
 # `compute` is implemented as generated function so a fully static symbolic term and
 # the concrete binding types can be turned into plain Julia code with no
@@ -56,7 +56,7 @@ to_expr(sf::SFun, bnd) = sf.f
 
 # Calls are lowered structurally by recursively translating all children.
 to_expr(expr::SExpr{Call}, bnd) = Expr(:call, map(arg -> to_expr(arg, bnd), children(expr))...)
-to_expr(expr::SExpr{Node}, bnd) = to_expr(argument(expr), bnd)
+to_expr(expr::SNode, bnd) = to_expr(unwrap(expr), bnd)
 to_expr(::SLiteral{Value}, bnd) where {Value} = Value
 to_expr(::SIndex{i}, bnd) where {i} = :(I[$i])
 function to_expr(expr::SExpr{Ind}, bnd)

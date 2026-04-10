@@ -48,6 +48,12 @@ show_static(io, ::STensor{R,<:Any,<:Any,N}, ::Int) where {R,N} = printstyled(io,
 
 show_static(io, ::SZeroTensor, ::Int) = printstyled(io, '𝒪'; bold=true, underline=true)
 show_static(io, ::SIdTensor, ::Int) = printstyled(io, 'ℐ'; bold=true, underline=true)
+function show_static(io, node::SNode, ::Int)
+    printstyled(io, '('; color=:red)
+    show_static(io, argument(node), 0)
+    printstyled(io, ')'; color=:red)
+    return
+end
 
 function show_static(io, expr::SExpr, prec::Int)
     if iscall(expr)
@@ -68,10 +74,6 @@ function show_static(io, expr::SExpr, prec::Int)
             show_list(io, args, ", ", op_prec)
             print(io, ')')
         end
-    elseif isnode(expr)
-        printstyled(io, '('; color=:red)
-        show_static(io, argument(expr), 0)
-        printstyled(io, ')'; color=:red)
     elseif iscomp(expr)
         arg = argument(expr)
         show_static(io, arg, 0)

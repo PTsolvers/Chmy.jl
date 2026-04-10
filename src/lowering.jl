@@ -24,17 +24,15 @@ function Base.getindex(term::STerm, loc::Vararg{Space,N}) where {N}
     return SExpr(Loc(), term, loc...)
 end
 
-# `Node` is transparent to symbolic indexing, but the indexed result stays
-# wrapped so later substitutions can still target the protected subtree.
-Base.getindex(expr::SExpr{Node}, I::Vararg{Integer,N}) where {N} = expr[tuplemap(STerm, I)...]
-Base.getindex(expr::SExpr{Node}, inds::Vararg{SLiteral,N}) where {N} = node(argument(expr)[inds...])
-Base.getindex(expr::SExpr{Node}, inds::Vararg{STerm,N}) where {N} = node(argument(expr)[inds...])
-Base.getindex(expr::SExpr{Node}, loc::Vararg{Space,N}) where {N} = node(argument(expr)[loc...])
-
 function Base.getindex(expr::SExpr{Ind}, loc::Vararg{Space,N}) where {N}
     inds = indices(expr)
     arg = argument(expr)
     return arg[loc...][inds...]
+end
+
+function Base.getindex(t::Chmy.AbstractSTensor{R}, ::Vararg{SLiteral,N}) where {R,N}
+    N == R || throw(ArgumentError("expected $R tensor component indices, got $N"))
+    return SExpr(Comp(), t, I...)
 end
 
 function Base.getindex(t::AbstractSTensor{R}, loc::Vararg{Space,N}) where {R,N}
@@ -67,7 +65,7 @@ function Base.getindex(expr::SExpr{Loc}, inds::Vararg{STerm,N}) where {N}
 end
 
 function Base.getindex(expr::SExpr{Call}, inds::Vararg{STerm,N}) where {N}
-    tensorrank(expr) == 0 || throw(ArgumentError("tensor expression '$expr' can only be component-indexed by SLiterals"))
+    tensorrank(expr) == 0 || throw(ArgumentError("grid indexing requires a scalar term; take tensor components of '$expr' first"))
     return lower_ind(Tensor{N}(expr), inds)
 end
 

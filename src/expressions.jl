@@ -5,7 +5,6 @@ iscall(::STerm) = false
 iscomp(::STerm) = false
 isind(::STerm)  = false
 isloc(::STerm)  = false
-isnode(::STerm) = false
 
 isstaticzero(::STerm) = false
 isstaticone(::STerm) = false
@@ -28,8 +27,6 @@ struct Loc <: SExprHead end
 
 struct Ind <: SExprHead end
 
-struct Node <: SExprHead end
-
 """
     SLiteral(value)
 
@@ -43,17 +40,12 @@ function SLiteral(value::Real)
     if isinteger(value)
         value = Int(value)
     end
-    sgn = value >= zero(value)
-    value = abs(value)
-    if isone(value)
-        value = 1
-    end
-    return sgn ? SLiteral{value}() : -SLiteral{value}()
+    return SLiteral{value}()
 end
 
 SLiteral(::StaticCoeff{Value}) where {Value} = SLiteral(Value)
 
-isstaticliteral(s::STerm) = s isa SLiteral
+isliteral(s::STerm) = s isa SLiteral
 isuniform(::SLiteral) = true
 
 value(::SLiteral{Value}) where {Value} = Value
@@ -100,50 +92,6 @@ end
 
 SExpr(head::SExprHead, children::Vararg{STerm}) = SExpr(head, children)
 
-"""
-    node(term)
-
-Wrap `term` in a `Node` expression.
-
-`Node` keeps the wrapped subtree structurally intact during expression evaluation.
-
-```jldoctest
-julia> using Chmy
-
-julia> a, b = SScalar(:a), SScalar(:b)
-(a, b)
-
-julia> a + (a + b)
-StaticExpression:
- 2a + b
-
-julia> a + node(a + b)
-StaticExpression:
- a + (a + b)
-```
-"""
-node(term::SExpr{Node}) = term
-node(term::SLiteral) = term
-node(term::STerm) = SExpr(Node(), term)
-node(term) = node(STerm(term))
-
-"""
-    node_unwrap(term)
-
-Recursively remove all `Node` wrappers from `term` and symbolically evaluate the
-rebuilt expression.
-
-This is the inverse of [`node`](@ref) for expression trees: once the wrappers
-are gone, ordinary Chmy expression construction rules are re-applied, so the
-result may be simplified or re-canonicalized.
-"""
-node_unwrap(term::STerm) = term
-node_unwrap(expr::SExpr{Node}) = node_unwrap(argument(expr))
-function node_unwrap(expr::SExpr)
-    rebuilt = SExpr(head(expr), tuplemap(node_unwrap, children(expr))...)
-    return evaluate(rebuilt)
-end
-
 SExpr(::Call, ::SRef{:*}, x::STerm) = x
 SExpr(::Call, ::SRef{:+}, x::STerm) = x
 
@@ -164,23 +112,20 @@ head(expr::SExpr) = expr.head
 children(expr::SExpr) = expr.children
 isuniform(expr::SExpr) = all(isuniform, children(expr))
 
-iscall(expr::SExpr) = expr.head isa Call
+iscall(expr::SExpr{Call}) = true
 operation(expr::SExpr{Call}) = first(expr.children)
 arguments(expr::SExpr{Call}) = Base.tail(expr.children)
 arity(expr::SExpr{Call}) = length(arguments(expr))
 
-isnode(expr::SExpr) = expr.head isa Node
-argument(expr::SExpr{Node}) = only(expr.children)
-
-iscomp(expr::SExpr) = expr.head isa Comp
+iscomp(expr::SExpr{Comp}) = true
 argument(expr::SExpr{Comp}) = first(expr.children)
 indices(expr::SExpr{Comp}) = Base.tail(expr.children)
 
-isind(expr::SExpr) = expr.head isa Ind
+isind(expr::SExpr{Ind}) = true
 argument(expr::SExpr{Ind}) = first(expr.children)
 indices(expr::SExpr{Ind}) = Base.tail(expr.children)
 
-isloc(expr::SExpr) = expr.head isa Loc
+isloc(expr::SExpr{Loc}) = true
 argument(expr::SExpr{Loc}) = first(expr.children)
 location(expr::SExpr{Loc}) = Base.tail(expr.children)
 

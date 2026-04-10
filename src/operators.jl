@@ -208,6 +208,7 @@ function Base.:-(arg::STerm)
     end
     return makeop(:-, arg)
 end
+Base.:-(::SLiteral{S}) where {S} = SLiteral{-S}()
 Base.:-(arg::SLiteral{0}) = arg
 Base.:-(arg::SZeroTensor) = arg
 
