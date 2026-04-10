@@ -32,7 +32,8 @@ end
 Declare symbolic tensors of rank `R`.
 
 Plain names create generic tensors. Qualifiers such as [`@sym`](@ref),
-[`@diag`](@ref), and [`@alt`](@ref) select specialized tensor kinds.
+[`@diag`](@ref), [`@alt`](@ref), [`@id`](@ref), and [`@zero`](@ref)
+select specialized tensor kinds.
 
 ```julia
 @tensors 2 A @sym(B, C) @diag(D)
@@ -50,7 +51,9 @@ end
 Mark declarations as spatially uniform.
 
 `@uniform` can wrap a declaration macro, appear inline inside another declaration,
-or wrap a `begin ... end` block containing declaration macros.
+or wrap a `begin ... end` block containing declaration macros. Identity and zero
+tensors are always uniform, so `@uniform` has no effect on [`@id`](@ref) and
+[`@zero`](@ref) declarations.
 
 ```julia
 @uniform @scalars a b
@@ -123,6 +126,40 @@ macro alt(args...)
     declaration_error("`@alt` can only be used inside `@tensors`.")
 end
 
+"""
+    @id x
+    @id(x, y, ...)
+
+Declare identity tensors.
+
+This qualifier is only valid inside [`@tensors`](@ref). Identity tensors are
+always uniform, so wrapping them in [`@uniform`](@ref) has no effect.
+
+```julia
+@tensors 2 @id(I)
+```
+"""
+macro id(args...)
+    declaration_error("`@id` can only be used inside `@tensors`.")
+end
+
+"""
+    @zero x
+    @zero(x, y, ...)
+
+Declare zero tensors.
+
+This qualifier is only valid inside [`@tensors`](@ref). Zero tensors are always
+uniform, so wrapping them in [`@uniform`](@ref) has no effect.
+
+```julia
+@tensors 2 @zero(Z)
+```
+"""
+macro zero(args...)
+    declaration_error("`@zero` can only be used inside `@tensors`.")
+end
+
 struct Declaration
     name::Symbol
     rank::Int
@@ -131,9 +168,17 @@ struct Declaration
 end
 
 const DECLARATION_MACROS = (Symbol("@scalars"), Symbol("@vectors"), Symbol("@tensors"))
-const KIND_MACROS = Dict(Symbol("@sym") => :SymKind, Symbol("@diag") => :DiagKind, Symbol("@alt") => :AltKind)
+const KIND_MACROS = Dict(
+    Symbol("@sym") => :SymKind,
+    Symbol("@diag") => :DiagKind,
+    Symbol("@alt") => :AltKind,
+    Symbol("@id") => :IdKind,
+    Symbol("@zero") => :ZeroKind,
+)
 
 const STENSOR_REF = GlobalRef(@__MODULE__, :STensor)
+const S_ID_TENSOR_REF = GlobalRef(@__MODULE__, :SIdTensor)
+const S_ZERO_TENSOR_REF = GlobalRef(@__MODULE__, :SZeroTensor)
 
 is_macrocall(expr, name::Symbol) = expr isa Expr && expr.head === :macrocall && expr.args[1] === name
 macro_args(expr::Expr) = expr.args[3:end]
@@ -194,6 +239,11 @@ end
 kind_ref(kind::Symbol) = GlobalRef(@__MODULE__, kind)
 
 function constructor_expr(decl::Declaration)
+    if decl.kind === :IdKind
+        return Expr(:call, Expr(:curly, S_ID_TENSOR_REF, decl.rank))
+    elseif decl.kind === :ZeroKind
+        return Expr(:call, Expr(:curly, S_ZERO_TENSOR_REF, decl.rank))
+    end
     return Expr(:call, Expr(:curly, STENSOR_REF, decl.rank, kind_ref(decl.kind), decl.uniform, QuoteNode(decl.name)))
 end
 
