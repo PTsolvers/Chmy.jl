@@ -1,3 +1,7 @@
+using Test
+using Chmy
+import Chmy: makeop
+
 @testset "isless_lex" begin
     @scalars a b c
     @vectors u v

@@ -1,7 +1,5 @@
-using Test
 using Chmy
-import Chmy: StaticCoef, makeop, ncomponents, linear_index, dimensions
-import Chmy: NoKind, SymKind, AltKind, DiagKind
+using ParallelTestRunner
 
 # Test naming convention:
 # Reuse the same symbolic field names across the test suite whenever possible,
@@ -24,12 +22,4 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
 # Prefer this convention for both regular and uniform declarations, and for both
 # tensor-core tests and other symbolic-expression tests.
 
-include("test_staticcoef.jl")
-include("test_tensors.jl")
-include("test_calculus.jl")
-include("test_node.jl")
-include("test_macros.jl")
-include("test_rewriters.jl")
-include("test_isless_lex.jl")
-include("test_canonicalize.jl")
-include("test_show.jl")
+runtests(Chmy, ARGS)

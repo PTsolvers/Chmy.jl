@@ -12,3 +12,6 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 julia = "1.12"
 Adapt = "4"
 KernelAbstractions = "0.9"
+
+[workspace]
+projects = ["test"]

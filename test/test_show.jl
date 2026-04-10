@@ -1,3 +1,7 @@
+using Test
+using Chmy
+import Chmy: makeop
+
 @testset "show" begin
     @scalars a b c
     n = node(a + b)

@@ -1,3 +1,7 @@
+using Test
+using Chmy
+import Chmy: StaticCoef
+
 @testset "StaticCoef" begin
     @test StaticCoef(2.0) === StaticCoef{2}()
     @test StaticCoef(6 // 3) === StaticCoef{2}()

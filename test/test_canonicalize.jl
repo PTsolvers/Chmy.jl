@@ -1,3 +1,7 @@
+using Test
+using Chmy
+import Chmy: makeop
+
 @testset "canonicalize" begin
     @scalars a b c
 

@@ -1,3 +1,6 @@
+using Test
+using Chmy
+
 @testset "calculus" begin
     @testset "generic calculus term indexing fallbacks" begin
         i = SIndex(1)

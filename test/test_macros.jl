@@ -1,3 +1,6 @@
+using Test
+using Chmy
+
 @testset "macros" begin
     @testset "scalar and vector declarations" begin
         @scalars a b

@@ -1,3 +1,6 @@
+using Test
+using Chmy
+
 @inline sameterm(a::STerm, b::STerm) = a === b
 
 @testset "rewriters" begin

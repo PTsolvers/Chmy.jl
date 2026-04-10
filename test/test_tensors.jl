@@ -1,3 +1,8 @@
+using Test
+using Chmy
+import Chmy: ncomponents, linear_index, dimensions
+import Chmy: NoKind, SymKind, AltKind, DiagKind
+
 @testset "tensors" begin
     @testset "symbolic tensors" begin
         @scalars a

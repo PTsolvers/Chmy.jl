@@ -1,8 +1,11 @@
+using Test
+using Chmy
+import Chmy: makeop
+
 @testset "node" begin
     @testset "simplify treats nodes as black boxes" begin
         @scalars a b
-        raw = makeop(:+, b, a)
-        wrapped = node(raw)
+        wrapped = node(a + b)
 
         @test simplify(wrapped) === wrapped
         @test simplify(cos(wrapped)) === cos(wrapped)
@@ -10,8 +13,8 @@
 
     @testset "subs does not descend into node expressions" begin
         @scalars a b c d
-        inner = makeop(:+, b, a)
-        expr = node(makeop(:*, inner, d))
+        inner = a + b
+        expr = node(inner * d)
 
         @test subs(expr, a => c) === expr
         @test subs(expr, inner => c) === expr
@@ -23,7 +26,7 @@
         raw = makeop(:+, b, a)
         expr = a + node(raw)
 
-        @test unwrap(expr) === makeop(:+, makeop(:*, SLiteral(2), a), b)
+        @test unwrap(expr) === SLiteral(2) * a + b
         @test unwrap(node(raw)) === a + b
     end
 
@@ -107,7 +110,7 @@
 
     @testset "substitution still matches whole node subexpressions" begin
         @scalars a b c
-        q = node(makeop(:+, b, a))
+        q = node(a + b)
         expr = simplify(q + c + q)
 
         @test simplify(q) === q
@@ -116,7 +119,7 @@
 
     @testset "compute ignores the wrapper" begin
         @scalars a b
-        expr = node(makeop(:+, b, a))
+        expr = node(a + b)
         binding = Binding(a => 2, b => 3)
 
         @test compute(expr, binding) == 5
