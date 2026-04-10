@@ -10,7 +10,7 @@
 using Chmy
 using CairoMakie: Figure, Axis, Colorbar, DataAspect, heatmap!
 
-function laplace_2d(nx, ny)
+function laplace_2d(nx, ny; niter=50_000, display_fig=true)
     # grid
     grid = Grid(nx, ny)
     i, j = indices(grid)
@@ -22,7 +22,7 @@ function laplace_2d(nx, ny)
     divg = Divergence(D)
 
     # main equation definition (spelled out)
-    f = SScalar(:f)
+    @scalars f
     # Keep flux components structurally intact so boundary substitutions can
     # still match them after the residual is simplified.
     q = node(-grad(f))
@@ -30,17 +30,17 @@ function laplace_2d(nx, ny)
     r_c = r[s, s][i, j]
 
     ## boundary conditions
-    # values at bottom and top boundaries
-    f_b = f[s, s][i, j-1]
-    f_t = f[s, s][i, j+1]
-    # fluxes at left and right boundaries
+    # normal fluxes at left and right boundaries
     q_l = q[1][p, s][i, j]
     q_r = q[1][p, s][i+1, j]
+    f_c = f[s, s][i, j]
+    q_b = q[2][s, p][i, j]
+    q_t = q[2][s, p][i, j+1]
     # side boundary conditions
     bc_l = q_l => SLiteral(0)
     bc_r = q_r => SLiteral(0)
-    bc_b = f_b => SLiteral(+1)
-    bc_t = f_t => SLiteral(-1)
+    bc_b = q_b => SLiteral(1) - f_c
+    bc_t = q_t => f_c + SLiteral(1)
     # side residuals
     r_l = subs(r_c, bc_l)
     r_r = subs(r_c, bc_r)
@@ -52,14 +52,15 @@ function laplace_2d(nx, ny)
     r_tl = subs(r_t, bc_l)
     r_tr = subs(r_t, bc_r)
 
-    bc = (l  = r_l,
-          r  = r_r,
-          b  = r_b,
-          t  = r_t,
-          bl = r_bl,
-          br = r_br,
-          tl = r_tl,
-          tr = r_tr)
+    sys = (c  = r_c,
+           l  = r_l,
+           r  = r_r,
+           b  = r_b,
+           t  = r_t,
+           bl = r_bl,
+           br = r_br,
+           tl = r_tl,
+           tr = r_tr)
 
     # arrays
     R = zeros(dims(grid, s, s))
@@ -78,34 +79,34 @@ function laplace_2d(nx, ny)
     Nx, Ny = dims(grid, s, s)
 
     # iterative loop
-    for iter in 1:50_000
+    @time for _ in 1:niter
         # compute residual
         # inner points
-        for j in 2:Ny-1, i in 2:Nx-1
-            R[i, j] = compute(r_c, B, i, j)
+        for iy in 2:Ny-1, ix in 2:Nx-1
+            R[ix, iy] = compute(sys.c, B, ix, iy)
         end
         # x sides
-        for j in 2:Ny-1
-            R[1, j]  = compute(bc.l, B, 1, j)
-            R[Nx, j] = compute(bc.r, B, Nx, j)
+        for iy in 2:Ny-1
+            R[1, iy]  = compute(sys.l, B, 1, iy)
+            R[Nx, iy] = compute(sys.r, B, Nx, iy)
         end
         # y sides
-        for i in 2:Nx-1
-            R[i, 1]  = compute(bc.b, B, i, 1)
-            R[i, Ny] = compute(bc.t, B, i, Ny)
+        for ix in 2:Nx-1
+            R[ix, 1]  = compute(sys.b, B, ix, 1)
+            R[ix, Ny] = compute(sys.t, B, ix, Ny)
         end
         # corners
-        R[1, 1]   = compute(bc.bl, B, 1, 1)
-        R[Nx, 1]  = compute(bc.br, B, Nx, 1)
-        R[1, Ny]  = compute(bc.tl, B, 1, Ny)
-        R[Nx, Ny] = compute(bc.tr, B, Nx, Ny)
+        R[1, 1]   = compute(sys.bl, B, 1, 1)
+        R[Nx, 1]  = compute(sys.br, B, Nx, 1)
+        R[1, Ny]  = compute(sys.tl, B, 1, Ny)
+        R[Nx, Ny] = compute(sys.tr, B, Nx, Ny)
         # update solution
         @. F += 0.25 * R
     end
 
     # update plots
     plt[2][1] = F
-    display(fig)
+    display_fig && display(fig)
 
     return
 end
