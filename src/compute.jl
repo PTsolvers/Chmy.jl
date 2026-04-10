@@ -9,10 +9,10 @@ plain Julia expression and executes it, replacing bound symbolic terms by the
 concrete data stored in `binding`. Scalar bindings are read directly, while
 indexed expressions can read from array-valued bindings using `inds...`.
 
-Calling `compute(expr)` uses an empty binding.
+Omiting `binding` uses an empty binding `Binding()`.
 """
 Base.@propagate_inbounds compute(expr::STerm, binding::Binding, inds::Vararg{Integer,N}) where {N} = compute_unwrapped(unwrap(expr), binding, inds...)
-Base.@propagate_inbounds compute(expr::STerm) = compute(expr, Binding())
+Base.@propagate_inbounds compute(expr::STerm, inds::Vararg{Integer,N}) where {N} = compute(expr, Binding(), inds...)
 
 Base.@propagate_inbounds compute_unwrapped(expr::STerm, binding::Binding, inds::Vararg{Integer,N}) where {N} = compute_expr(expr, binding, inds)
 
