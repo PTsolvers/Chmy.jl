@@ -3,7 +3,7 @@
 
 Protect `arg` from symbolic tree walks.
 
-`SNode` is an inert wrapper aroung a symbolic term: rewriters and traversals treat it as a black box.
+`SNode` is an inert wrapper around a symbolic term: rewriters and traversals treat it as a black box.
 When a protected tensor is expanded into components, each scalar component is wrapped back in `SNode`
 so parent expressions can still lower around it. Use [`unwrap`](@ref) to
 remove the wrapper and re-enter ordinary symbolic evaluation.
