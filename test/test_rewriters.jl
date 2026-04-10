@@ -1,11 +1,7 @@
 @inline sameterm(a::STerm, b::STerm) = a === b
 
-import Chmy: makeop
-
 @testset "rewriters" begin
-    a = SScalar(:a)
-    b = SScalar(:b)
-    c = SScalar(:c)
+    @scalars a b c
     i = SIndex(1)
     j = SIndex(2)
     seg = Segment()
@@ -89,9 +85,9 @@ import Chmy: makeop
 
     @testset "subs" begin
         @test sameterm(subs(a, a => c), c)
-        @test sameterm(subs(a + b, a => c), makeop(:+, b, c))
-        @test sameterm(subs((a+b)[i], a[i] => c[i]), makeop(:+, b[i], c[i]))
-        @test sameterm(subs(a + b, a => c, b => a), makeop(:+, a, c))
+        @test sameterm(subs(a + b, a => c), b + c)
+        @test sameterm(subs((a + b)[i], a[i] => c[i]), b[i] + c[i])
+        @test sameterm(subs(a + b, a => c, b => a), a + c)
         @test sameterm(subs(a, a => b, a => c), b)
     end
 end

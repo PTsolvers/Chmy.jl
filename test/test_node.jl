@@ -1,9 +1,6 @@
-import Chmy: makeop
-
 @testset "node" begin
     @testset "simplify treats nodes as black boxes" begin
-        a = SScalar(:a)
-        b = SScalar(:b)
+        @scalars a b
         raw = makeop(:+, b, a)
         wrapped = node(raw)
 
@@ -12,10 +9,7 @@ import Chmy: makeop
     end
 
     @testset "subs does not descend into node expressions" begin
-        a = SScalar(:a)
-        b = SScalar(:b)
-        c = SScalar(:c)
-        d = SScalar(:d)
+        @scalars a b c d
         inner = makeop(:+, b, a)
         expr = node(makeop(:*, inner, d))
 
@@ -25,8 +19,7 @@ import Chmy: makeop
     end
 
     @testset "unwrap removes wrappers and reevaluates" begin
-        a = SScalar(:a)
-        b = SScalar(:b)
+        @scalars a b
         raw = makeop(:+, b, a)
         expr = a + node(raw)
 
@@ -35,77 +28,71 @@ import Chmy: makeop
     end
 
     @testset "nodes keep tensor-valued terms opaque" begin
-        v = SVec(:v)
-        wrapped = node(v)
+        @vectors u
+        wrapped = node(u)
         comp = wrapped[1]
-        tv = Tensor{2}(wrapped)
+        tu = Tensor{2}(wrapped)
 
         @test wrapped isa SNode
         @test tensorrank(wrapped) == 1
         @test comp isa SNode
-        @test unwrap(comp) === v[1]
-        @test tv isa Vec{2}
-        @test tv[1] isa SNode
-        @test tv[2] isa SNode
-        @test unwrap(tv[1]) === v[1]
-        @test unwrap(tv[2]) === v[2]
+        @test unwrap(comp) === u[1]
+        @test tu isa Vec{2}
+        @test tu[1] isa SNode
+        @test tu[2] isa SNode
+        @test unwrap(tu[1]) === u[1]
+        @test unwrap(tu[2]) === u[2]
     end
 
     @testset "nodes protect tensor components without contaminating parents" begin
-        f = SScalar(:f)
-        p = Point()
-        s = Segment()
-        D = StaggeredCentralDifference()
-        grad = Gradient(D)
-        divg = Divergence(D)
-        i = SIndex(1)
-        j = SIndex(2)
+        @scalars a
+        p, s = Point(), Segment()
+        diff = StaggeredCentralDifference()
+        grad = Gradient(diff)
+        divg = Divergence(diff)
+        i, j = SIndex(1), SIndex(2)
 
-        q = node(grad(f))
+        q = node(grad(a))
         q1 = q[1][p, s][i, j]
         expr = divg(q)[s, s][i, j]
-        expected = -q[1][p, s][i, j] + q[1][p, s][i+1, j] - q[2][s, p][i, j] + q[2][s, p][i, j+1]
+        expected = -q[1][p, s][i, j] + q[1][p, s][i + 1, j] - q[2][s, p][i, j] + q[2][s, p][i, j + 1]
 
-        @test q1 === node(grad.op[1](f))[p, s][i, j]
+        @test q1 === node(grad.op[1](a))[p, s][i, j]
         @test expr === expected
-        @test unwrap(expr) === divg(grad(f))[s, s][i, j]
+        @test unwrap(expr) === divg(grad(a))[s, s][i, j]
     end
 
     @testset "component propagation materializes tensor contents without lowering indices" begin
-        V = SVec(:V)
+        @vectors u
         s = Segment()
-        D = StaggeredCentralDifference()
-        grad = Gradient(D)
-        i = SIndex(1)
-        j = SIndex(2)
+        diff = StaggeredCentralDifference()
+        grad = Gradient(diff)
+        i, j = SIndex(1), SIndex(2)
 
-        expr = node(grad(V))[1, 1][s, s][i, j]
-        expected = node(grad.op[1](V[1]))[s, s][i, j]
+        expr = node(grad(u))[1, 1][s, s][i, j]
+        expected = node(grad.op[1](u[1]))[s, s][i, j]
 
         @test expr === expected
-        @test unwrap(expr) === grad(V)[1, 1][s, s][i, j]
+        @test unwrap(expr) === grad(u)[1, 1][s, s][i, j]
     end
 
     @testset "boundary substitutions match protected flux components" begin
-        f = SScalar(:f)
-        p = Point()
-        s = Segment()
-        D = StaggeredCentralDifference()
-        grad = Gradient(D)
-        divg = Divergence(D)
-        i = SIndex(1)
-        j = SIndex(2)
+        @scalars a
+        p, s = Point(), Segment()
+        diff = StaggeredCentralDifference()
+        grad = Gradient(diff)
+        divg = Divergence(diff)
+        i, j = SIndex(1), SIndex(2)
 
-        q = node(-grad(f))
+        q = node(-grad(a))
         expr = (-divg(q))[s, s][i, j]
         bc = q[1][p, s][i, j] => SLiteral(0)
 
-        @test subs(expr, bc) === -q[1][p, s][i+1, j] + q[2][s, p][i, j] - q[2][s, p][i, j+1]
+        @test subs(expr, bc) === -q[1][p, s][i + 1, j] + q[2][s, p][i, j] - q[2][s, p][i, j + 1]
     end
 
     @testset "nodes wrap concrete tensors componentwise" begin
-        a = SScalar(:a)
-        b = SScalar(:b)
+        @scalars a b
         t = Tensor{2,1}(a, b)
         wrapped = node(t)
         tw = Tensor{2}(wrapped)
@@ -119,9 +106,7 @@ import Chmy: makeop
     end
 
     @testset "substitution still matches whole node subexpressions" begin
-        a = SScalar(:a)
-        b = SScalar(:b)
-        c = SScalar(:c)
+        @scalars a b c
         q = node(makeop(:+, b, a))
         expr = simplify(q + c + q)
 
@@ -130,10 +115,9 @@ import Chmy: makeop
     end
 
     @testset "compute ignores the wrapper" begin
-        f = SScalar(:f)
-        g = SScalar(:g)
-        expr = node(makeop(:+, g, f))
-        binding = Binding(f => 2, g => 3)
+        @scalars a b
+        expr = node(makeop(:+, b, a))
+        binding = Binding(a => 2, b => 3)
 
         @test compute(expr, binding) == 5
     end

@@ -1,9 +1,5 @@
-import Chmy: makeop
-
 @testset "canonicalize" begin
-    a = SScalar(:a)
-    b = SScalar(:b)
-    c = SScalar(:c)
+    @scalars a b c
 
     @testset "commutativity" begin
         @test b + c + a === makeop(:+, a, b, c)

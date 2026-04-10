@@ -1,13 +1,11 @@
 @testset "show" begin
-    a = SScalar(:a)
-    b = SScalar(:b)
-    c = SScalar(:c)
+    @scalars a b c
     n = node(a + b)
 
     @test sprint(show, -a + b) == "-a + b"
     @test sprint(show, (-a)^b) == "(-a) ^ b"
     @test sprint(show, a + b - a / b) == "a + b - a / b"
-    @test sprint(show, Chmy.makeop(:-, a, Chmy.makeop(:+, b, a^b))) == "a - (b + a ^ b)"
+    @test sprint(show, makeop(:-, a, makeop(:+, b, a^b))) == "a - (b + a ^ b)"
     @test sprint(show, a .+ b) == "a .+ b"
     @test sprint(show, sin.(a)) == "sin.(a)"
     @test sprint(show, n) == "(a + b)"

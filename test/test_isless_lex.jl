@@ -1,11 +1,6 @@
-import Chmy: makeop
-
 @testset "isless_lex" begin
-    a = SScalar(:a)
-    b = SScalar(:b)
-    c = SScalar(:c)
-    u = SVec(:u)
-    v = SVec(:v)
+    @scalars a b c
+    @vectors u v
 
     @testset "leaf terms" begin
         @test isless_lex(SIndex(1), SIndex(2))
@@ -44,7 +39,7 @@ import Chmy: makeop
         @test isless_lex(PartialDerivative(SRef(:a))(a, 2), PartialDerivative(SRef(:b))(a, 1))
         @test !isless_lex(PartialDerivative(SRef(:b))(a, 1), PartialDerivative(SRef(:a))(a, 2))
 
-        @test isless_lex(makeop(:+, a, b), sin(a))
+        @test isless_lex(a + b, sin(a))
         @test isless_lex(sin(a), d(a))
         @test isless_lex(Divergence(d)(u), Curl(d)(u))
 

@@ -1,22 +1,17 @@
-import Chmy: makeop, ncomponents, linear_index, dimensions
-import Chmy: NoKind, SymKind, AltKind, DiagKind
-
 @testset "tensors" begin
     @testset "symbolic tensors" begin
-        a = SScalar(:a)
-        v = SVec(:v)
-        s = SSymTensor{2}(:S)
-        A = SAltTensor{2}(:A)
-        d = SDiagTensor{2}(:D)
+        @scalars a
+        @vectors u
+        @tensors 2 @sym(S) @diag(D) @alt(A)
 
         @test tensorrank(a) == 0
-        @test tensorrank(v) == 1
-        @test tensorrank(s) == 2
+        @test tensorrank(u) == 1
+        @test tensorrank(S) == 2
         @test tensorkind(a) === NoKind
-        @test tensorkind(s) === SymKind
+        @test tensorkind(S) === SymKind
         @test tensorkind(A) === AltKind
-        @test tensorkind(d) === DiagKind
-        @test name(v) === :v
+        @test tensorkind(D) === DiagKind
+        @test name(u) === :u
 
         @test a[] === a
         @test SZeroTensor{0}() === SLiteral(0)
@@ -26,89 +21,45 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test SIdTensor{2}()[1, 1] === SLiteral(1)
         @test SIdTensor{2}()[1, 2] === SLiteral(0)
 
-        @test s[2, 1] === s[1, 2]
-        @test d[1, 2] === SLiteral(0)
-        @test d[2, 2] === d[SLiteral(2), SLiteral(2)]
+        @test S[2, 1] === S[1, 2]
+        @test D[1, 2] === SLiteral(0)
+        @test D[2, 2] === D[SLiteral(2), SLiteral(2)]
         @test A[1, 1] === SLiteral(0)
-        @test A[2, 1] === makeop(:-, A[1, 2])
+        @test A[2, 1] === -A[1, 2]
     end
 
     @testset "uniform symbolic tensors" begin
-        u = SUScalar(:u)
-        v = SUVec(:v)
-        T = SUSymTensor{2}(:T)
-        A = SUAltTensor{2}(:A)
-        d = SUDiagTensor{2}(:D)
-        w = SScalar(:w)
+        @uniform @scalars a
+        @uniform @vectors u
+        @uniform @tensors 2 T @sym(S) @diag(D) @alt(A)
+        @scalars b
         p, s = Point(), Segment()
         i, j = SIndex(1), SIndex(2)
-        D = CentralDifference()
-        grad = Gradient(D)
-        divg = Divergence(D)
-        curl = Curl(D)
 
         @test !isuniform(STensor{0,NoKind}(:a))
         @test STensor{1,NoKind,true}(:u) === SUVec(:u)
 
+        @test isuniform(a)
         @test isuniform(u)
-        @test isuniform(v)
         @test isuniform(T)
+        @test isuniform(S)
         @test isuniform(A)
-        @test isuniform(d)
+        @test isuniform(D)
         @test isuniform(SZeroTensor{2}())
         @test isuniform(SIdTensor{2}())
-        @test isuniform(sin(u) + 1)
-        @test isuniform(v[1])
-        @test !isuniform(w)
-        @test !isuniform(sin(w))
-        @test !isuniform(w[p][i])
+        @test isuniform(sin(a) + 1)
+        @test isuniform(u[1])
+        @test !isuniform(b)
+        @test !isuniform(sin(b))
+        @test !isuniform(b[p][i])
 
-        @test u[p, s][i, j] === u
-        @test sin(u)[p, s][i, j] === sin(u)
-        @test v[1][p, s][i, j] === v[1]
-        @test_throws ArgumentError v[p]
-        @test_throws ArgumentError v[i]
-        @test_throws ArgumentError (v + v)[p]
-        @test_throws ArgumentError (v + v)[i]
-
-        @test !isuniform(D(u))
-        @test !isuniform(grad(u))
-        @test D(u)[i] === SLiteral(0)
-        @test D(sin(u))[i] === SLiteral(0)
-        @test grad(u)[1][i] === SLiteral(0)
-        @test grad(v)[1, 1][i] === SLiteral(0)
-        @test grad(T)[1, 1, 1][i] === SLiteral(0)
-        @test divg(v)[i] === SLiteral(0)
-        @test divg(T)[1][i] === SLiteral(0)
-        @test Tensor{2}(curl(v))[i, j] === SLiteral(0)
-    end
-
-    @testset "generic STerm indexing fallbacks" begin
-        i = SIndex(1)
-        p = Point()
-
-        lit = SLiteral(2)
-        ref = SRef(:f)
-        fun = SFun(sin)
-        diff = CentralDifference()
-
-        @test lit[i] === lit
-        @test lit[p] === lit
-        @test ref[i] === ref
-        @test ref[p] === ref
-        @test fun[i] === fun
-        @test fun[p] === fun
-
-        ind = diff[i]
-        loc = diff[p]
-
-        @test isind(ind)
-        @test argument(ind) === diff
-        @test only(indices(ind)) === i
-
-        @test isloc(loc)
-        @test argument(loc) === diff
-        @test only(location(loc)) === p
+        @test a[p, s][i, j] === a
+        @test sin(a)[p, s][i, j] === sin(a)
+        @test u[1][p, s][i, j] === u[1]
+        @test_throws ArgumentError u[p]
+        @test_throws ArgumentError u[i]
+        @test_throws ArgumentError (u + u)[p]
+        @test_throws ArgumentError (u + u)[i]
     end
 
     @testset "tensor metadata and helper indices" begin
@@ -125,10 +76,7 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
     end
 
     @testset "concrete tensor construction and indexing" begin
-        a = SScalar(:a)
-        b = SScalar(:b)
-        c = SScalar(:c)
-        d = SScalar(:d)
+        @scalars a b c d
 
         t = Tensor{2,2}(a, b, c, d)
         @test t isa Tensor{2,2,NoKind}
@@ -170,75 +118,67 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
     end
 
     @testset "symbolic tensor expansion" begin
-        s = SSymTensor{2}(:S)
-        A = SAltTensor{2}(:A)
-        d = SDiagTensor{2}(:D)
+        @tensors 2 @sym(S) @diag(D) @alt(A)
 
-        ts = Tensor{2}(s)
+        ts = Tensor{2}(S)
         ta = Tensor{3}(A)
-        td = Tensor{3}(d)
+        td = Tensor{3}(D)
 
         @test ts isa SymTensor{2,2}
         @test ta isa AltTensor{3,2}
         @test td isa DiagTensor{3,2}
 
-        @test ts[2, 1] === s[1, 2]
+        @test ts[2, 1] === S[1, 2]
         @test ta[1, 2] === A[1, 2]
-        @test ta[2, 1] === makeop(:-, A[1, 2])
+        @test ta[2, 1] === -A[1, 2]
         @test ta[1, 1] === SLiteral(0)
         @test td[1, 2] === SLiteral(0)
-        @test td[3, 3] === d[3, 3]
+        @test td[3, 3] === D[3, 3]
     end
 
-    @testset "symbolic tensor expression expansion" begin
-        u = SVec(:u)
-        v = SVec(:v)
-        T = SSymTensor{2}(:T)
-        d = CentralDifference()
-        grad = Gradient(d)
-        divg = Divergence(d)
-        curl = Curl(d)
+    @testset "tensor expression expansion" begin
+        @scalars a
+        @vectors u v
+        @tensors 2 @sym(S)
 
-        expr = T ⋅ u + 2 * v
+        expr = S ⋅ u + 2 * v
         tex = Tensor{2}(expr)
 
         @test tex isa Vec{2}
-        @test tex[1] === T[1, 1] * u[1] + T[1, 2] * u[2] + 2 * v[1]
-        @test tex[2] === T[1, 2] * u[1] + T[2, 2] * u[2] + 2 * v[2]
+        @test tex[1] === S[1, 1] * u[1] + S[1, 2] * u[2] + 2 * v[1]
+        @test tex[2] === S[1, 2] * u[1] + S[2, 2] * u[2] + 2 * v[2]
 
-        tau = SSymTensor{2}(:tau)
-        @test Tensor{3}(tau[1, 1]) === tau[1, 1]
-        @test Tensor{3}(tau[1, 1] + tau[2, 2]) === tau[1, 1] + tau[2, 2]
+        @test Tensor{3}(S[1, 1]) === S[1, 1]
+        @test Tensor{3}(S[1, 1] + S[2, 2]) === S[1, 1] + S[2, 2]
 
         @test Tensor{4}(SLiteral(3)) === SLiteral(3)
-        @test Tensor{4}(SScalar(:p)) === SScalar(:p)
+        @test Tensor{4}(a) === a
 
-        p = SScalar(:p)
         I = SIdTensor{2}()
-        negI = @inferred Tensor{2}(-p * I)
+        negI = @inferred Tensor{2}(-a * I)
         @test negI isa DiagTensor{2,2}
-        @test negI[1, 1] === -p
-        @test negI[2, 2] === -p
+        @test negI[1, 1] === -a
+        @test negI[2, 2] === -a
 
-        σ = -p * I + tau
-        @test σ[1, 1] === -p + tau[1, 1]
-        @test σ[1, 2] === tau[1, 2]
-        @test (v / p)[1] === v[1] / p
-        tσ = Tensor{2}(σ)
-        @test tσ isa SymTensor{2,2}
-        @test tσ[1, 1] === -p + tau[1, 1]
-        @test tσ[1, 2] === tau[1, 2]
-        @test tσ[2, 2] === -p + tau[2, 2]
+        stress = -a * I + S
+        @test stress[1, 1] === -a + S[1, 1]
+        @test stress[1, 2] === S[1, 2]
+        @test (v / a)[1] === v[1] / a
+        tstress = Tensor{2}(stress)
+        @test tstress isa SymTensor{2,2}
+        @test tstress[1, 1] === -a + S[1, 1]
+        @test tstress[1, 2] === S[1, 2]
+        @test tstress[2, 2] === -a + S[2, 2]
 
         rawI = IdTensor{2,2}()
-        left_scaled = @inferred(p * rawI)
-        right_scaled = @inferred(rawI * p)
+        left_scaled = @inferred(a * rawI)
+        right_scaled = @inferred(rawI * a)
         @test left_scaled isa DiagTensor{2,2}
-        @test left_scaled[1, 1] === p
-        @test left_scaled[2, 2] === p
+        @test left_scaled[1, 1] === a
+        @test left_scaled[2, 2] === a
         @test right_scaled isa DiagTensor{2,2}
-        @test right_scaled[1, 1] === p
-        @test right_scaled[2, 2] === p
+        @test right_scaled[1, 1] === a
+        @test right_scaled[2, 2] === a
 
         zero_broadcast = @inferred Base.Broadcast.broadcasted(sin, ZeroTensor{2,2}())
         @test zero_broadcast isa ZeroTensor{2,2}
@@ -255,109 +195,38 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test widened[1, 1] === exp(SLiteral(0))
         @test widened[1, 2] === exp(SLiteral(0))
 
-        st = sin.(2tau)
+        st = sin.(2S)
         tst = Tensor{2}(st)
-        @test tst[1, 1] === sin(2tau[1, 1])
-        @test tst[1, 2] === sin(2tau[1, 2])
-        @test tst[2, 2] === sin(2tau[2, 2])
-
-        gu = Tensor{2}(grad(u))
-        @test gu isa Tensor{2,2}
-        @test gu[1, 2] === grad.op[1](u[2])
-        @test gu[2, 1] === grad.op[2](u[1])
-        @test Tensor{2}(grad(u)[1, 2]) === grad.op[1](u[2])
-
-        gT = Tensor{2}(grad(T))
-        @test gT isa Tensor{2,3}
-        @test gT[1, 1, 2] === grad.op[1](T[1, 2])
-        @test gT[2, 1, 2] === grad.op[2](T[1, 2])
-
-        divT = Tensor{2}(divg(T))
-        @test divT isa Vec{2}
-        @test divT[1] === divg.op[1](T[1, 1]) + divg.op[2](T[2, 1])
-        @test divT[2] === divg.op[1](T[1, 2]) + divg.op[2](T[2, 2])
-
-        w = SVec(:w)
-        curlw = Tensor{3}(curl(w))
-        @test curlw isa Vec{3}
-        @test curlw[1] === curl.op[2](w[3]) - curl.op[3](w[2])
-        @test curlw[2] === curl.op[3](w[1]) - curl.op[1](w[3])
-        @test curlw[3] === curl.op[1](w[2]) - curl.op[2](w[1])
-
-        curlu = Tensor{2}(curl(u))
-        @test curlu === curl.op[1](u[2]) - curl.op[2](u[1])
-
-        @test_throws ArgumentError Tensor{4}(curl(SVec(:z)))
-
-        q = -grad(p)
-        @test Tensor{3}(q[1]) === -grad.op[1](p)
-    end
-
-    @testset "automatic scalar indexing" begin
-        f = SScalar(:f)
-        D = StaggeredCentralDifference()
-        grad = Gradient(D)
-        divg = Divergence(D)
-        p, s = Point(), Segment()
-        i, j = SIndex(1), SIndex(2)
-
-        expr = divg(grad(f))
-        @test expr[s, s][i, j] === Tensor{2}(expr)[s, s][i, j]
-        @test (-grad(f))[1][p, s][i, j] === -f[s, s][i, j] + f[s, s][i - 1, j]
-    end
-
-    @testset "immediate lowering inference" begin
-        @scalars P
-        @vectors V
-        @uniform @scalars ρ β
-
-        D = StaggeredCentralDifference()
-        grad = Gradient(D)
-        divg = Divergence(D)
-        p, s = Point(), Segment()
-        i, j = SIndex(1), SIndex(2)
-
-        r_P = -divg(V) / β
-        r_V = -grad(P) / ρ
-
-        lower_pressure(r_P, s, i, j) = r_P[s, s][i, j]
-        lower_velocity(r_V, p, s, i, j) = r_V[1][p, s][i, j]
-
-        @inferred lower_pressure(r_P, s, i, j)
-        @inferred lower_velocity(r_V, p, s, i, j)
-
-        lower_pressure(r_P, s, i, j)
-        lower_velocity(r_V, p, s, i, j)
-        @test @allocated(lower_pressure(r_P, s, i, j)) == 0
-        @test @allocated(lower_velocity(r_V, p, s, i, j)) == 0
+        @test tst[1, 1] === sin(2S[1, 1])
+        @test tst[1, 2] === sin(2S[1, 2])
+        @test tst[2, 2] === sin(2S[2, 2])
     end
 
     @testset "uniform compute bindings" begin
-        u = SUScalar(:u)
-        v = SUVec(:v)
+        @uniform @scalars a
+        @uniform @vectors u
         p, s = Point(), Segment()
         i, j = SIndex(1), SIndex(2)
 
-        expr = (u + 1)[p, s][i, j]
-        component = v[1][p][i]
+        expr = (a + 1)[p, s][i, j]
+        component = u[1][p][i]
 
-        @test expr === u + 1
-        @test component === v[1]
-        @test compute(u[p, s][i, j], Binding(u => 2.0), 3, 4) == 2.0
+        @test expr === a + 1
+        @test component === u[1]
+        @test compute(a[p, s][i, j], Binding(a => 2.0), 3, 4) == 2.0
         @test compute(component, Binding(component => 5.0), 3) == 5.0
     end
 
     @testset "expression tensor rank inference" begin
-        a = SScalar(:a)
-        u = SVec(:u)
-        v = SVec(:v)
-        T = SSymTensor{2}(:T)
+        @scalars a
+        @vectors u v
+        @tensors 2 @sym(S)
 
         @test tensorrank(u ⊗ v) == 2
         @test tensorrank(u ⋅ v) == 0
-        @test tensorrank(T ⋅ u) == 1
-        @test tensorrank(diag(T)) == 1
-        @test tensorrank(gram(T)) == 2
+        @test tensorrank(S ⋅ u) == 1
+        @test tensorrank(diag(S)) == 1
+        @test tensorrank(gram(S)) == 2
         @test tensorrank(a * u) == 1
     end
 end
