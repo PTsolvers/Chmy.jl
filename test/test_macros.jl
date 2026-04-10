@@ -1,4 +1,4 @@
-@testset "declaration macros" begin
+@testset "macros" begin
     @testset "scalar and vector declarations" begin
         @scalars p T
         @vectors V q
@@ -10,7 +10,7 @@
     end
 
     @testset "tensor declarations" begin
-        @tensors 2 A @sym(tau, eps) @diag(G, H) @alt(W, Z)
+        @tensors 2 A @sym(tau, eps) @diag(G, H) @alt(W, Z) @id(I, J) @zero(O, P)
 
         @test A === STensor{2}(:A)
         @test tau === SSymTensor{2}(:tau)
@@ -19,6 +19,10 @@
         @test H === SDiagTensor{2}(:H)
         @test W === SAltTensor{2}(:W)
         @test Z === SAltTensor{2}(:Z)
+        @test I === SIdTensor{2}()
+        @test J === SIdTensor{2}()
+        @test O === SZeroTensor{2}()
+        @test P === SZeroTensor{2}()
     end
 
     @testset "expansion shape" begin
@@ -29,7 +33,7 @@
     @testset "uniform declarations" begin
         @uniform @scalars dx dy
         @uniform @vectors u v
-        @uniform @tensors 2 H @sym(S) @diag(D) @alt(B)
+        @uniform @tensors 2 H @sym(S) @diag(D) @alt(B) @id(I) @zero(O)
 
         @test dx === SUScalar(:dx)
         @test dy === SUScalar(:dy)
@@ -39,12 +43,14 @@
         @test S === SUSymTensor{2}(:S)
         @test D === SUDiagTensor{2}(:D)
         @test B === SUAltTensor{2}(:B)
+        @test I === SIdTensor{2}()
+        @test O === SZeroTensor{2}()
     end
 
     @testset "inline uniform groups" begin
         @scalars a b @uniform(c, d)
         @vectors x @uniform(y)
-        @tensors 2 T @sym(sigma) @uniform(U, @uniform(V), @sym(Su, Sv), @uniform(@diag(Du, Dv)), @alt(Au, Av))
+        @tensors 2 T @sym(sigma) @uniform(U, @uniform(V), @sym(Su, Sv), @uniform(@diag(Du, Dv)), @alt(Au, Av), @id(Iu), @zero(Ou))
 
         @test a === SScalar(:a)
         @test b === SScalar(:b)
@@ -62,13 +68,15 @@
         @test Dv === SUDiagTensor{2}(:Dv)
         @test Au === SUAltTensor{2}(:Au)
         @test Av === SUAltTensor{2}(:Av)
+        @test Iu === SIdTensor{2}()
+        @test Ou === SZeroTensor{2}()
     end
 
     @testset "uniform blocks" begin
         @uniform begin
             @scalars x y
             @vectors v q
-            @tensors 2 A @sym(B, C) @diag(D) @alt(E)
+            @tensors 2 A @sym(B, C) @diag(D) @alt(E) @id(I) @zero(O)
         end
 
         @test x === SUScalar(:x)
@@ -80,6 +88,8 @@
         @test C === SUSymTensor{2}(:C)
         @test D === SUDiagTensor{2}(:D)
         @test E === SUAltTensor{2}(:E)
+        @test I === SIdTensor{2}()
+        @test O === SZeroTensor{2}()
     end
 
     @testset "local scope" begin
@@ -117,5 +127,7 @@
         @test_throws ArgumentError @macroexpand @sym(T)
         @test_throws ArgumentError @macroexpand @diag(T)
         @test_throws ArgumentError @macroexpand @alt(T)
+        @test_throws ArgumentError @macroexpand @id(T)
+        @test_throws ArgumentError @macroexpand @zero(T)
     end
 end
