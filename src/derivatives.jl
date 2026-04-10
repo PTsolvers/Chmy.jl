@@ -34,12 +34,12 @@ struct CentralDifference <: AbstractDerivative end
 
 function stencil_rule(::CentralDifference, args::Tuple{STerm}, loc::Tuple{Space}, inds::Tuple{STerm})
     f, l, i = only(args), only(loc), only(inds)
-    return 0.5 * (f[l][i+1] - f[l][i-1])
+    return 1 // 2 * (f[l][i+1] - f[l][i-1])
 end
 
 function stencil_rule(::CentralDifference, args::Tuple{STerm}, inds::Tuple{STerm})
     f, i = only(args), only(inds)
-    return 0.5 * (f[i+1] - f[i-1])
+    return 1 // 2 * (f[i+1] - f[i-1])
 end
 
 struct StaggeredCentralDifference <: AbstractDerivative end
