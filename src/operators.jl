@@ -425,9 +425,9 @@ Base.inv(t::Tensor{D,2}) where {D} = adj(t) / det(t)
 
 sym(t::SymTensor) = t
 @generated function sym(t::Tensor{D,2}) where {D}
-    ex = Expr(:call, :(SymTensor{2,$D}))
-    for j in 1:D, i in j:D
-        push!(ex.args, :((t[$i, $j] + t[$j, $i]) // 2))
+    ex = Expr(:call, :(SymTensor{$D,2}))
+    foreach_nondecreasing(Val(D), Val(2)) do (i, j)
+        push!(ex.args, :(1 // 2 * (t[$i, $j] + t[$j, $i])))
     end
     quote
         @inline
@@ -436,9 +436,9 @@ sym(t::SymTensor) = t
 end
 
 @generated function asym(t::Tensor{D,2}) where {D}
-    ex = Expr(:call, :(AltTensor{2,$D}))
-    for j in 1:D, i in j+1:D
-        push!(ex.args, :((t[$i, $j] - t[$j, $i]) // 2))
+    ex = Expr(:call, :(AltTensor{$D,2}))
+    foreach_increasing(Val(D), Val(2)) do (i, j)
+        push!(ex.args, :(1 // 2 * (t[$i, $j] - t[$j, $i])))
     end
     quote
         @inline
@@ -452,8 +452,8 @@ end
 The Gramian of a second-rank tensor, defined as `t' ⋅ t`.
 """
 @generated function gram(t::Tensor{D,2}) where {D}
-    ex = Expr(:call, :(SymTensor{2,$D}))
-    for j in 1:D, i in j:D
+    ex = Expr(:call, :(SymTensor{$D,2}))
+    foreach_nondecreasing(Val(D), Val(2)) do (i, j)
         comp = Expr(:call, :+)
         for k in 1:D
             push!(comp.args, :(t[$i, $k] * t[$j, $k]))
@@ -472,8 +472,8 @@ end
 The co-Gramian of a second-rank tensor, defined as `t ⋅ t'`.
 """
 @generated function cogram(t::Tensor{D,2}) where {D}
-    ex = Expr(:call, :(SymTensor{2,$D}))
-    for j in 1:D, i in j:D
+    ex = Expr(:call, :(SymTensor{$D,2}))
+    foreach_nondecreasing(Val(D), Val(2)) do (i, j)
         comp = Expr(:call, :+)
         for k in 1:D
             push!(comp.args, :(t[$k, $i] * t[$k, $j]))
