@@ -3,15 +3,19 @@ uuid = "33a72cf0-4690-46d7-b987-06506c2248b9"
 version = "0.2.0"
 authors = ["Ivan Utkin <iutkin@ethz.ch> and contributors"]
 
+[workspace]
+projects = ["test"]
+
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
+StyledStrings = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
 
 [compat]
-julia = "1.12"
 Adapt = "4"
 KernelAbstractions = "0.9"
-
-[workspace]
-projects = ["test"]
+PrettyTables = "3.3.2"
+StyledStrings = "1.11"
+julia = "1.12"
