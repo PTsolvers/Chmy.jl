@@ -67,7 +67,7 @@ Base.values(bnd::Binding) = bnd.data
 
 Return the contents of `bnd` as a tuple of `expr => value` pairs.
 """
-pairstuple(bnd::Binding) = (pairs(bnd)..., )
+pairstuple(bnd::Binding) = (pairs(bnd)...,)
 
 """
     push(bnd::Binding, pairs...)
@@ -89,6 +89,19 @@ function push(bnd::Binding, kv::Pair)
 end
 function push(bnd::Binding, kvs::Vararg{Pair,N}) where {N}
     return push(push(bnd, first(kvs)), Base.tail(kvs)...)
+end
+
+Base.mergewith(_, bnd::Binding) = bnd
+Base.mergewith(combine, bnd::Binding, others::Vararg{Binding,N}) where {N} = mergewith(combine, mergewith(combine, bnd, first(others)), Base.tail(others)...)
+Base.mergewith(combine, bnd1::Binding, bnd2::Binding) = merge_bindings(combine, bnd1, pairstuple(bnd2))
+merge_bindings(_, bnd, ::Tuple{}) = bnd
+function merge_bindings(combine, bnd, kvs)
+    k, v1 = first(kvs)
+    if haskey(bnd, k)
+        v2 = bnd[k]
+        return merge_bindings(combine, push(bnd, k => combine(v1, v2)), Base.tail(kvs))
+    end
+    return merge_bindings(combine, push(bnd, first(kvs)), Base.tail(kvs))
 end
 
 """
