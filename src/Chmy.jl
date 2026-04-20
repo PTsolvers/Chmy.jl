@@ -1,6 +1,9 @@
 module Chmy
 
 using KernelAbstractions
+using PrettyTables: pretty_table, TextTableFormat
+import StyledStrings
+using StyledStrings: face!
 import Adapt
 
 import LinearAlgebra: ⋅, ×, tr, det, diag, transpose
@@ -59,6 +62,10 @@ include("lowering.jl")
 
 export Binding, push, binding_types, pairstuple
 include("binding.jl")
+
+export Offset, Dirichlet, Neumann, AxisFace, Lower, Upper, Span, Face, Stencil, Nonuniforms
+export δ, adjacent_faces, boundary_rule, boundary_operator, dim, codim, nonuniforms
+include("boundary_operators.jl")
 
 export isless_lex
 include("isless_lex.jl")
