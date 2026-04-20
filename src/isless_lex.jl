@@ -19,10 +19,10 @@ oprank(::Curl)                    = 0x6
 oprank(t::STerm)                  = 0x7 + objectid(t)
 
 # comparing heads of expressions
-headrank(::Call)       = 0x0
-headrank(::Comp)       = 0x1
+headrank(::Comp)       = 0x0
+headrank(::Loc)        = 0x1
 headrank(::Ind)        = 0x2
-headrank(::Loc)        = 0x3
+headrank(::Call)       = 0x3
 headrank(h::SExprHead) = 0x4 + objectid(h)
 headrank(expr::SExpr)  = headrank(head(expr))
 

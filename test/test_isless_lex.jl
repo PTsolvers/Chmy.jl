@@ -59,8 +59,8 @@ import Chmy: makeop
         @test isless_lex(a[Point()], a[Segment()])
         @test !isless_lex(a[Segment()], a[Point()])
 
-        @test isless_lex(a[SIndex(1)], a[Point()])
-        @test !isless_lex(a[Point()], a[SIndex(1)])
+        @test !isless_lex(a[SIndex(1)], a[Point()])
+        @test isless_lex(a[Point()], a[SIndex(1)])
 
         @test isless_lex(d, sd) != isless_lex(sd, d)
     end
