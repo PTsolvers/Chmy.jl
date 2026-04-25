@@ -63,8 +63,10 @@ include("lowering.jl")
 export Binding, push, binding_types, pairstuple
 include("binding.jl")
 
-export Offset, Dirichlet, Neumann, AxisFace, Lower, Upper, Span, Face, Stencil, Nonuniforms
+export Offset, CartesianOffset, Dirichlet, Neumann, AxisFace, Lower, Upper, Span, Face, Stencil, Nonuniforms
 export δ, adjacent_faces, boundary_rule, boundary_operator, dim, codim, nonuniforms
+export ExtensionRule, ExtensionOperator, PolynomialExtension, reconstruct
+export BoundaryData, ValueData, DerivativeData, RobinData
 include("boundary_operators.jl")
 
 export isless_lex

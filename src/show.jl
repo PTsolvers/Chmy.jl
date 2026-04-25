@@ -245,29 +245,28 @@ function Base.show(io::IO, ::MIME"text/plain", rule::SubsRule)
     show(io, rule)
 end
 
-offset_value(::Offset{O}) where {O} = O
-stencil_coords(offset::Tuple) = map(offset_value, offset)
+stencil_coords(o::CartesianOffset) = map(offset_value, o.offsets)
 stencil_axis_name(dim::Integer) = string(Symbol(:i, to_subscript(Val(dim))))
 
-function show_stencil_offset(io::IO, offset::Tuple)
+function Base.show(io::IO, offset::CartesianOffset)
     print(io, "δ(")
     join(io, stencil_coords(offset), ", ")
     print(io, ')')
 end
 
 function Base.show(io::IO, s::Stencil)
-    offsets = map(offset -> sprint(show_stencil_offset, offset), s.offsets)
-    print(io, "Stencil(", join(offsets, ", "), ')')
+    print(io, "Stencil(")
+    join(io, s.offsets, ", ")
+    print(io, ')')
 end
 
-function stencil_bounds(coords)
-    nd = length(first(coords))
+function stencil_vertex_bounds(coords, nd::Integer=length(first(coords)))
     mins = fill(typemax(Int), nd)
     maxs = fill(typemin(Int), nd)
     for coord in coords
         for d in 1:nd
-            mins[d] = min(mins[d], coord[d])
-            maxs[d] = max(maxs[d], coord[d])
+            mins[d] = min(mins[d], floor(Int, coord[d]))
+            maxs[d] = max(maxs[d], ceil(Int, coord[d]))
         end
     end
     return [(mins[d], maxs[d]) for d in 1:nd]
@@ -278,22 +277,56 @@ function stencil_slice_matches(coord, fixed::Tuple)
     return all(coord[d+2] == fixed[d] for d in eachindex(fixed))
 end
 
-stencil_node(active::Bool) = active ? '●' : '·'
+stencil_halfstep_index(coord::Real) = isinteger(2coord) ? Int(2coord) : nothing
 
-const STENCIL_ACTIVE_FACE = StyledStrings.Face(; foreground=:cyan, weight=:bold)
-const STENCIL_GRID_FACE = StyledStrings.Face(; foreground=:light_black)
-
-function stencil_face(char::Char)
-    char == '●' && return STENCIL_ACTIVE_FACE
-    char in ('·', '─', '│') && return STENCIL_GRID_FACE
-    return nothing
+function stencil_halfgrid_coord(coord, nd::Integer)
+    halfcoord = ntuple(i -> stencil_halfstep_index(coord[i]), nd)
+    any(isnothing, halfcoord) && return nothing
+    return ntuple(i -> something(halfcoord[i]), nd)
 end
 
-function stencil_node_row_string(active_nodes, sepwidth::Integer=3)
-    return join((stencil_node(active) for active in active_nodes), repeat("─", sepwidth))
+function stencil_halfgrid_coords(coords, nd::Integer)
+    halfcoords = map(coord -> stencil_halfgrid_coord(coord, nd), coords)
+    any(isnothing, halfcoords) && return nothing
+    return map(coord -> something(coord), halfcoords)
 end
 
-stencil_edge_row_string(n::Integer, sepwidth::Integer=3) = join(fill("│", n), repeat(" ", sepwidth))
+stencil_vertex(active::Bool) = active ? '●' : '○'
+stencil_xedge(active::Bool) = active ? '▶' : '▷'
+stencil_yedge(active::Bool) = active ? '▼' : '▽'
+stencil_cell(active::Bool) = active ? '■' : '□'
+
+function stencil_symbol_span(symbol::Char, sepwidth::Integer; fill::Char)
+    left = fld(sepwidth - 1, 2)
+    right = sepwidth - left - 1
+    return repeat(string(fill), left) * string(symbol) * repeat(string(fill), right)
+end
+
+function stencil_node_row_string(active_nodes, active_segments, sepwidth::Integer=3)
+    nodes = collect(active_nodes)
+    segments = collect(active_segments)
+    chars = String[]
+    for (i, active) in enumerate(nodes)
+        push!(chars, string(stencil_vertex(active)))
+        i == length(nodes) && continue
+        push!(chars, stencil_symbol_span(stencil_xedge(segments[i]), sepwidth; fill='─'))
+    end
+    return join(chars)
+end
+
+function stencil_edge_row_string(active_edges, active_cells, sepwidth::Integer=3)
+    edges = collect(active_edges)
+    cells = collect(active_cells)
+    chars = String[]
+    for (i, active) in enumerate(edges)
+        push!(chars, string(stencil_yedge(active)))
+        i == length(edges) && continue
+        push!(chars, stencil_symbol_span(stencil_cell(cells[i]), sepwidth; fill=' '))
+    end
+    return join(chars)
+end
+
+stencil_vertical_border_row_string(n::Integer, sepwidth::Integer=3) = join(fill("│", n), repeat(" ", sepwidth))
 
 stencil_fixed_indices_string(fixed::Tuple) = join((string(stencil_axis_name(i + 2), " = ", value) for (i, value) in enumerate(fixed)), ", ")
 
@@ -351,7 +384,7 @@ function stencil_slice_layout_2d(bounds;
     ymin, ymax = bounds[2]
     labelwidth = reserve_y_tick_space ? maximum(y -> textwidth(string(y)), ymin:ymax) : 0
     tickwidth = show_x_ticks ? maximum(x -> textwidth(string(x)), xmin:xmax) : 1
-    sepwidth = max(3, show_x_ticks ? tickwidth + 1 : 3)
+    sepwidth = max(9, show_x_ticks ? tickwidth + 1 : 9)
     prefixwidth = max(reserve_y_tick_space ? labelwidth + 2 : 0, show_x_ticks ? tickwidth - 1 : 0)
     gridwidth = stencil_grid_width(xmax - xmin + 1, sepwidth)
     return (; xmin, xmax, ymin, ymax, labelwidth, tickwidth, sepwidth, prefixwidth, gridwidth)
@@ -376,21 +409,7 @@ function stencil_hcat_blocks(blocks::Vector{<:Vector{String}}; gap::Integer=3)
                  repeat(" ", gap)) for row in 1:height]
 end
 
-function stencil_style_line(line::String)
-    styledline = Base.annotatedstring(line)
-    runstart = firstindex(line)
-    runface = nothing
-    for idx in eachindex(line)
-        face = stencil_face(line[idx])
-        if face !== runface
-            isnothing(runface) || face!(styledline, runstart:prevind(line, idx), runface)
-            runstart = idx
-            runface = face
-        end
-    end
-    isnothing(runface) || face!(styledline, runstart:lastindex(line), runface)
-    return styledline
-end
+stencil_style_line(line::String) = Base.annotatedstring(line)
 
 stencil_style_lines(lines::AbstractVector{String}) = map(stencil_style_line, lines)
 
@@ -407,23 +426,27 @@ function stencil_centered_block(lines::AbstractVector{<:AbstractString}, width::
     return stencil_join_lines(padded)
 end
 
-function stencil_slice_lines_1d(coords, bounds; show_ticks::Bool=true, show_axis_labels::Bool=true)
+function stencil_slice_lines_1d(halfcoords, bounds; show_ticks::Bool=true, show_axis_labels::Bool=true)
     xmin, xmax = bounds[1]
-    active = Set(coords)
+    active = Set(first(coord) for coord in halfcoords)
     tickwidth = show_ticks ? maximum(x -> textwidth(string(x)), xmin:xmax) : 1
-    sepwidth = max(3, show_ticks ? tickwidth + 1 : 3)
+    sepwidth = max(9, show_ticks ? tickwidth + 1 : 9)
     prefixwidth = show_ticks ? tickwidth - 1 : 0
     gridwidth = stencil_grid_width(xmax - xmin + 1, sepwidth)
     lines = String[]
     if show_axis_labels
         push!(lines, stencil_centered_line(stencil_axis_name(1), prefixwidth, gridwidth))
     end
-    push!(lines, rpad("", prefixwidth) * stencil_node_row_string(((x,) in active for x in xmin:xmax), sepwidth))
+    push!(lines,
+          rpad("", prefixwidth) *
+          stencil_node_row_string((2x in active for x in xmin:xmax),
+                                  (2x + 1 in active for x in xmin:xmax-1),
+                                  sepwidth))
     show_ticks && push!(lines, stencil_xlabels_line(xmin, xmax, prefixwidth, sepwidth))
     return lines
 end
 
-function stencil_slice_lines_2d(coords, bounds, fixed::Tuple=();
+function stencil_slice_lines_2d(coords, halfcoords, bounds, fixed::Tuple=();
                                 show_x_ticks::Bool=true,
                                 show_y_ticks::Bool=true,
                                 reserve_y_tick_space::Bool=show_y_ticks,
@@ -432,7 +455,7 @@ function stencil_slice_lines_2d(coords, bounds, fixed::Tuple=();
     layout = stencil_slice_layout_2d(bounds; show_x_ticks, show_y_ticks, reserve_y_tick_space)
     xmin, xmax = layout.xmin, layout.xmax
     ymin, ymax = layout.ymin, layout.ymax
-    active = Set((coord[1], coord[2]) for coord in coords if stencil_slice_matches(coord, fixed))
+    active = Set((halfcoord[1], halfcoord[2]) for (coord, halfcoord) in zip(coords, halfcoords) if stencil_slice_matches(coord, fixed))
     labelwidth = layout.labelwidth
     sepwidth = layout.sepwidth
     prefixwidth = layout.prefixwidth
@@ -446,12 +469,29 @@ function stencil_slice_lines_2d(coords, bounds, fixed::Tuple=();
     for (row, y) in enumerate(ymax:-1:ymin)
         prefix = show_y_ticks ? " $(lpad(string(y), labelwidth)) " : blankprefix
         suffix = show_y_axis_label && isodd(nrows) && row == midrow ? " " * stencil_axis_name(2) : ""
-        push!(lines, prefix * stencil_node_row_string(((x, y) in active for x in xmin:xmax), sepwidth) * suffix)
+        push!(lines,
+              prefix *
+              stencil_node_row_string(((2x, 2y) in active for x in xmin:xmax),
+                                      ((2x + 1, 2y) in active for x in xmin:xmax-1),
+                                      sepwidth) *
+              suffix)
         if row < ymax - ymin + 1
             edgeprefix = show_y_ticks ? " $(repeat(" ", labelwidth)) " : blankprefix
-            # For even-height stencils, the y-axis sits between the two middle rows.
-            edgesuffix = show_y_axis_label && iseven(nrows) && row == midedge ? " " * stencil_axis_name(2) : ""
-            push!(lines, edgeprefix * stencil_edge_row_string(xmax - xmin + 1, sepwidth) * edgesuffix)
+            centersuffix = show_y_axis_label && iseven(nrows) && row == midedge ? " " * stencil_axis_name(2) : ""
+            ncols = xmax - xmin + 1
+            hy = 2y - 1
+            push!(lines,
+                  edgeprefix *
+                  stencil_vertical_border_row_string(ncols, sepwidth))
+            push!(lines,
+                  edgeprefix *
+                  stencil_edge_row_string(((2x, hy) in active for x in xmin:xmax),
+                                          ((2x + 1, hy) in active for x in xmin:xmax-1),
+                                          sepwidth) *
+                  centersuffix)
+            push!(lines,
+                  edgeprefix *
+                  stencil_vertical_border_row_string(ncols, sepwidth))
         end
     end
     show_x_ticks && push!(lines, stencil_xlabels_line(xmin, xmax, prefixwidth, sepwidth))
@@ -461,12 +501,14 @@ end
 function stencil_render_lines(s::Stencil; show_ticks::Bool=true, show_axis_labels::Bool=true)
     isempty(s.offsets) && return [Base.annotatedstring(sprint(show, s))]
     coords = map(stencil_coords, s.offsets)
-    bounds = stencil_bounds(coords)
     nd = length(first(coords))
+    halfcoords = stencil_halfgrid_coords(coords, min(nd, 2))
+    isnothing(halfcoords) && return [Base.annotatedstring(sprint(show, s))]
+    bounds = stencil_vertex_bounds(coords, min(nd, 2))
     if nd == 1
-        return stencil_style_lines(stencil_slice_lines_1d(coords, bounds; show_ticks, show_axis_labels))
+        return stencil_style_lines(stencil_slice_lines_1d(halfcoords, bounds; show_ticks, show_axis_labels))
     elseif nd == 2
-        return stencil_style_lines(stencil_slice_lines_2d(coords, bounds;
+        return stencil_style_lines(stencil_slice_lines_2d(coords, halfcoords, bounds;
                                                           show_x_ticks=show_ticks,
                                                           show_y_ticks=show_ticks,
                                                           reserve_y_tick_space=show_ticks,
@@ -475,14 +517,14 @@ function stencil_render_lines(s::Stencil; show_ticks::Bool=true, show_axis_label
     elseif nd != 3
         return [Base.annotatedstring(sprint(show, s))]
     end
-    ranges = [bounds[d][1]:bounds[d][2] for d in 3:length(bounds)]
+    ranges = [sort(unique(coord[d] for coord in coords)) for d in 3:nd]
     fixeds = collect(Tuple(values) for values in Iterators.product(ranges...))
     blocks = Vector{Vector{String}}()
     gap = 1
     for (i, fixed) in enumerate(fixeds)
         # Horizontal slice layouts keep x ticks on every slice, but avoid repeated y ticks.
         show_y_ticks = show_ticks && i == 1
-        slicelines = stencil_slice_lines_2d(coords, bounds, fixed;
+        slicelines = stencil_slice_lines_2d(coords, halfcoords, bounds, fixed;
                                             show_x_ticks=show_ticks,
                                             show_y_ticks=show_y_ticks,
                                             reserve_y_tick_space=show_ticks,

@@ -23,4 +23,16 @@ using Chmy
 
         @test @inferred(adjacent_faces(Face(Span(), Span(), Span()))) === ()
     end
+
+    @testset "nonuniform staggered offsets" begin
+        @scalars a b
+        i, j = SIndex(1), SIndex(2)
+
+        nu1 = nonuniforms(a[Segment()][i])
+        @test sprint(show, Chmy.stencil(nu1, a[Segment()])) == "Stencil(δ(1//2))"
+
+        nu2 = nonuniforms(a[Segment(), Point()][i + 1, j] + b[Point(), Segment()][i, j - 1])
+        @test sprint(show, Chmy.stencil(nu2, a[Segment(), Point()])) == "Stencil(δ(3//2, 0))"
+        @test sprint(show, Chmy.stencil(nu2, b[Point(), Segment()])) == "Stencil(δ(0, -1//2))"
+    end
 end

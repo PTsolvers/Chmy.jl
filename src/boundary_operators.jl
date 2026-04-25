@@ -1,11 +1,21 @@
 struct Offset{O} <: STerm end
-Offset(i::Integer) = Offset{i}()
+Offset(i) = Offset{i}()
 Offset(::SLiteral{i}) where {i} = Offset{i}()
 
-δ(inds::Vararg{Integer,N}) where {N} = ntuple(i -> Offset(inds[i]), Val(N))
-
 tensorrank(::Offset) = 0
+offset_value(::Offset{O}) where {O} = O
 isless_lex(::Offset{I}, ::Offset{J}) where {I,J} = isless(I, J)
+struct CartesianOffset{N,O}
+    offsets::O
+    CartesianOffset(offsets::NTuple{N,Offset}) where {N} = new{N,typeof(offsets)}(offsets)
+end
+CartesianOffset(offsets::Vararg{Offset}) = CartesianOffset(offsets)
+
+δ(inds::Vararg{Real,N}) where {N} = CartesianOffset(ntuple(i -> Offset(inds[i]), Val(N)))
+
+Base.isless(a::CartesianOffset, b::CartesianOffset) = isless_tuple(a.offsets, b.offsets)
+
+Base.getindex(s::STerm, o::CartesianOffset) = getindex(s, o.offsets...)
 
 get_offset(::SIndex) = Offset(0)
 function get_offset(ind::SExpr{Call})
@@ -17,24 +27,14 @@ function get_offset(ind::SExpr{Call})
     return operation(ind) === SRef(:+) ? Offset(o) : Offset(-o)
 end
 
-struct Dirichlet <: STerm end
-function boundary_rule(::Dirichlet, args::Tuple{STerm,STerm}, ::Segment, ::Offset{1})
-    lhs, rhs = args
-    return 2rhs - lhs[δ(-1)]
-end
-function boundary_rule(::Dirichlet, args::Tuple{STerm,STerm}, ::Point, ::Offset{0})
-    _, rhs = args
-    return rhs
-end
+staggering_offset(::Point) = 0
+staggering_offset(::Segment) = 1 // 2
 
-struct Neumann <: STerm end
-function boundary_rule(::Neumann, args::Tuple{STerm,STerm}, ::Segment, ::Offset{1})
-    lhs, rhs = args
-    return lhs[δ(-1)] + rhs
-end
-function boundary_rule(::Neumann, args::Tuple{STerm,STerm}, ::Point, ::Offset{1})
-    lhs, rhs = args
-    return lhs[δ(-1)] + 2rhs
+combine_offset(offset::Offset, loc::Space) = Offset(offset_value(offset) + staggering_offset(loc))
+
+nonuniform_offset(arg, inds) = CartesianOffset(map(get_offset, inds))
+function nonuniform_offset(arg::SExpr{Loc}, inds)
+    return CartesianOffset(tuplemap(combine_offset, map(get_offset, inds), location(arg)))
 end
 
 abstract type AxisFace end
@@ -109,9 +109,9 @@ end
 
 struct Stencil{N,O}
     offsets::O
-    Stencil(offsets::Tuple{Vararg{Tuple{Vararg{Offset,N}},R}}) where {N,R} = new{N,typeof(offsets)}(offsets)
+    Stencil(offsets::NTuple{R,CartesianOffset{N}}) where {R,N} = new{N,typeof(offsets)}(offsets)
 end
-Stencil(offsets...) = Stencil(offsets)
+Stencil(offsets::CartesianOffset...) = Stencil(offsets)
 
 Base.ndims(::Stencil{N}) where {N} = N
 
@@ -124,7 +124,7 @@ function merge_sorted_unique(a::Tuple, b::Tuple)
     bh = first(b)
     if ah === bh
         return (ah, merge_sorted_unique(Base.tail(a), Base.tail(b))...)
-    elseif isless_tuple(ah, bh)
+    elseif isless(ah, bh)
         return (ah, merge_sorted_unique(Base.tail(a), b)...)
     else
         return (bh, merge_sorted_unique(a, Base.tail(b))...)
@@ -143,10 +143,15 @@ stencil(nu::Nonuniforms, t::STerm) = nu.stencils[t]
 
 Base.mergewith(combine, nu::Nonuniforms, others::Vararg{Nonuniforms}) = Nonuniforms(mergewith(combine, nu.stencils, map(stencils, others)...))
 
+"""
+    nonuniforms(expr)
+
+Returns a Binding containing pairs of nonuniform fields and their corresponding stencils. 
+"""
 nonuniforms(::STerm) = Nonuniforms()
 Base.@assume_effects :foldable nonuniforms(expr::SExpr{Call}) = mergewith(merge, map(nonuniforms, arguments(expr))...)
 function nonuniforms(expr::SExpr{Ind})
-    offset = map(get_offset, indices(expr))
+    offset = nonuniform_offset(argument(expr), indices(expr))
     stencil = Stencil(offset)
     return Nonuniforms(argument(expr) => stencil)
 end
@@ -155,39 +160,68 @@ struct GridOperator{E,R}
     expr::E
     rules::R
 end
+GridOperator(expr, rules...) = GridOperator(expr, rules)
 
 struct CombinedRule{R}
     rules::R
 end
 
-operator(op::GridOperator, ::Face{NTuple{N,Span}}, loc) where {N} = op.expr[loc]
-function operator(op::GridOperator, f::Face, loc)
-    rule = construct_rule(op.rules, f)
-    isnothing(rule) && return op.expr[loc]
-    return boundary_operator(rule, op.expr, loc)
+operator(op::GridOperator, ::Face{NTuple{N,Span}}, loc, _) where {N} = op.expr[loc...]
+function operator(op::GridOperator, f::Face, loc, offsets)
+    rule = combine_rules(op.rules, f)
+    isnothing(rule) && return op.expr[loc...]
+    return boundary_rule(rule, op.expr, loc, offsets)
 end
 
-function construct_rule(rules, f::Face)
+function combine_rules(rules, f::Face)
     haskey(rules, f) && return rules[f]
     codim(f) == 1 && return nothing
     af = adjacent_faces(f)
-    ar = map(x -> construct_rule(rules, x), af)
+    ar = map(x -> combine_rules(rules, x), af)
     any(isnothing, ar) && return nothing
     return CombinedRule(ar)
 end
 
-# Substitution BC procedure
-# 1. User must define custom boundary condition type and a method to match an expression and return a replacement expression.
-# 2. The stencil width in a direction is defined as the largest offset out-of-grid in the corresponding direction. For this width, the interior expression is walked and matched againes this custom rule for as many points as needed.
-# 3. The interior expression is passed to the matching function as is, and the returned expression must be already lowered. Whether the interior expression should come in a lower form or not depends on a specific boundary rule.
+abstract type BoundaryRule end
 
-# Replacement BC procedure
-# User must define custom boundary condition type and a method to return a replacement expression.
-# 
+struct ExtensionRule{F,D,O} <: BoundaryRule
+    field::F
+    data::D
+    op::O
+end
 
-# Automatic inference of faces of low codimension
-# If there is no bc rule specified for a face, Chmy will attempt to construct it automatically from higher-dimensional faces.
-# Maximum one high-dim rule can be a replacement rule, all other must be substitution rules. The replacement is run first, and then the substitution ones. The order is undefined, and this is the users responsibility to make sure subs rules are commutative.
+abstract type BoundaryData end
 
-# Reference implementations
-# 1. Reconstruction rules. In a lowered interior expression, finds the specified subexpressions that are computed at the boundary or outside, and then a reconstruction rule is called that must be defined by the user. Examples are reconstruction from value, from gradient, or from weighted sum of the two.
+struct ValueData{V} <: BoundaryData
+    value::V
+end
+
+struct DerivativeData{V} <: BoundaryData
+    value::V
+end
+
+struct RobinData{A,B} <: BoundaryData
+    a::A
+    b::B
+end
+
+abstract type ExtensionOperator end
+
+struct PolynomialExtension{O} <: ExtensionOperator end
+
+function reconstruct(::PolynomialExtension, data::ValueData, f, ::Point, ::Offset{0})
+    rhs = data.value
+    return rhs
+end
+function reconstruct(::PolynomialExtension{1}, data::ValueData, f, ::Segment, ::Offset{1//2})
+    lhs, rhs = f[δ(-1//2)], data.value
+    return 2rhs - lhs
+end
+function reconstruct(::PolynomialExtension{1}, data::DerivativeData, f, ::Point, ::Offset{1})
+    lhs, rhs = f[δ(-1)], data.value
+    return lhs + 2rhs
+end
+function reconstruct(::PolynomialExtension{1}, data::DerivativeData, f, ::Segment, ::Offset{1//2})
+    lhs, rhs = f[δ(-1//2)], data.value
+    return lhs + rhs
+end
