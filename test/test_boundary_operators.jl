@@ -82,12 +82,39 @@ end
         @test sprint(show, Chmy.stencil(nu2, b[Point(), Segment()])) == "Stencil((Point(), Segment()), δ(0, -1))"
     end
 
+    @testset "extension constructors" begin
+        @scalars a b
+
+        @test @inferred(PolynomialReconstruction()) === LinearReconstruction()
+        @test @inferred(PolynomialReconstruction(1)) === LinearReconstruction()
+
+        value_spec = @inferred ExtensionSpec(b)
+        @test value_spec.data.value === b
+        @test value_spec.op === LinearReconstruction()
+
+        data_spec = @inferred ExtensionSpec(ValueData(b))
+        @test data_spec.data.value === b
+        @test data_spec.op === LinearReconstruction()
+
+        derivative_spec = @inferred ExtensionSpec(DerivativeData(b))
+        @test derivative_spec.data.value === b
+        @test derivative_spec.op === LinearReconstruction()
+
+        explicit_spec = @inferred ExtensionSpec(ValueData(b), PolynomialReconstruction())
+        @test explicit_spec.data.value === b
+        @test explicit_spec.op === LinearReconstruction()
+
+        rule = @inferred ExtensionRule(a => b)
+        @test rule.specs[a].data.value === b
+        @test rule.specs[a].op === LinearReconstruction()
+    end
+
     @testset "extension value reconstruction" begin
         @scalars a b
         i = SIndex(1)
         D = CentralDifference()
 
-        point_rule = ExtensionRule(a => ExtensionSpec(ValueData(b), PolynomialReconstruction()))
+        point_rule = ExtensionRule(a => b)
 
         @test @inferred(boundary_rule(point_rule, D(a), Face(Upper()), (Point(),), (Shift(0),))) ===
               1 // 2 * (2 * b - 2 * a[Point()][i-1])
@@ -98,7 +125,7 @@ end
         @test boundary_rule(point_rule, a + D(a), Face(Upper()), (Point(),), (Shift(0),)) ===
               b + 1 // 2 * (2 * b - 2 * a[Point()][i-1])
 
-        segment_rule = ExtensionRule(a => ExtensionSpec(ValueData(b), PolynomialReconstruction()))
+        segment_rule = ExtensionRule(a => b)
 
         @test boundary_rule(segment_rule, D(a), Face(Upper()), (Segment(),), (Shift(-1),)) ===
               1 // 2 * (2 * b - a[Segment()][i] - a[Segment()][i-1])
@@ -112,12 +139,12 @@ end
         i = SIndex(1)
         D = CentralDifference()
 
-        point_rule = ExtensionRule(a => ExtensionSpec(DerivativeData(b), PolynomialReconstruction()))
+        point_rule = ExtensionRule(a => ExtensionSpec(DerivativeData(b)))
 
         @test @inferred(boundary_rule(point_rule, D(a), Face(Upper()), (Point(),), (Shift(0),))) === b
         @test boundary_rule(point_rule, D(a), Face(Lower()), (Point(),), (Shift(0),)) === -b
 
-        segment_rule = ExtensionRule(a => ExtensionSpec(DerivativeData(b), PolynomialReconstruction()))
+        segment_rule = ExtensionRule(a => ExtensionSpec(DerivativeData(b)))
 
         @test boundary_rule(segment_rule, D(a), Face(Upper()), (Segment(),), (Shift(-1),)) ===
               1 // 2 * (b + a[Segment()][i] - a[Segment()][i-1])
@@ -128,8 +155,7 @@ end
         i, j = SIndex(1), SIndex(2)
         D = CentralDifference()
 
-        rule = ExtensionRule(a => ExtensionSpec(ValueData(c), PolynomialReconstruction()),
-                             b => ExtensionSpec(ValueData(d), PolynomialReconstruction()))
+        rule = ExtensionRule(a => c, b => d)
 
         @test @inferred(boundary_rule(rule, D(a) + D(b), Face(Upper()), (Point(),), (Shift(0),))) ===
               1 // 2 * (2 * c - 2 * a[Point()][i-1]) +
@@ -149,8 +175,8 @@ end
         @scalars a b c d e f q
         i, j, k = SIndex(1), SIndex(2), SIndex(3)
 
-        xrule = ExtensionRule(a => ExtensionSpec(ValueData(b), PolynomialReconstruction()))
-        yrule = ExtensionRule(a => ExtensionSpec(ValueData(c), PolynomialReconstruction()))
+        xrule = ExtensionRule(a => b)
+        yrule = ExtensionRule(a => c)
 
         shifted_tangent = BoundaryShift{(1, -1)}()(a)
         @test @inferred(boundary_rule(xrule, shifted_tangent, Face(Upper(), Span()),
@@ -166,15 +192,15 @@ end
                                       (Point(), Point()), (Shift(0), Shift(0)))) ===
               -2 * b + 2 * c + a[Point(), Point()][i-1, j-1]
 
-        direct = ExtensionRule(a => ExtensionSpec(ValueData(d), PolynomialReconstruction()))
+        direct = ExtensionRule(a => d)
         direct_rules = Binding(Face(Upper(), Upper()) => direct,
                                Face(Upper(), Span()) => xrule,
                                Face(Span(), Upper()) => yrule)
         @test Chmy.combine_rules(direct_rules, Face(Upper(), Upper())) === direct
 
-        rules3 = Binding(Face(Upper(), Span(), Span()) => ExtensionRule(a => ExtensionSpec(ValueData(b), PolynomialReconstruction())),
-                         Face(Span(), Upper(), Span()) => ExtensionRule(a => ExtensionSpec(ValueData(c), PolynomialReconstruction())),
-                         Face(Span(), Span(), Upper()) => ExtensionRule(a => ExtensionSpec(ValueData(d), PolynomialReconstruction())))
+        rules3 = Binding(Face(Upper(), Span(), Span()) => ExtensionRule(a => b),
+                         Face(Span(), Upper(), Span()) => ExtensionRule(a => c),
+                         Face(Span(), Span(), Upper()) => ExtensionRule(a => d))
         combined3 = @inferred Chmy.combine_rules(rules3, Face(Upper(), Upper(), Upper()))
         @test length(combined3.rules) == 3
 
@@ -183,10 +209,8 @@ end
                             (Point(), Point(), Point()), (Shift(0), Shift(0), Shift(0))) ===
               -2 * b + c + 2 * d
 
-        mxrule = ExtensionRule(a => ExtensionSpec(ValueData(b), PolynomialReconstruction()),
-                               q => ExtensionSpec(ValueData(e), PolynomialReconstruction()))
-        myrule = ExtensionRule(a => ExtensionSpec(ValueData(c), PolynomialReconstruction()),
-                               q => ExtensionSpec(ValueData(f), PolynomialReconstruction()))
+        mxrule = ExtensionRule(a => b, q => e)
+        myrule = ExtensionRule(a => c, q => f)
         mrules = Binding(Face(Upper(), Span()) => mxrule,
                          Face(Span(), Upper()) => myrule)
         mcombined = @inferred Chmy.combine_rules(mrules, Face(Upper(), Upper()))
@@ -213,17 +237,17 @@ end
 
         @test_throws ArgumentError reconstruct(PolynomialReconstruction(), RobinData(a, b), (a,), SLiteral(1), SLiteral(1))
 
-        bad_rule = ExtensionRule(a[Point()] => ExtensionSpec(ValueData(b), PolynomialReconstruction()))
+        bad_rule = ExtensionRule(a[Point()] => b)
         @test_throws ArgumentError boundary_rule(bad_rule, CentralDifference()(a), Face(Upper()), (Point(),), (Shift(0),))
 
-        bad_tensor_rule = ExtensionRule(V => ExtensionSpec(ValueData(b), PolynomialReconstruction()))
+        bad_tensor_rule = ExtensionRule(V => b)
         @test_throws ArgumentError boundary_rule(bad_tensor_rule, CentralDifference()(a), Face(Upper()), (Point(),), (Shift(0),))
 
-        missing_rule = ExtensionRule(b => ExtensionSpec(ValueData(b), PolynomialReconstruction()))
+        missing_rule = ExtensionRule(b => b)
         @test boundary_rule(missing_rule, CentralDifference()(a), Face(Upper()), (Point(),), (Shift(0),)) ===
               1 // 2 * (a[Point()][i+1] - a[Point()][i-1])
 
-        corner_rule = ExtensionRule(a => ExtensionSpec(ValueData(b), PolynomialReconstruction()))
+        corner_rule = ExtensionRule(a => b)
         @test_throws ArgumentError boundary_rule(corner_rule, a, Face(Upper(), Upper()),
                                                  (Point(), Point()), (Shift(0), Shift(0)))
     end

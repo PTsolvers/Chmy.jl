@@ -344,12 +344,14 @@ function has_rule_pair(pairs::Tuple, face::Face)
 end
 
 """
-    ExtensionSpec(data, op)
+    ExtensionSpec(data[, op])
+    ExtensionSpec(value[, op])
 
 Boundary data and reconstruction method for one field.
 
-`data` provides the boundary data, and `op` is an [`ExtensionOperator`](@ref)
-such as [`PolynomialReconstruction`](@ref).
+Passing a [`BoundaryData`](@ref) object keeps that boundary data kind. Passing a
+plain Chmy expression stores it as [`ValueData`](@ref). If `op` is omitted,
+[`LinearReconstruction`](@ref) is used.
 """
 struct ExtensionSpec{D,O}
     data::D
@@ -358,6 +360,7 @@ end
 
 """
     ExtensionRule(field => ExtensionSpec(data, op), ...)
+    ExtensionRule(field => value, ...)
 
 Boundary rule that extends one or more scalar fields across a codim-1 face.
 
@@ -365,13 +368,12 @@ Each key is an unlocated scalar field identity, such as `u` or `V[1]`. When the
 interior expression is lowered, the rule finds located occurrences such as
 `u[Point()]` or `V[1][Point(), Segment()]` and uses each occurrence's location
 to reconstruct boundary and ghost reads. Each value is an [`ExtensionSpec`](@ref)
-containing the boundary data and an [`ExtensionOperator`](@ref), such as
-[`PolynomialReconstruction`](@ref).
+or a Chmy expression, which is treated as value data with linear reconstruction.
 """
 struct ExtensionRule{B} <: BoundaryRule
     specs::B
 end
-ExtensionRule(specs::Pair...) = ExtensionRule(Binding(specs...))
+ExtensionRule(specs::Pair...) = ExtensionRule(Binding(map(extension_rule_pair, specs)...))
 
 """
     BoundaryData
@@ -435,11 +437,23 @@ The reconstruction is defined in one boundary-normal coordinate and is lifted ba
 to the full expression by [`boundary_rule`](@ref).
 """
 struct PolynomialReconstruction{O} <: ExtensionOperator{O} end
-PolynomialReconstruction() = PolynomialReconstruction{1}()
+
+"""
+    LinearReconstruction
+
+Alias for the one-inner-point linear polynomial reconstruction used by default.
+"""
+const LinearReconstruction = PolynomialReconstruction{1}
+
+PolynomialReconstruction() = LinearReconstruction()
 function PolynomialReconstruction(order::Integer)
     order == 1 || throw(ArgumentError("only linear polynomial reconstruction is supported"))
-    return PolynomialReconstruction{1}()
+    return LinearReconstruction()
 end
+
+ExtensionSpec(data::BoundaryData) = ExtensionSpec(data, LinearReconstruction())
+ExtensionSpec(value::STerm) = ExtensionSpec(ValueData(value), LinearReconstruction())
+ExtensionSpec(value::STerm, op::ExtensionOperator) = ExtensionSpec(ValueData(value), op)
 
 _canonical_indices(::Val{N}) where {N} = ntuple(SIndex, Val(N))
 
@@ -507,7 +521,10 @@ function extension_rule_field(field)
 end
 
 extension_rule_spec(spec::ExtensionSpec) = spec
+extension_rule_spec(value::STerm) = ExtensionSpec(value)
 extension_rule_spec(spec) = throw(ArgumentError("ExtensionRule values must be ExtensionSpec objects, got $spec"))
+
+extension_rule_pair(pair::Pair) = pair.first => extension_rule_spec(pair.second)
 
 # Carries the static context needed to decide whether an indexed read is inside
 # the domain or requires reconstruction.
