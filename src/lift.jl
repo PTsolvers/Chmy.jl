@@ -7,12 +7,12 @@ dimension `I` and reinserting the fixed indices (and locations) in other axes.
 """
 Base.@assume_effects :foldable function lift(op::STerm, args, inds::NTuple{N,STerm}, ::Val{I}) where {I,N}
     expr = stencil_rule(op, tuplemap(Stub, args), (inds[I],))
-    rule = InsertRule(inds, Val(I), Val(N))
+    rule = InsertRule{I}(inds)
     return evaluate(unstub(Prewalk(rule)(expr)))
 end
 Base.@assume_effects :foldable function lift(op::STerm, args, loc::NTuple{N,Space}, inds::NTuple{N,STerm}, ::Val{I}) where {I,N}
     expr = stencil_rule(op, tuplemap(Stub, args), (loc[I],), (inds[I],))
-    rule = InsertRuleLoc(loc, inds, Val(I), Val(N))
+    rule = InsertRuleLoc{I}(loc, inds)
     return evaluate(unstub(Prewalk(rule)(expr)))
 end
 
@@ -53,13 +53,13 @@ end
 struct InsertRule{I,N,Inds} <: AbstractRule
     inds::Inds
 end
-function InsertRule(inds::NTuple{N,STerm}, ::Val{I}, ::Val{N}) where {I,N}
+function InsertRule{I}(inds::NTuple{N,STerm}) where {I,N}
     return InsertRule{I,N,typeof(inds)}(inds)
 end
 
 function (rule::InsertRule{I,N})(term::SExpr{Ind}) where {I,N}
     ind = only(indices(term))
-    new_inds = ntuple(j -> j == I ? ind : rule.inds[j], Val(N))
+    new_inds = replace_index(rule.inds, ind, Val(I))
     return SExpr(Ind(), argument(term), new_inds...)
 end
 
@@ -69,17 +69,17 @@ struct InsertRuleLoc{I,N,Loc,Inds} <: AbstractRule
     loc::Loc
     inds::Inds
 end
-function InsertRuleLoc(loc::NTuple{N,Space}, inds::NTuple{N,STerm}, ::Val{I}, ::Val{N}) where {I,N}
+function InsertRuleLoc{I}(loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where {I,N}
     return InsertRuleLoc{I,N,typeof(loc),typeof(inds)}(loc, inds)
 end
 
 function (rule::InsertRuleLoc{I,N})(term::SExpr{Loc}) where {I,N}
     loc = only(location(term))
-    new_loc = ntuple(j -> j == I ? loc : rule.loc[j], Val(N))
+    new_loc = replace_index(rule.loc, loc, Val(I))
     return SExpr(Loc(), argument(term), new_loc...)
 end
 function (rule::InsertRuleLoc{I,N})(term::SExpr{Ind}) where {I,N}
     ind = only(indices(term))
-    new_inds = ntuple(j -> j == I ? ind : rule.inds[j], Val(N))
+    new_inds = replace_index(rule.inds, ind, Val(I))
     return SExpr(Ind(), argument(term), new_inds...)
 end

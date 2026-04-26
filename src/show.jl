@@ -40,7 +40,7 @@ function Base.show(io::IO, ::MIME"text/plain", term::STerm)
     show_static(io, term, 0)
 end
 
-show_static(io, ::Offset{O}, ::Int) where {O} = print(io, "δ(", O, ')')
+show_static(io, ::Shift{S}, ::Int) where {S} = print(io, "δ(", S, ')')
 
 show_static(io, si::SIndex, ::Int) = printstyled(io, variablename(si); italic=true)
 
@@ -245,18 +245,39 @@ function Base.show(io::IO, ::MIME"text/plain", rule::SubsRule)
     show(io, rule)
 end
 
-stencil_coords(o::CartesianOffset) = map(offset_value, o.offsets)
+stencil_shift_coords(o::CartesianShift) = map(shift_value, o.shifts)
+stencil_coords(o::CartesianShift, ::Nothing) = stencil_shift_coords(o)
+stencil_coords(o::CartesianShift, loc::Tuple) = tuplemap(stencil_coord, o.shifts, loc)
+stencil_coords(s::Stencil) = map(shift -> stencil_coords(shift, s.location), s.shifts)
+stencil_coord(shift::Shift, loc::Space) = value(SLiteral(shift) + offset(loc))
 stencil_axis_name(dim::Integer) = string(Symbol(:i, to_subscript(Val(dim))))
 
-function Base.show(io::IO, offset::CartesianOffset)
+function Base.show(io::IO, shift::CartesianShift)
     print(io, "δ(")
-    join(io, stencil_coords(offset), ", ")
+    join(io, stencil_shift_coords(shift), ", ")
+    print(io, ')')
+end
+
+stencil_location_name(::Point) = "Point()"
+stencil_location_name(::Segment) = "Segment()"
+
+function show_stencil_location(io::IO, ::Nothing) end
+function show_stencil_location(io::IO, loc::Tuple{<:Space})
+    print(io, stencil_location_name(only(loc)))
+end
+function show_stencil_location(io::IO, loc::Tuple)
+    print(io, '(')
+    join(io, map(stencil_location_name, loc), ", ")
     print(io, ')')
 end
 
 function Base.show(io::IO, s::Stencil)
     print(io, "Stencil(")
-    join(io, s.offsets, ", ")
+    if !isnothing(s.location)
+        show_stencil_location(io, s.location)
+        !isempty(s.shifts) && print(io, ", ")
+    end
+    join(io, s.shifts, ", ")
     print(io, ')')
 end
 
@@ -499,8 +520,8 @@ function stencil_slice_lines_2d(coords, halfcoords, bounds, fixed::Tuple=();
 end
 
 function stencil_render_lines(s::Stencil; show_ticks::Bool=true, show_axis_labels::Bool=true)
-    isempty(s.offsets) && return [Base.annotatedstring(sprint(show, s))]
-    coords = map(stencil_coords, s.offsets)
+    isempty(s.shifts) && return [Base.annotatedstring(sprint(show, s))]
+    coords = stencil_coords(s)
     nd = length(first(coords))
     halfcoords = stencil_halfgrid_coords(coords, min(nd, 2))
     isnothing(halfcoords) && return [Base.annotatedstring(sprint(show, s))]
@@ -557,9 +578,14 @@ function vertically_centered_cell(text::AbstractString, height::Integer)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", s::Stencil)
-    isempty(s.offsets) && return show(io, s)
+    isempty(s.shifts) && return show(io, s)
     ndims(s) > 3 && return show(io, s)
-    print(io, "Stencil ($(ndims(s))D, $(length(s.offsets)) offsets):\n")
+    print(io, "Stencil ($(ndims(s))D, $(length(s.shifts)) shifts")
+    if !isnothing(s.location)
+        print(io, ", location ")
+        show_stencil_location(io, s.location)
+    end
+    print(io, "):\n")
     print(io, stencil_join_lines(stencil_render_lines(s)))
 end
 

@@ -35,6 +35,17 @@ end
 tuplemap(f, xs) = map(f, xs)
 tuplemap(f, xs, ys) = map(f, xs, ys)
 
+"""
+    replace_index(inds, v, Val(I))
+
+Return a tuple equal to `inds`, except that position `I` is replaced by `v`.
+
+This is the type-stable tuple analogue of `Base.setindex`, used when a
+one-dimensional symbolic rule is lifted back into an N-dimensional index or
+location tuple.
+"""
+replace_index(inds::Tuple, v, ::Val{I}) where {I} = ntuple(i -> i == I ? v : inds[i], Val(length(inds)))
+
 @generated function tuplemap(f, xs::T) where {T<:Tuple}
     ex = Expr(:tuple)
     for i in 1:length(T.parameters)

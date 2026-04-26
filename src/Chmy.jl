@@ -26,7 +26,7 @@ export AbstractRule, Passthrough, Chain, Prewalk, Postwalk, Fixpoint
 include("rewriters.jl")
 
 export Space, Segment, Point
-export scale, offset
+export offset
 include("spaces.jl")
 
 export Grid, dims
@@ -63,10 +63,11 @@ include("lowering.jl")
 export Binding, push, binding_types, pairstuple
 include("binding.jl")
 
-export Offset, CartesianOffset, Dirichlet, Neumann, AxisFace, Lower, Upper, Span, Face, Stencil, Nonuniforms
+export Shift, CartesianShift, AxisFace, Lower, Upper, Span, Face, Stencil, Nonuniforms
 export δ, adjacent_faces, boundary_rule, boundary_operator, dim, codim, nonuniforms
-export ExtensionRule, ExtensionOperator, PolynomialExtension, reconstruct
+export ExtensionRule, ExtensionOperator, PolynomialReconstruction, reconstruct
 export BoundaryData, ValueData, DerivativeData, RobinData
+export GridOperator, operator
 include("boundary_operators.jl")
 
 export isless_lex

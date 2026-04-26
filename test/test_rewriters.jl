@@ -76,6 +76,8 @@ using Chmy
     end
 
     @testset "lift" begin
+        @test @inferred(Chmy.replace_index((i, j), c, Val(2))) === (i, c)
+
         @test sameterm(lift(SRef(:+), (a, b), (i, j), Val(1)),
                        a[i, j] + b[i, j])
 
