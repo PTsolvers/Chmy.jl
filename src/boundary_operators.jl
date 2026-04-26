@@ -344,27 +344,39 @@ function has_rule_pair(pairs::Tuple, face::Face)
 end
 
 """
-    ExtensionRule(field, data, op)
+    ExtensionSpec(data, op)
 
-Boundary rule that extends one scalar field across a codim-1 face.
+Boundary data and reconstruction method for one field.
 
-`field` is the unlocated scalar field identity, such as `u` or `V[1]`.
-When the interior expression is lowered, the rule finds located occurrences
-such as `u[Point()]` or `V[1][Point(), Segment()]` and uses each occurrence's
-location to reconstruct boundary and ghost reads. `data` provides the boundary
-data, and `op` is an [`ExtensionOperator`](@ref) such as
-[`PolynomialReconstruction`](@ref).
+`data` provides the boundary data, and `op` is an [`ExtensionOperator`](@ref)
+such as [`PolynomialReconstruction`](@ref).
 """
-struct ExtensionRule{F,D,O} <: BoundaryRule
-    field::F
+struct ExtensionSpec{D,O}
     data::D
     op::O
 end
 
 """
+    ExtensionRule(field => ExtensionSpec(data, op), ...)
+
+Boundary rule that extends one or more scalar fields across a codim-1 face.
+
+Each key is an unlocated scalar field identity, such as `u` or `V[1]`. When the
+interior expression is lowered, the rule finds located occurrences such as
+`u[Point()]` or `V[1][Point(), Segment()]` and uses each occurrence's location
+to reconstruct boundary and ghost reads. Each value is an [`ExtensionSpec`](@ref)
+containing the boundary data and an [`ExtensionOperator`](@ref), such as
+[`PolynomialReconstruction`](@ref).
+"""
+struct ExtensionRule{B} <: BoundaryRule
+    specs::B
+end
+ExtensionRule(specs::Pair...) = ExtensionRule(Binding(specs...))
+
+"""
     BoundaryData
 
-Abstract base type for boundary data used by [`ExtensionRule`](@ref).
+Abstract base type for boundary data used by [`ExtensionSpec`](@ref).
 """
 abstract type BoundaryData end
 
@@ -460,9 +472,16 @@ Base.@assume_effects :foldable function apply_boundary_rule(rule::ExtensionRule,
     codim(face) == 1 || throw(ArgumentError("ExtensionRule can only be applied to codim-1 faces, got codim $(codim(face))"))
     I = normal_axis(face)
     axis = face.axes[I]
-    field = extension_rule_field(rule.field)
-    er = ExtensionRewriteRule{I}(rule, field, axis, shifts[I])
-    return evaluate(Postwalk(er)(expr))
+    return apply_extension_specs(rule.specs.exprs, rule.specs.data, expr, Val(I), axis, shifts[I])
+end
+
+apply_extension_specs(::Tuple{}, ::Tuple{}, expr::STerm, ::Val, _, _) = expr
+function apply_extension_specs(fields::Tuple, specs::Tuple, expr::STerm, ::Val{I}, axis, shift) where {I}
+    field = extension_rule_field(first(fields))
+    spec = extension_rule_spec(first(specs))
+    er = ExtensionRewriteRule{I}(spec, field, axis, shift)
+    next = evaluate(Postwalk(er)(expr))
+    return apply_extension_specs(Base.tail(fields), Base.tail(specs), next, Val(I), axis, shift)
 end
 
 # Combined rules store flattened `Face => rule` pairs. Each pair carries the
@@ -481,22 +500,25 @@ end
 # Return the single non-`Span()` axis of a codim-1 face
 normal_axis(face::Face) = findfirst(!=(Span()), face.axes)
 
-extension_rule_field(field::SExpr{Loc}) = throw(ArgumentError("ExtensionRule.field must be an unlocated scalar field, got $field"))
+extension_rule_field(field::SExpr{Loc}) = throw(ArgumentError("ExtensionRule keys must be unlocated scalar fields, got $field"))
 function extension_rule_field(field)
-    tensorrank(field) == 0 || throw(ArgumentError("ExtensionRule.field must be a scalar field, got $field"))
+    tensorrank(field) == 0 || throw(ArgumentError("ExtensionRule keys must be scalar fields, got $field"))
     return field
 end
 
+extension_rule_spec(spec::ExtensionSpec) = spec
+extension_rule_spec(spec) = throw(ArgumentError("ExtensionRule values must be ExtensionSpec objects, got $spec"))
+
 # Carries the static context needed to decide whether an indexed read is inside
 # the domain or requires reconstruction.
-struct ExtensionRewriteRule{I,R,F,A,S} <: AbstractRule
-    rule::R
+struct ExtensionRewriteRule{I,SP,F,A,S} <: AbstractRule
+    spec::SP
     field::F
     axis::A
     shift::S
 end
-function ExtensionRewriteRule{I}(rule, field, axis, shift) where {I}
-    return ExtensionRewriteRule{I,typeof(rule),typeof(field),typeof(axis),typeof(shift)}(rule, field, axis, shift)
+function ExtensionRewriteRule{I}(spec, field, axis, shift) where {I}
+    return ExtensionRewriteRule{I,typeof(spec),typeof(field),typeof(axis),typeof(shift)}(spec, field, axis, shift)
 end
 
 # For a candidate read, convert its index displacement into the outward-positive
@@ -514,7 +536,7 @@ function rewrite_occurrence(er::ExtensionRewriteRule{I}, term::SExpr{Ind}, field
     value(xn) < 0 && return nothing
     v = interior_values(er, field, inds, loc)
     Δb = boundary_delta(loc)
-    return reconstruct(er.rule.op, er.rule.data, v, Δb, xn + Δb)
+    return reconstruct(er.spec.op, er.spec.data, v, Δb, xn + Δb)
 end
 
 # Orient a boundary-normal coordinate so positive values point out of the domain.
@@ -525,7 +547,9 @@ boundary_delta(::Point) = SLiteral(1)
 boundary_delta(::Segment) = SLiteral(1 // 2)
 
 function interior_values(er::ExtensionRewriteRule, field, inds, loc)
-    O = npoints(er.rule.op)
+    return interior_values(er, field, inds, loc, Val(npoints(er.spec.op)))
+end
+function interior_values(er::ExtensionRewriteRule, field, inds, loc, ::Val{O}) where {O}
     return ntuple(k -> interior_value(er, field, inds, loc, Val(k)), Val(O))
 end
 
