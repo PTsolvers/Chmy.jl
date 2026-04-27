@@ -31,6 +31,126 @@ function variablename(::AbstractPartialAveraging{I}) where {I}
     return Symbol("ℐ", to_subscript(Val(I)))
 end
 
+show_style(::STerm) = NamedTuple()
+show_style(::SIndex) = (; italic=true)
+show_style(::STensor{R,<:Any,<:Any}) where {R} = (; bold=true, underline=(R > 0))
+show_style(::SZeroTensor) = (; bold=true, underline=true)
+show_style(::SIdTensor) = (; bold=true, underline=true)
+
+function style_face(style::NamedTuple)
+    props = Pair{Symbol,Any}[]
+    hasproperty(style, :bold) && style.bold && push!(props, :weight => :bold)
+    hasproperty(style, :italic) && style.italic && push!(props, :slant => :italic)
+    hasproperty(style, :underline) && style.underline && push!(props, :underline => true)
+    hasproperty(style, :color) && push!(props, :foreground => style.color)
+    isempty(props) && return nothing
+    return StyledStrings.Face(; props...)
+end
+
+show_face(term::STerm) = style_face(show_style(term))
+
+function show_styled(io::IO, value, term::STerm)
+    style = show_style(term)
+    isempty(style) ? print(io, value) : printstyled(io, value; style...)
+    return
+end
+
+term_display_string(term; color::Bool=false) = sprint(show, term; context=:color => color)
+
+const SHOW_NODE_FACE = StyledStrings.Face(; foreground=:red)
+
+function annotated_text(text::AbstractString, face::Union{Nothing,StyledStrings.Face}=nothing)
+    annotated = Base.annotatedstring(text)
+    isnothing(face) || face!(annotated, firstindex(text):lastindex(text), face)
+    return annotated
+end
+annotated_text(text, face::Union{Nothing,StyledStrings.Face}=nothing) = annotated_text(string(text), face)
+
+annotated_show(term::STerm) = annotated_show(term, 0)
+
+function annotated_show(expr::SExpr, prec::Int)
+    if iscall(expr)
+        op = operation(expr)
+        args = arguments(expr)
+        opname = variablename(op)
+        if op === SRef(:broadcasted)
+            return annotated_broadcast(args, prec)
+        elseif Meta.isoperator(opname)
+            return annotated_operator(opname, args, prec)
+        elseif opname == :adjoint
+            return Base.annotatedstring(annotated_call_arg(only(args)), "'")
+        else
+            op_prec = Base.operator_precedence(opname)
+            return Base.annotatedstring(string(opname), "(", annotated_show_list(args, ", ", op_prec), ")")
+        end
+    elseif iscomp(expr)
+        return Base.annotatedstring(annotated_show(argument(expr), 0), "[", annotated_show_list(indices(expr), ", ", 0), "]")
+    elseif isind(expr)
+        return Base.annotatedstring(annotated_call_arg(argument(expr)), "[", annotated_show_list(indices(expr), ", ", 0), "]")
+    elseif isloc(expr)
+        pieces = Any[annotated_call_arg(argument(expr))]
+        append!(pieces, map(s -> string(variablename(s)), location(expr)))
+        return Base.annotatedstring(pieces...)
+    end
+    return annotated_text(string(expr))
+end
+
+function annotated_show(term::STerm, ::Int)
+    return annotated_text(variablename(term), show_face(term))
+end
+
+function annotated_show(node::SNode, ::Int)
+    return Base.annotatedstring(annotated_text("(", SHOW_NODE_FACE),
+                                annotated_show(argument(node), 0),
+                                annotated_text(")", SHOW_NODE_FACE))
+end
+
+function annotated_show(t::STensor{R,<:Any,<:Any,N}, ::Int) where {R,N}
+    return annotated_text(N, show_face(t))
+end
+
+function annotated_broadcast(args, prec)
+    op = first(args)
+    bargs = Base.tail(args)
+    opname = variablename(op)
+    if Meta.isoperator(opname)
+        return annotated_operator(Symbol('.', opname), bargs, prec; parent_opname=opname)
+    else
+        op_prec = Base.operator_precedence(opname)
+        return Base.annotatedstring(string(opname), ".(", annotated_show_list(bargs, ", ", op_prec), ")")
+    end
+end
+
+function annotated_operator(display_opname::Symbol, args, prec; parent_opname::Symbol=display_opname)
+    op_prec = Base.operator_precedence(parent_opname)
+    parens = needs_parens(op_prec, prec)
+    body = if length(args) == 1
+        Base.annotatedstring(string(display_opname), annotated_show(only(args), op_prec))
+    else
+        annotated_show_list(args, operator_separator(display_opname, parent_opname, args), op_prec, parent_opname)
+    end
+    return parens ? Base.annotatedstring("(", body, ")") : body
+end
+
+function annotated_call_arg(arg)
+    if isexpr(arg) && iscall(arg)
+        return Base.annotatedstring("(", annotated_show(arg, 0), ")")
+    else
+        return annotated_show(arg, 0)
+    end
+end
+
+function annotated_show_list(items, sep, prec, parent_opname=nothing)
+    pieces = Any[]
+    for (i, item) in enumerate(items)
+        i > 1 && push!(pieces, sep)
+        push!(pieces, annotated_show(item, child_precedence(parent_opname, item, prec, i)))
+    end
+    return Base.annotatedstring(pieces...)
+end
+
+term_table_text(term, use_color::Bool) = use_color ? annotated_show(term) : term_display_string(term)
+
 Base.show(io::IO, term::STerm) = show_static(io, term, 0)
 
 function Base.show(io::IO, ::MIME"text/plain", term::STerm)
@@ -42,12 +162,12 @@ end
 
 show_static(io, ::Shift{S}, ::Int) where {S} = print(io, "δ(", S, ')')
 
-show_static(io, si::SIndex, ::Int) = printstyled(io, variablename(si); italic=true)
+show_static(io, si::SIndex, ::Int) = show_styled(io, variablename(si), si)
 
-show_static(io, ::STensor{R,<:Any,<:Any,N}, ::Int) where {R,N} = printstyled(io, N; bold=true, underline=(R > 0))
+show_static(io, t::STensor{R,<:Any,<:Any,N}, ::Int) where {R,N} = show_styled(io, N, t)
 
-show_static(io, ::SZeroTensor, ::Int) = printstyled(io, '𝒪'; bold=true, underline=true)
-show_static(io, ::SIdTensor, ::Int) = printstyled(io, 'ℐ'; bold=true, underline=true)
+show_static(io, t::SZeroTensor, ::Int) = show_styled(io, '𝒪', t)
+show_static(io, t::SIdTensor, ::Int) = show_styled(io, 'ℐ', t)
 function show_static(io, node::SNode, ::Int)
     printstyled(io, '('; color=:red)
     show_static(io, argument(node), 0)
@@ -245,7 +365,7 @@ function Base.show(io::IO, ::MIME"text/plain", rule::SubsRule)
     show(io, rule)
 end
 
-stencil_shift_coords(o::CartesianShift) = map(shift_value, o.shifts)
+stencil_shift_coords(o::CartesianShift) = map(value, o.shifts)
 stencil_coords(o::CartesianShift, ::Nothing) = stencil_shift_coords(o)
 stencil_coords(o::CartesianShift, loc::Tuple) = tuplemap(stencil_coord, o.shifts, loc)
 stencil_coords(s::Stencil) = map(shift -> stencil_coords(shift, s.location), s.shifts)
@@ -316,6 +436,18 @@ stencil_vertex(active::Bool) = active ? '●' : '○'
 stencil_xedge(active::Bool) = active ? '▶' : '▷'
 stencil_yedge(active::Bool) = active ? '▼' : '▽'
 stencil_cell(active::Bool) = active ? '■' : '□'
+
+const STENCIL_ACTIVE_FACE = StyledStrings.Face(; foreground=:blue, weight=:bold)
+const STENCIL_INDEX_FACE = something(show_face(SIndex(1)), StyledStrings.Face(; underline=true))
+
+function stencil_face(char::Char)
+    char in ('●', '▶', '▼', '■') && return STENCIL_ACTIVE_FACE
+    return nothing
+end
+
+function stencil_index_text(label::AbstractString, use_color::Bool)
+    return use_color ? annotated_text(label, STENCIL_INDEX_FACE) : label
+end
 
 function stencil_symbol_span(symbol::Char, sepwidth::Integer; fill::Char)
     left = fld(sepwidth - 1, 2)
@@ -423,6 +555,14 @@ function stencil_leading_space_width(line::AbstractString)
     return width
 end
 
+function stencil_trim_visible_block(lines::AbstractVector{<:AbstractString})
+    lefttrim = minimum(stencil_leading_space_width, lines; init=0)
+    return map(lines) do line
+        trimmed = lefttrim == 0 ? line : stencil_trim_prefix(line, lefttrim)
+        return rstrip(trimmed, ' ')
+    end
+end
+
 function stencil_hcat_blocks(blocks::Vector{<:Vector{String}}; gap::Integer=3)
     widths = [maximum(textwidth, block; init=0) for block in blocks]
     height = maximum(length, blocks; init=0)
@@ -430,9 +570,37 @@ function stencil_hcat_blocks(blocks::Vector{<:Vector{String}}; gap::Integer=3)
                  repeat(" ", gap)) for row in 1:height]
 end
 
-stencil_style_line(line::String) = Base.annotatedstring(line)
+function stencil_style_segment(line::String)
+    styledline = Base.annotatedstring(line)
+    runstart = firstindex(line)
+    runface = nothing
+    for idx in eachindex(line)
+        face = stencil_face(line[idx])
+        if face !== runface
+            isnothing(runface) || face!(styledline, runstart:prevind(line, idx), runface)
+            runstart = idx
+            runface = face
+        end
+    end
+    isnothing(runface) || face!(styledline, runstart:lastindex(line), runface)
+    return styledline
+end
 
-stencil_style_lines(lines::AbstractVector{String}) = map(stencil_style_line, lines)
+function stencil_style_line(line::String; color::Bool=false)
+    pieces = Any[]
+    nextstart = firstindex(line)
+    for m in eachmatch(r"i[₀-₉]+", line)
+        startidx = m.offset
+        nextstart < startidx && push!(pieces, stencil_style_segment(line[nextstart:prevind(line, startidx)]))
+        push!(pieces, stencil_index_text(m.match, color))
+        nextstart = nextind(line, startidx, length(m.match))
+    end
+    nextstart <= lastindex(line) && push!(pieces, stencil_style_segment(line[nextstart:end]))
+    isempty(pieces) && return stencil_style_segment(line)
+    return Base.annotatedstring(pieces...)
+end
+
+stencil_style_lines(lines::AbstractVector{String}; color::Bool=false) = map(line -> stencil_style_line(line; color), lines)
 
 function stencil_join_lines(lines::AbstractVector{<:AbstractString})
     isempty(lines) && return Base.annotatedstring("")
@@ -440,11 +608,20 @@ function stencil_join_lines(lines::AbstractVector{<:AbstractString})
 end
 
 function stencil_centered_block(lines::AbstractVector{<:AbstractString}, width::Integer)
-    # Center the multiline stencil as one block so narrow slices keep their internal geometry.
-    blockwidth = maximum(textwidth, lines; init=0)
-    leftpad = max(0, (width - blockwidth) ÷ 2)
-    padded = [rpad(repeat(" ", leftpad) * line, width) for line in lines]
+    # Center the visible stencil block, not the shared leading/trailing whitespace used inside
+    # each rendered slice for axis/tick alignment. PrettyTables adds one padding column on each
+    # side of the cell, so this helper only needs a 1-character internal margin.
+    trimmed = stencil_trim_visible_block(lines)
+    blockwidth = maximum(textwidth, trimmed; init=0)
+    inner_slack = max(0, width - blockwidth - 2)
+    leftpad = 1 + fld(inner_slack, 2)
+    padded = [rpad(repeat(" ", leftpad) * line, width) for line in trimmed]
     return stencil_join_lines(padded)
+end
+
+function stencil_visible_width(lines::AbstractVector{<:AbstractString})
+    trimmed = stencil_trim_visible_block(lines)
+    return maximum(textwidth, trimmed; init=0)
 end
 
 function stencil_slice_lines_1d(halfcoords, bounds; show_ticks::Bool=true, show_axis_labels::Bool=true)
@@ -519,7 +696,7 @@ function stencil_slice_lines_2d(coords, halfcoords, bounds, fixed::Tuple=();
     return lines
 end
 
-function stencil_render_lines(s::Stencil; show_ticks::Bool=true, show_axis_labels::Bool=true)
+function stencil_render_lines(s::Stencil; show_ticks::Bool=true, show_axis_labels::Bool=true, color::Bool=false)
     isempty(s.shifts) && return [Base.annotatedstring(sprint(show, s))]
     coords = stencil_coords(s)
     nd = length(first(coords))
@@ -527,14 +704,14 @@ function stencil_render_lines(s::Stencil; show_ticks::Bool=true, show_axis_label
     isnothing(halfcoords) && return [Base.annotatedstring(sprint(show, s))]
     bounds = stencil_vertex_bounds(coords, min(nd, 2))
     if nd == 1
-        return stencil_style_lines(stencil_slice_lines_1d(halfcoords, bounds; show_ticks, show_axis_labels))
+        return stencil_style_lines(stencil_slice_lines_1d(halfcoords, bounds; show_ticks, show_axis_labels); color)
     elseif nd == 2
         return stencil_style_lines(stencil_slice_lines_2d(coords, halfcoords, bounds;
                                                           show_x_ticks=show_ticks,
                                                           show_y_ticks=show_ticks,
                                                           reserve_y_tick_space=show_ticks,
                                                           show_x_axis_label=show_axis_labels,
-                                                          show_y_axis_label=show_axis_labels))
+                                                          show_y_axis_label=show_axis_labels); color)
     elseif nd != 3
         return [Base.annotatedstring(sprint(show, s))]
     end
@@ -567,7 +744,7 @@ function stencil_render_lines(s::Stencil; show_ticks::Bool=true, show_axis_label
                                              blockwidth)
         push!(blocks, [map(line -> stencil_pad_line(line, blockwidth), slicelines)..., titleline])
     end
-    return stencil_style_lines(stencil_hcat_blocks(blocks; gap))
+    return stencil_style_lines(stencil_hcat_blocks(blocks; gap); color)
 end
 
 function vertically_centered_cell(text::AbstractString, height::Integer)
@@ -580,13 +757,14 @@ end
 function Base.show(io::IO, ::MIME"text/plain", s::Stencil)
     isempty(s.shifts) && return show(io, s)
     ndims(s) > 3 && return show(io, s)
+    use_color = get(io, :color, false)
     print(io, "Stencil ($(ndims(s))D, $(length(s.shifts)) shifts")
     if !isnothing(s.location)
         print(io, ", location ")
         show_stencil_location(io, s.location)
     end
     print(io, "):\n")
-    print(io, stencil_join_lines(stencil_render_lines(s)))
+    print(io, stencil_join_lines(stencil_render_lines(s; color=use_color)))
 end
 
 function Base.show(io::IO, nu::Nonuniforms)
@@ -601,21 +779,24 @@ end
 function Base.show(io::IO, ::MIME"text/plain", nu::Nonuniforms)
     pairs = pairstuple(stencils(nu))
     isempty(pairs) && return show(io, nu)
+    use_color = get(io, :color, false)
     if any(ndims(stencil) > 3 for (_, stencil) in pairs)
-        padlength = maximum(term -> textwidth(repr(term)), keys(stencils(nu)))
+        padlength = maximum(term -> textwidth(term_display_string(term)), keys(stencils(nu)))
         println(io, "Nonuniforms:")
         for (term, stencil) in pairs
-            println(io, ' ', rpad(repr(term), padlength), " => ", stencil)
+            plain = term_display_string(term)
+            styled = term_table_text(term, use_color)
+            println(io, ' ', styled, repeat(" ", padlength - textwidth(plain)), " => ", stencil)
         end
         return
     end
-    stencil_lines = [stencil_render_lines(stencil) for (_, stencil) in pairs]
-    stencil_width = maximum(lines -> maximum(textwidth, lines; init=0), stencil_lines; init=0)
+    stencil_lines = [stencil_render_lines(stencil; color=use_color) for (_, stencil) in pairs]
+    stencil_width = maximum(stencil_visible_width, stencil_lines; init=0) + 2
     data = Matrix{Any}(undef, length(pairs), 2)
     for (i, (term, stencil)) in enumerate(pairs)
         lines = stencil_lines[i]
         height = length(lines)
-        data[i, 1] = vertically_centered_cell(repr(term), height)
+        data[i, 1] = vertically_centered_cell(term_table_text(term, use_color), height)
         data[i, 2] = stencil_centered_block(lines, stencil_width)
     end
     pretty_table(io, data;

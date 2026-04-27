@@ -34,4 +34,25 @@ import Chmy: makeop
     stencil3d = sprint(show, MIME"text/plain"(), Stencil((Point(), Point(), Segment()), δ(0, 0, 0), δ(0, 0, 1)))
     @test occursin("i₃ = 1//2", stencil3d)
     @test occursin("i₃ = 3//2", stencil3d)
+
+    colored_stencil = sprint(show,
+                             MIME"text/plain"(),
+                             Stencil((Segment(), Point()), δ(0, 0), δ(1, 0));
+                             context=:color => true)
+    @test occursin("\e[34m\e[1m▶", colored_stencil)
+
+    colored_cell = sprint(show,
+                          MIME"text/plain"(),
+                          Stencil((Segment(), Segment()), δ(0, 0));
+                          context=:color => true)
+    @test occursin("\e[34m\e[1m■", colored_cell)
+
+    i, j = SIndex(1), SIndex(2)
+    colored_nu = sprint(show,
+                        MIME"text/plain"(),
+                        nonuniforms(a[Segment(), Point()][i, j]);
+                        context=:color => true)
+    @test occursin("\e[1ma", colored_nu)
+    @test occursin("i₁", colored_nu)
+    @test occursin("i₂", colored_nu)
 end
