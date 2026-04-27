@@ -1,6 +1,20 @@
 using Test
 using Chmy
-import Chmy: makeop
+import Chmy: makeop, render_stencil
+
+struct UnknownShowTerm <: Chmy.STerm
+    x::Int
+end
+
+struct StyledShowTerm <: Chmy.STerm
+    x::Int
+end
+Chmy.styled(t::StyledShowTerm) = Base.annotatedstring("styled(", string(t.x), ")")
+
+struct CustomBaseShowTerm <: Chmy.STerm
+    x::Int
+end
+Base.show(io::IO, t::CustomBaseShowTerm) = print(io, "base(", t.x, ")")
 
 @testset "show" begin
     @scalars a b c
@@ -17,7 +31,11 @@ import Chmy: makeop
 
     colored = sprint(show, n; context=:color => true)
     @test occursin("\e[31m(\e[39m", colored)
-    @test occursin("\e[31m)\e[39m", colored)
+    @test occursin(r"\e\[31m(?:\e\[[0-9;]*m)*\)\e\[39m", colored)
+
+    @test endswith(sprint(show, UnknownShowTerm(1)), "UnknownShowTerm(1)")
+    @test sprint(show, StyledShowTerm(2)) == "styled(2)"
+    @test sprint(show, CustomBaseShowTerm(3)) == "base(3)"
 
     stencil2d = sprint(show, MIME"text/plain"(), Stencil((Segment(), Point()), δ(0, 0), δ(1, 0)))
     @test occursin("location (Segment(), Point())", stencil2d)
@@ -46,6 +64,39 @@ import Chmy: makeop
                           Stencil((Segment(), Segment()), δ(0, 0));
                           context=:color => true)
     @test occursin("\e[34m\e[1m■", colored_cell)
+
+    direct_colored = sprint(print,
+                            render_stencil(Stencil((Segment(), Point()), δ(0, 0), δ(1, 0)));
+                            context=:color => true)
+    @test occursin("\e[34m\e[1m▶", direct_colored)
+
+    default_stencil_opts = Chmy.StencilRenderOptions()
+    rendered = render_stencil(Stencil((Segment(), Point()), δ(0, 0), δ(1, 0)))
+    @test rendered isa Base.AnnotatedString
+    @test Chmy.stencil_render_width(Stencil((Segment(), Point()), δ(0, 0), δ(1, 0)), default_stencil_opts) == maximum(textwidth, split(string(rendered), '\n'))
+
+    rendered3d = render_stencil(Stencil((Point(), Point(), Segment()), δ(0, 0, 0), δ(0, 0, 1)))
+    @test Chmy.stencil_render_width(Stencil((Point(), Point(), Segment()), δ(0, 0, 0), δ(0, 0, 1)), default_stencil_opts) ==
+          maximum(textwidth, split(string(rendered3d), '\n'))
+
+    no_xticks = sprint(print, render_stencil(Stencil((Segment(), Point()), δ(0, 0)); x_ticks=false))
+    @test !occursin("0         1", no_xticks)
+    no_yticks = sprint(print, render_stencil(Stencil((Segment(), Point()), δ(0, 0)); y_ticks=false))
+    @test !occursin(" 0 ", no_yticks)
+    no_xlabel = sprint(print, render_stencil(Stencil((Segment(), Point()), δ(0, 0)); x_axis_label=false))
+    @test !occursin("i₁", no_xlabel)
+    no_ylabel = sprint(print, render_stencil(Stencil((Segment(), Point()), δ(0, 0)); y_axis_label=false))
+    @test !occursin("i₂", no_ylabel)
+
+    boxed = render_stencil(Stencil((Segment(), Point()), δ(0, 0)); left_margin=2, right_margin=3, textwidth=40)
+    @test all(==(40), textwidth.(split(string(boxed), '\n')))
+    boxed_opts = Chmy.StencilRenderOptions(; left_margin=2, right_margin=3, textwidth=40)
+    @test Chmy.stencil_render_width(Stencil((Segment(), Point()), δ(0, 0)), boxed_opts) == 40
+
+    upper_vertical = split(string(render_stencil(Stencil(δ(0, 0), δ(0, 1)))), '\n')
+    lower_vertical = split(string(render_stencil(Stencil(δ(0, 0), δ(0, -1)))), '\n')
+    @test any(startswith("1 "), upper_vertical)
+    @test any(startswith("-1 "), lower_vertical)
 
     i, j = SIndex(1), SIndex(2)
     colored_nu = sprint(show,

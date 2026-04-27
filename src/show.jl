@@ -1,35 +1,15 @@
+# Styled string primitives and faces
+
 function to_subscript(::Val{i}) where {i}
     if i <= 9
         return Symbol('₀' + i)
     else
-        # recurse for multi-digit numbers
         return Symbol(to_subscript(Val(div(i, 10))), to_subscript(Val(mod(i, 10))))
     end
 end
 
-variablename(::SLiteral{Value}) where {Value} = Value
-
-variablename(sf::SFun)            = nameof(sf.f)
-variablename(::SRef{F}) where {F} = F
-
-variablename(::Point)   = :ᵖ
-variablename(::Segment) = :ˢ
-
-variablename(::AbstractDerivative) = :𝒟
-variablename(::AbstractAveraging)  = :ℐ
-variablename(::Gradient)           = :grad
-variablename(::Divergence)         = :divg
-variablename(::Curl)               = :curl
-
-variablename(::SIndex{I}) where {I} = Symbol(:i, to_subscript(Val(I)))
-
-function variablename(::AbstractPartialDerivative{I}) where {I}
-    return Symbol("∂", to_subscript(Val(I)))
-end
-
-function variablename(::AbstractPartialAveraging{I}) where {I}
-    return Symbol("ℐ", to_subscript(Val(I)))
-end
+const SHOW_NODE_FACE = StyledStrings.Face(; foreground=:red)
+const STENCIL_ACTIVE_FACE = StyledStrings.Face(; foreground=:blue, weight=:bold)
 
 show_style(::STerm) = NamedTuple()
 show_style(::SIndex) = (; italic=true)
@@ -49,237 +29,203 @@ end
 
 show_face(term::STerm) = style_face(show_style(term))
 
-function show_styled(io::IO, value, term::STerm)
-    style = show_style(term)
-    isempty(style) ? print(io, value) : printstyled(io, value; style...)
-    return
-end
-
-term_display_string(term; color::Bool=false) = sprint(show, term; context=:color => color)
-
-const SHOW_NODE_FACE = StyledStrings.Face(; foreground=:red)
-
 function annotated_text(text::AbstractString, face::Union{Nothing,StyledStrings.Face}=nothing)
-    annotated = Base.annotatedstring(text)
-    isnothing(face) || face!(annotated, firstindex(text):lastindex(text), face)
+    annotated = annotatedstring(text)
+    if !isnothing(face) && !isempty(text)
+        face!(annotated, firstindex(text):lastindex(text), face)
+    end
     return annotated
 end
 annotated_text(text, face::Union{Nothing,StyledStrings.Face}=nothing) = annotated_text(string(text), face)
 
-annotated_show(term::STerm) = annotated_show(term, 0)
+blank(width::Integer) = repeat(" ", max(0, width))
 
-function annotated_show(expr::SExpr, prec::Int)
+# These helpers keep layout operations annotation-preserving. Converting an
+# AnnotatedString to a plain String would drop all faces, so every padding/join
+# operation builds a new AnnotatedString by concatenating existing fragments.
+annotated_join(lines::AbstractVector{<:AbstractString}) = isempty(lines) ? annotatedstring("") : reduce((l, r) -> annotatedstring(l, "\n", r), lines)
+annotated_pad_right(line::AbstractString, width::Integer) = annotatedstring(line, blank(width - textwidth(line)))
+
+# Fallback for STerm subtypes that have not opted into Chmy pretty printing.
+# This deliberately uses Julia's default struct printer instead of calling
+# `show`, because `show(::STerm)` delegates back to `styled`.
+function default_annotated(x)
+    io = IOBuffer()
+    Base.show_default(io, x)
+    return annotatedstring(String(take!(io)))
+end
+
+styled(x) = annotatedstring(sprint(show, x))
+styled(term::STerm) = styled_expr(term, 0)
+
+function term_display_string(term; color::Bool=false)
+    return sprint(io -> print(IOContext(io, :color => color), styled(term)))
+end
+
+# Chmy display names
+
+# `display_name` is the small, known-object classifier used by the expression
+# renderer. It returns either the textual head/name that participates in Chmy's
+# syntax, or `nothing` for unknown terms. Unknown terms then fall back to
+# default Julia display instead of throwing a missing `variablename` MethodError.
+display_name(::SLiteral{Value}) where {Value} = Value
+display_name(sf::SFun) = nameof(sf.f)
+display_name(::SRef{F}) where {F} = F
+display_name(::Point) = :ᵖ
+display_name(::Segment) = :ˢ
+display_name(::AbstractDerivative) = :𝒟
+display_name(::AbstractAveraging) = :ℐ
+display_name(::Gradient) = :grad
+display_name(::Divergence) = :divg
+display_name(::Curl) = :curl
+display_name(::BoundaryNormal) = :N
+display_name(::FaceNormal) = :N
+display_name(::SIndex{I}) where {I} = Symbol(:i, to_subscript(Val(I)))
+display_name(::AbstractPartialDerivative{I}) where {I} = Symbol("∂", to_subscript(Val(I)))
+display_name(::AbstractPartialAveraging{I}) where {I} = Symbol("ℐ", to_subscript(Val(I)))
+display_name(::STerm) = nothing
+
+# Chmy expression rendering
+
+# Expression rendering threads a parent precedence value (`prec`) down the
+# syntax tree. Each operator compares its own Julia precedence with the parent
+# context; when the child would bind too weakly, it wraps itself in
+# parentheses. This mirrors ordinary Julia printing while still producing
+# AnnotatedStrings, so styling is attached during construction rather than as a
+# later string-processing pass.
+function styled_expr(expr::SExpr, prec::Int)
     if iscall(expr)
         op = operation(expr)
         args = arguments(expr)
-        opname = variablename(op)
+        opname = display_name(op)
+        # Calls are split into the compact syntaxes Chmy users expect:
+        # broadcasted calls (`a .+ b`), infix/prefix operators (`a + b`, `-a`),
+        # adjoints (`a'`), and ordinary function-call syntax (`sin(a)`).
         if op === SRef(:broadcasted)
-            return annotated_broadcast(args, prec)
-        elseif Meta.isoperator(opname)
-            return annotated_operator(opname, args, prec)
+            return styled_broadcast(args, prec)
+        elseif opname isa Symbol && Meta.isoperator(opname)
+            return styled_operator(opname, args, prec)
         elseif opname == :adjoint
-            return Base.annotatedstring(annotated_call_arg(only(args)), "'")
-        else
+            return annotatedstring(styled_call_arg(only(args)), "'")
+        elseif opname isa Symbol
             op_prec = Base.operator_precedence(opname)
-            return Base.annotatedstring(string(opname), "(", annotated_show_list(args, ", ", op_prec), ")")
+            return annotatedstring(string(opname), "(", styled_list(args, ", ", op_prec), ")")
         end
+        return default_annotated(expr)
     elseif iscomp(expr)
-        return Base.annotatedstring(annotated_show(argument(expr), 0), "[", annotated_show_list(indices(expr), ", ", 0), "]")
+        return annotatedstring(styled_expr(argument(expr), 0), "[", styled_list(indices(expr), ", ", 0), "]")
     elseif isind(expr)
-        return Base.annotatedstring(annotated_call_arg(argument(expr)), "[", annotated_show_list(indices(expr), ", ", 0), "]")
+        return annotatedstring(styled_call_arg(argument(expr)), "[", styled_list(indices(expr), ", ", 0), "]")
     elseif isloc(expr)
-        pieces = Any[annotated_call_arg(argument(expr))]
-        append!(pieces, map(s -> string(variablename(s)), location(expr)))
-        return Base.annotatedstring(pieces...)
+        pieces = Any[styled_call_arg(argument(expr))]
+        for loc in location(expr)
+            locname = display_name(loc)
+            push!(pieces, isnothing(locname) ? styled(loc) : annotated_text(locname))
+        end
+        return annotatedstring(pieces...)
     end
-    return annotated_text(string(expr))
+    return default_annotated(expr)
 end
 
-function annotated_show(term::STerm, ::Int)
-    return annotated_text(variablename(term), show_face(term))
+function styled_expr(term::STerm, ::Int)
+    name = display_name(term)
+    isnothing(name) && return default_annotated(term)
+    return annotated_text(name, show_face(term))
 end
 
-function annotated_show(node::SNode, ::Int)
-    return Base.annotatedstring(annotated_text("(", SHOW_NODE_FACE),
-                                annotated_show(argument(node), 0),
-                                annotated_text(")", SHOW_NODE_FACE))
+function styled_expr(::Shift{S}, ::Int) where {S}
+    return annotatedstring("δ(", string(S), ")")
 end
 
-function annotated_show(t::STensor{R,<:Any,<:Any,N}, ::Int) where {R,N}
+function styled_expr(node::SNode, ::Int)
+    return annotatedstring(annotated_text("(", SHOW_NODE_FACE),
+                           styled_expr(argument(node), 0),
+                           annotated_text(")", SHOW_NODE_FACE))
+end
+
+function styled_expr(t::STensor{R,<:Any,<:Any,N}, ::Int) where {R,N}
     return annotated_text(N, show_face(t))
 end
 
-function annotated_broadcast(args, prec)
+styled_expr(t::SZeroTensor, ::Int) = annotated_text('𝒪', show_face(t))
+styled_expr(t::SIdTensor, ::Int) = annotated_text('ℐ', show_face(t))
+
+function styled_broadcast(args, prec)
     op = first(args)
     bargs = Base.tail(args)
-    opname = variablename(op)
-    if Meta.isoperator(opname)
-        return annotated_operator(Symbol('.', opname), bargs, prec; parent_opname=opname)
-    else
+    opname = display_name(op)
+    # Broadcast stores the broadcasted operator/function as its first argument.
+    # Reuse the normal operator printer for dotted operators, but keep dotted
+    # call syntax for non-operator functions.
+    if opname isa Symbol && Meta.isoperator(opname)
+        return styled_operator(Symbol('.', opname), bargs, prec; parent_opname=opname)
+    elseif opname isa Symbol
         op_prec = Base.operator_precedence(opname)
-        return Base.annotatedstring(string(opname), ".(", annotated_show_list(bargs, ", ", op_prec), ")")
+        return annotatedstring(string(opname), ".(", styled_list(bargs, ", ", op_prec), ")")
     end
+    return default_annotated(SExpr(Call(), SRef(:broadcasted), args...))
 end
 
-function annotated_operator(display_opname::Symbol, args, prec; parent_opname::Symbol=display_opname)
+function styled_operator(display_opname::Symbol, args, prec; parent_opname::Symbol=display_opname)
     op_prec = Base.operator_precedence(parent_opname)
     parens = needs_parens(op_prec, prec)
+    # `display_opname` is what appears in the string (`.+`), while
+    # `parent_opname` is the semantic operator whose precedence Julia knows
+    # (`+`). They differ only for dotted broadcast operators.
     body = if length(args) == 1
-        Base.annotatedstring(string(display_opname), annotated_show(only(args), op_prec))
+        annotatedstring(string(display_opname), styled_expr(only(args), op_prec))
     else
-        annotated_show_list(args, operator_separator(display_opname, parent_opname, args), op_prec, parent_opname)
+        styled_list(args, operator_separator(display_opname, parent_opname, args), op_prec, parent_opname)
     end
-    return parens ? Base.annotatedstring("(", body, ")") : body
+    return parens ? annotatedstring("(", body, ")") : body
 end
 
-function annotated_call_arg(arg)
+function styled_call_arg(arg)
+    # Function-call heads need a stricter wrapper than ordinary operator
+    # precedence: `f(a + b)` is already parenthesized by the call, but
+    # indexing/location of a call argument should display `(a + b)[i]`.
     if isexpr(arg) && iscall(arg)
-        return Base.annotatedstring("(", annotated_show(arg, 0), ")")
+        return annotatedstring("(", styled_expr(arg, 0), ")")
     else
-        return annotated_show(arg, 0)
+        return styled_expr(arg, 0)
     end
 end
 
-function annotated_show_list(items, sep, prec, parent_opname=nothing)
+function styled_list(items, sep, prec, parent_opname=nothing)
     pieces = Any[]
     for (i, item) in enumerate(items)
         i > 1 && push!(pieces, sep)
-        push!(pieces, annotated_show(item, child_precedence(parent_opname, item, prec, i)))
+        # Some left children of non-associative or same-precedence operators
+        # need a slightly lower effective parent precedence. That preserves
+        # strings like `a - (b + c)` and `(-a) ^ b` without over-parenthesizing
+        # every child expression.
+        push!(pieces, styled_expr(item, child_precedence(parent_opname, item, prec, i)))
     end
-    return Base.annotatedstring(pieces...)
-end
-
-term_table_text(term, use_color::Bool) = use_color ? annotated_show(term) : term_display_string(term)
-
-Base.show(io::IO, term::STerm) = show_static(io, term, 0)
-
-function Base.show(io::IO, ::MIME"text/plain", term::STerm)
-    if isexpr(term)
-        print(io, "StaticExpression:\n ")
-    end
-    show_static(io, term, 0)
-end
-
-show_static(io, ::Shift{S}, ::Int) where {S} = print(io, "δ(", S, ')')
-
-show_static(io, si::SIndex, ::Int) = show_styled(io, variablename(si), si)
-
-show_static(io, t::STensor{R,<:Any,<:Any,N}, ::Int) where {R,N} = show_styled(io, N, t)
-
-show_static(io, t::SZeroTensor, ::Int) = show_styled(io, '𝒪', t)
-show_static(io, t::SIdTensor, ::Int) = show_styled(io, 'ℐ', t)
-function show_static(io, node::SNode, ::Int)
-    printstyled(io, '('; color=:red)
-    show_static(io, argument(node), 0)
-    printstyled(io, ')'; color=:red)
-    return
-end
-
-function show_static(io, expr::SExpr, prec::Int)
-    if iscall(expr)
-        op = operation(expr)
-        args = arguments(expr)
-        opname = variablename(op)
-        if op === SRef(:broadcasted)
-            show_broadcast(io, args, prec)
-        elseif Meta.isoperator(opname)
-            show_operator(io, opname, args, prec)
-        elseif opname == :adjoint
-            show_call_arg(io, only(args))
-            print(io, ''')
-        else
-            op_prec = Base.operator_precedence(opname)
-            print(io, opname)
-            print(io, '(')
-            show_list(io, args, ", ", op_prec)
-            print(io, ')')
-        end
-    elseif iscomp(expr)
-        arg = argument(expr)
-        show_static(io, arg, 0)
-        print(io, '[')
-        show_list(io, indices(expr), ", ", 0)
-        print(io, ']')
-    elseif isind(expr)
-        show_call_arg(io, argument(expr))
-        print(io, '[')
-        show_list(io, indices(expr), ", ", 0)
-        print(io, ']')
-    elseif isloc(expr)
-        show_call_arg(io, argument(expr))
-        for s in location(expr)
-            print(io, variablename(s))
-        end
-    end
-    return
-end
-
-show_static(io, term::STerm, _) = print(io, variablename(term))
-
-function show_broadcast(io, args, prec)
-    op = first(args)
-    bargs = Base.tail(args)
-    opname = variablename(op)
-    if Meta.isoperator(opname)
-        show_operator(io, Symbol('.', opname), bargs, prec; parent_opname=opname)
-    else
-        op_prec = Base.operator_precedence(opname)
-        print(io, opname)
-        print(io, ".(")
-        show_list(io, bargs, ", ", op_prec)
-        print(io, ')')
-    end
-    return
-end
-
-function show_operator(io, display_opname::Symbol, args, prec; parent_opname::Symbol=display_opname)
-    op_prec = Base.operator_precedence(parent_opname)
-    parens = needs_parens(op_prec, prec)
-    parens && print(io, '(')
-    if length(args) == 1
-        print(io, display_opname)
-        show_static(io, only(args), op_prec)
-    else
-        show_list(io, args, operator_separator(display_opname, parent_opname, args), op_prec, parent_opname)
-    end
-    parens && print(io, ')')
-    return
+    return annotatedstring(pieces...)
 end
 
 function operator_separator(display_opname::Symbol, parent_opname::Symbol, args)
+    # Print numeric scalar multiplication in coefficient form (`2a`) when the
+    # left side is a literal and the right side is a non-expression atom. More
+    # complex products keep an explicit operator for readability.
     if parent_opname == :* &&
        length(args) == 2 &&
        args[1] isa SLiteral &&
        !(args[2] isa SLiteral) &&
        !isexpr(args[2]) &&
-       variablename(args[1]) isa Union{AbstractFloat,Integer}
+       display_name(args[1]) isa Union{AbstractFloat,Integer}
         return ""
     end
     return " $display_opname "
 end
 
-function show_call_arg(io, arg)
-    if isexpr(arg) && iscall(arg)
-        print(io, '(')
-        show_static(io, arg, 0)
-        print(io, ')')
-    else
-        show_static(io, arg, 0)
-    end
-    return
-end
-
-function show_list(io, items, sep, prec, parent_opname=nothing)
-    for (i, item) in enumerate(items)
-        i > 1 && print(io, sep)
-        show_static(io, item, child_precedence(parent_opname, item, prec, i))
-    end
-    return
-end
-
 child_precedence(::Nothing, _, prec, _) = prec
 
 function child_precedence(parent_opname::Symbol, item, prec, i)
+    # Julia's precedence table alone is not enough for all infix formatting:
+    # the first argument of many left-associative operators can bind slightly
+    # looser without changing meaning, and unary minus under `+`/`-` needs the
+    # same treatment to avoid misleading strings.
     if parent_opname in (:+, :-) && isunaryminus(item)
         return prec - 1
     elseif i == 1 && parent_opname in (:+, :-, :*, :/, ://, :÷, :⋅, :×, :⊡, :⊗, :&, :|, :xor)
@@ -289,6 +235,8 @@ function child_precedence(parent_opname::Symbol, item, prec, i)
 end
 
 needs_parens(op_prec::Int, prec::Int) = op_prec != 0 && prec != 0 && op_prec <= prec
+
+# Tensor, binding, and rule display
 
 function Base.show(io::IO, ::MIME"text/plain", v::Vec{N}) where {N}
     print(io, "$N-element Vec:")
@@ -345,32 +293,35 @@ function Base.show(io::IO, ::MIME"text/plain", t::DiagTensor{D,R}) where {D,R}
 end
 
 function Base.show(io::IO, ::MIME"text/plain", b::Binding)
-    padlength = maximum(f -> textwidth(string(f)), b.exprs; init=0)
+    padlength = maximum(f -> textwidth(string(styled(f))), b.exprs; init=0)
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
     end
     print(io, "Binding:")
     for (expr, value) in zip(b.exprs, b.data)
+        rendered = styled(expr)
         print(io, '\n', ' ')
-        print(io, rpad(string(expr), padlength))
+        print(io, rendered)
+        print(io, blank(padlength - textwidth(rendered)))
         print(io, " => ")
         show(io, value)
     end
 end
 
-Base.show(io::IO, rule::SubsRule) = print(io, rule.lhs, " => ", rule.rhs)
+Base.show(io::IO, rule::SubsRule) = print(io, styled(rule.lhs), " => ", styled(rule.rhs))
 
 function Base.show(io::IO, ::MIME"text/plain", rule::SubsRule)
     print(io, "SubsRule:\n ")
     show(io, rule)
 end
 
+# Stencil geometry and line layout
+
 stencil_shift_coords(o::CartesianShift) = map(value, o.shifts)
 stencil_coords(o::CartesianShift, ::Nothing) = stencil_shift_coords(o)
 stencil_coords(o::CartesianShift, loc::Tuple) = tuplemap(stencil_coord, o.shifts, loc)
 stencil_coords(s::Stencil) = map(shift -> stencil_coords(shift, s.location), s.shifts)
 stencil_coord(shift::Shift, loc::Space) = value(SLiteral(shift) + offset(loc))
-stencil_axis_name(dim::Integer) = string(Symbol(:i, to_subscript(Val(dim))))
 
 function Base.show(io::IO, shift::CartesianShift)
     print(io, "δ(")
@@ -413,365 +364,390 @@ function stencil_vertex_bounds(coords, nd::Integer=length(first(coords)))
     return [(mins[d], maxs[d]) for d in 1:nd]
 end
 
-function stencil_slice_matches(coord, fixed::Tuple)
-    length(coord) == 2 && return isempty(fixed)
-    return all(coord[d+2] == fixed[d] for d in eachindex(fixed))
-end
-
-stencil_halfstep_index(coord::Real) = isinteger(2coord) ? Int(2coord) : nothing
-
-function stencil_halfgrid_coord(coord, nd::Integer)
-    halfcoord = ntuple(i -> stencil_halfstep_index(coord[i]), nd)
-    any(isnothing, halfcoord) && return nothing
-    return ntuple(i -> something(halfcoord[i]), nd)
-end
-
-function stencil_halfgrid_coords(coords, nd::Integer)
-    halfcoords = map(coord -> stencil_halfgrid_coord(coord, nd), coords)
-    any(isnothing, halfcoords) && return nothing
-    return map(coord -> something(coord), halfcoords)
-end
-
+# The stencil drawing lives on a half-step grid. Integer grid vertices are even
+# half-coordinates, staggered segments are odd in one coordinate, and 2D cells
+# are odd in both coordinates. Rendering is therefore a mapping problem: compute
+# a layout once, draw each semantic half-grid object into a framebuffer, and
+# only then convert the framebuffer to AnnotatedStrings.
 stencil_vertex(active::Bool) = active ? '●' : '○'
 stencil_xedge(active::Bool) = active ? '▶' : '▷'
 stencil_yedge(active::Bool) = active ? '▼' : '▽'
 stencil_cell(active::Bool) = active ? '■' : '□'
 
-const STENCIL_ACTIVE_FACE = StyledStrings.Face(; foreground=:blue, weight=:bold)
-const STENCIL_INDEX_FACE = something(show_face(SIndex(1)), StyledStrings.Face(; underline=true))
-
-function stencil_face(char::Char)
-    char in ('●', '▶', '▼', '■') && return STENCIL_ACTIVE_FACE
-    return nothing
+Base.@kwdef struct StencilRenderOptions
+    x_ticks::Bool = true
+    y_ticks::Bool = true
+    x_axis_label::Bool = true
+    y_axis_label::Bool = true
+    left_margin::Int = 0
+    right_margin::Int = 0
+    slice_gap::Int = 1
+    textwidth::Union{Nothing,Int} = nothing
 end
 
-function stencil_index_text(label::AbstractString, use_color::Bool)
-    return use_color ? annotated_text(label, STENCIL_INDEX_FACE) : label
+struct StencilSliceOptions
+    fixed::Tuple
+    y_ticks::Bool
+    reserve_y_tick_space::Bool
 end
 
-function stencil_symbol_span(symbol::Char, sepwidth::Integer; fill::Char)
-    left = fld(sepwidth - 1, 2)
-    right = sepwidth - left - 1
-    return repeat(string(fill), left) * string(symbol) * repeat(string(fill), right)
+StencilSliceOptions(opts::StencilRenderOptions) = StencilSliceOptions((), opts.y_ticks, opts.y_ticks)
+
+struct StencilGeometry{N,C,H,B}
+    coords::C
+    halfcoords::H
+    bounds::B
 end
 
-function stencil_node_row_string(active_nodes, active_segments, sepwidth::Integer=3)
-    nodes = collect(active_nodes)
-    segments = collect(active_segments)
-    chars = String[]
-    for (i, active) in enumerate(nodes)
-        push!(chars, string(stencil_vertex(active)))
-        i == length(nodes) && continue
-        push!(chars, stencil_symbol_span(stencil_xedge(segments[i]), sepwidth; fill='─'))
-    end
-    return join(chars)
+function StencilGeometry(s::Stencil{N}) where {N}
+    coords = stencil_coords(s)
+    halfcoords = map(coord -> ntuple(i -> Int(2coord[i]), min(N, 2)), coords)
+    bounds = stencil_vertex_bounds(coords, min(N, 2))
+    return StencilGeometry{N,typeof(coords),typeof(halfcoords),typeof(bounds)}(coords, halfcoords, bounds)
 end
 
-function stencil_edge_row_string(active_edges, active_cells, sepwidth::Integer=3)
-    edges = collect(active_edges)
-    cells = collect(active_cells)
-    chars = String[]
-    for (i, active) in enumerate(edges)
-        push!(chars, string(stencil_yedge(active)))
-        i == length(edges) && continue
-        push!(chars, stencil_symbol_span(stencil_cell(cells[i]), sepwidth; fill=' '))
-    end
-    return join(chars)
+function active_halfcoords(geometry::StencilGeometry{N}, fixed::Tuple=()) where {N}
+    nd = min(N, 2)
+    return Set(ntuple(i -> halfcoord[i], Val(nd))
+               for (coord, halfcoord) in zip(geometry.coords, geometry.halfcoords)
+               if (length(coord) == 2 && isempty(fixed)) || all(coord[d+2] == fixed[d] for d in eachindex(fixed)))
 end
 
-stencil_vertical_border_row_string(n::Integer, sepwidth::Integer=3) = join(fill("│", n), repeat(" ", sepwidth))
+struct StencilLayout1D
+    xmin::Int
+    xmax::Int
+    sepwidth::Int
+    prefixwidth::Int
+    gridwidth::Int
+    width::Int
+    height::Int
+    x_axis_row::Int
+    glyph_row::Int
+    x_tick_row::Int
+end
 
-stencil_fixed_indices_string(fixed::Tuple) = join((string(stencil_axis_name(i + 2), " = ", value) for (i, value) in enumerate(fixed)), ", ")
+function StencilLayout1D(bounds, opts::StencilRenderOptions)
+    xmin, xmax = bounds[1]
+    tickwidth = opts.x_ticks ? maximum(x -> textwidth(string(x)), xmin:xmax) : 1
+    sepwidth = max(9, opts.x_ticks ? tickwidth + 1 : 9)
+    prefixwidth = opts.x_ticks ? tickwidth - 1 : 0
+    gridwidth = stencil_grid_width(xmax - xmin + 1, sepwidth)
+    x_axis_col = prefixwidth + max(0, (gridwidth - 1) ÷ 2) + 1
+    width = max(prefixwidth + gridwidth,
+                opts.x_axis_label ? x_axis_col + textwidth(styled(SIndex(1))) - 1 : 0)
+    row = 1
+    x_axis_row = opts.x_axis_label ? row : 0
+    row += opts.x_axis_label ? 1 : 0
+    glyph_row = row
+    row += 1
+    x_tick_row = opts.x_ticks ? row : 0
+    row += opts.x_ticks ? 1 : 0
+    return StencilLayout1D(xmin, xmax, sepwidth, prefixwidth, gridwidth, width, row - 1, x_axis_row, glyph_row, x_tick_row)
+end
 
-function stencil_label_line(labels, prefixwidth::Integer, sepwidth::Integer)
-    # Tick labels need explicit placement so values like `-1` stay centered under their nodes.
-    nodecols = [prefixwidth + 1 + (i - 1) * (sepwidth + 1) for i in eachindex(labels)]
-    line = fill(' ', nodecols[end])
-    for (label, nodecol) in zip(labels, nodecols)
-        startcol = nodecol - textwidth(label) + 1
-        for (offset, char) in enumerate(label)
-            line[startcol+offset-1] = char
+struct StencilLayout2D
+    xmin::Int
+    xmax::Int
+    ymin::Int
+    ymax::Int
+    labelwidth::Int
+    sepwidth::Int
+    prefixwidth::Int
+    gridwidth::Int
+    gridheight::Int
+    width::Int
+    height::Int
+    x_axis_row::Int
+    grid_start_row::Int
+    x_tick_row::Int
+    y_axis_row::Int
+    y_axis_col::Int
+end
+
+function StencilLayout2D(bounds, opts::StencilRenderOptions, slice::StencilSliceOptions)
+    xmin, xmax = bounds[1]
+    ymin, ymax = bounds[2]
+    labelwidth = slice.reserve_y_tick_space ? maximum(y -> textwidth(string(y)), ymin:ymax) : 0
+    tickwidth = opts.x_ticks ? maximum(x -> textwidth(string(x)), xmin:xmax) : 1
+    sepwidth = max(9, opts.x_ticks ? tickwidth + 1 : 9)
+    # Prefix columns are owned by visible/reserved y tick labels plus one
+    # separator before the grid. There is no anonymous left gutter.
+    prefixwidth = max(slice.reserve_y_tick_space ? labelwidth + 1 : 0, opts.x_ticks ? tickwidth - 1 : 0)
+    gridwidth = stencil_grid_width(xmax - xmin + 1, sepwidth)
+    gridheight = 1 + 4 * (ymax - ymin)
+    x_axis_col = prefixwidth + max(0, (gridwidth - 1) ÷ 2) + 1
+    y_axis_col = prefixwidth + gridwidth + 2
+    width = prefixwidth + gridwidth
+    opts.x_axis_label && (width = max(width, x_axis_col + textwidth(styled(SIndex(1))) - 1))
+    opts.y_axis_label && (width = max(width, y_axis_col + textwidth(styled(SIndex(2))) - 1))
+    row = 1
+    x_axis_row = opts.x_axis_label ? row : 0
+    row += opts.x_axis_label ? 1 : 0
+    grid_start_row = row
+    row += gridheight
+    x_tick_row = opts.x_ticks ? row : 0
+    row += opts.x_ticks ? 1 : 0
+    if opts.y_axis_label
+        nrows = ymax - ymin + 1
+        if isodd(nrows)
+            midrow = cld(nrows, 2)
+            y = ymax - (midrow - 1)
+            y_axis_row = grid_start_row + 4 * (ymax - y)
+        else
+            midedge = fld(nrows, 2)
+            y = ymax - (midedge - 1)
+            y_axis_row = grid_start_row + 4 * (ymax - y) + 2
         end
+    else
+        y_axis_row = 0
     end
-    return String(line)
+    return StencilLayout2D(xmin, xmax, ymin, ymax, labelwidth, sepwidth, prefixwidth,
+                           gridwidth, gridheight, width, row - 1, x_axis_row,
+                           grid_start_row, x_tick_row, y_axis_row, y_axis_col)
 end
 
 stencil_grid_width(nnodes::Integer, sepwidth::Integer) = nnodes + (nnodes - 1) * sepwidth
 
-function stencil_centered_line(label::AbstractString, prefixwidth::Integer, contentwidth::Integer)
-    # Center the leading glyph on the axis and let any trailing modifiers extend to the right.
-    chars = collect(label)
-    startcol = prefixwidth + max(0, (contentwidth - 1) ÷ 2) + 1
-    line = fill(' ', max(prefixwidth + contentwidth, startcol + length(chars) - 1))
-    for (offset, char) in enumerate(chars)
-        line[startcol+offset-1] = char
+xnode_col(layout, x::Integer) = layout.prefixwidth + 1 + (x - layout.xmin) * (layout.sepwidth + 1)
+xedge_col(layout, x::Integer) = xnode_col(layout, x) + 1 + fld(layout.sepwidth - 1, 2)
+xaxis_col(layout) = layout.prefixwidth + max(0, (layout.gridwidth - 1) ÷ 2) + 1
+ynode_row(layout::StencilLayout2D, y::Integer) = layout.grid_start_row + 4 * (layout.ymax - y)
+
+struct StencilCanvas
+    cells::Matrix{Base.AnnotatedChar{Char}}
+end
+
+function StencilCanvas(height::Integer, width::Integer)
+    cells = fill(Base.AnnotatedChar(' '), width + 1, height)
+    cells[end, :] .= Base.AnnotatedChar('\n')
+    return StencilCanvas(cells)
+end
+
+stencil_char(char::Char, face=nothing) = isnothing(face) ? Base.AnnotatedChar(char) : Base.AnnotatedChar(char, [(label=:face, value=face)])
+
+function put!(canvas::StencilCanvas, row::Integer, col::Integer, char::Base.AnnotatedChar)
+    1 <= row <= size(canvas.cells, 2) || throw(BoundsError(canvas.cells, (row, col)))
+    1 <= col < size(canvas.cells, 1) || throw(BoundsError(canvas.cells, (row, col)))
+    canvas.cells[col, row] = char
+    return canvas
+end
+
+put!(canvas::StencilCanvas, row::Integer, col::Integer, char::Char) = put!(canvas, row, col, stencil_char(char))
+put!(canvas::StencilCanvas, row::Integer, col::Integer, char::Char, face) = put!(canvas, row, col, stencil_char(char, face))
+
+function put!(canvas::StencilCanvas, row::Integer, col::Integer, text::AbstractString)
+    cursor = col
+    for char in text
+        put!(canvas, row, cursor, char)
+        cursor += textwidth(char)
     end
-    return String(line)
+    return canvas
 end
 
-stencil_axis_anchor_column(prefixwidth::Integer, gridwidth::Integer) = prefixwidth + max(0, (gridwidth - 1) ÷ 2) + 1
-
-function stencil_anchor_text_line(label::AbstractString, anchor::AbstractChar, anchor_col::Integer, minwidth::Integer)
-    chars = collect(label)
-    anchor_idx = something(findfirst(==(anchor), chars), 1)
-    startcol = anchor_col - anchor_idx + 1
-    leftpad = max(0, 1 - startcol)
-    width = max(minwidth, leftpad + startcol + length(chars) - 1)
-    line = fill(' ', width)
-    for (i, char) in enumerate(chars)
-        line[leftpad+startcol+i-1] = char
+function put_hline!(canvas::StencilCanvas, row::Integer, firstcol::Integer, lastcol::Integer, char::Char)
+    for col in firstcol:lastcol
+        put!(canvas, row, col, char)
     end
-    return String(line)
+    return canvas
 end
 
-function stencil_xlabels_line(xmin::Integer, xmax::Integer, prefixwidth::Integer, sepwidth::Integer)
-    labels = map(string, xmin:xmax)
-    return stencil_label_line(labels, prefixwidth, sepwidth)
+function put_right_aligned!(canvas::StencilCanvas, row::Integer, anchor_col::Integer, text)
+    label = annotated_text(text)
+    return put!(canvas, row, anchor_col - textwidth(label) + 1, label)
 end
 
-function stencil_slice_layout_2d(bounds;
-                                 show_x_ticks::Bool=true,
-                                 show_y_ticks::Bool=true,
-                                 reserve_y_tick_space::Bool=show_y_ticks)
-    xmin, xmax = bounds[1]
-    ymin, ymax = bounds[2]
-    labelwidth = reserve_y_tick_space ? maximum(y -> textwidth(string(y)), ymin:ymax) : 0
-    tickwidth = show_x_ticks ? maximum(x -> textwidth(string(x)), xmin:xmax) : 1
-    sepwidth = max(9, show_x_ticks ? tickwidth + 1 : 9)
-    prefixwidth = max(reserve_y_tick_space ? labelwidth + 2 : 0, show_x_ticks ? tickwidth - 1 : 0)
-    gridwidth = stencil_grid_width(xmax - xmin + 1, sepwidth)
-    return (; xmin, xmax, ymin, ymax, labelwidth, tickwidth, sepwidth, prefixwidth, gridwidth)
+struct Stencil3DSlice{O,S,L,T}
+    opts::O
+    slice::S
+    layout::L
+    title::T
+    width::Int
 end
 
-stencil_pad_line(line::AbstractString, width::Integer) = rpad(line, width)
-stencil_trim_prefix(line::AbstractString, width::Integer) = textwidth(line) <= width ? "" : line[nextind(line, firstindex(line), width):end]
-
-function stencil_leading_space_width(line::AbstractString)
-    width = 0
-    for char in line
-        char == ' ' || break
-        width += 1
-    end
-    return width
+struct StencilLayout3D{S}
+    slices::S
+    gap::Int
+    width::Int
+    height::Int
 end
 
-function stencil_trim_visible_block(lines::AbstractVector{<:AbstractString})
-    lefttrim = minimum(stencil_leading_space_width, lines; init=0)
-    return map(lines) do line
-        trimmed = lefttrim == 0 ? line : stencil_trim_prefix(line, lefttrim)
-        return rstrip(trimmed, ' ')
-    end
-end
-
-function stencil_hcat_blocks(blocks::Vector{<:Vector{String}}; gap::Integer=3)
-    widths = [maximum(textwidth, block; init=0) for block in blocks]
-    height = maximum(length, blocks; init=0)
-    return [join((stencil_pad_line(row <= length(block) ? block[row] : "", width) for (block, width) in zip(blocks, widths)),
-                 repeat(" ", gap)) for row in 1:height]
-end
-
-function stencil_style_segment(line::String)
-    styledline = Base.annotatedstring(line)
-    runstart = firstindex(line)
-    runface = nothing
-    for idx in eachindex(line)
-        face = stencil_face(line[idx])
-        if face !== runface
-            isnothing(runface) || face!(styledline, runstart:prevind(line, idx), runface)
-            runstart = idx
-            runface = face
-        end
-    end
-    isnothing(runface) || face!(styledline, runstart:lastindex(line), runface)
-    return styledline
-end
-
-function stencil_style_line(line::String; color::Bool=false)
-    pieces = Any[]
-    nextstart = firstindex(line)
-    for m in eachmatch(r"i[₀-₉]+", line)
-        startidx = m.offset
-        nextstart < startidx && push!(pieces, stencil_style_segment(line[nextstart:prevind(line, startidx)]))
-        push!(pieces, stencil_index_text(m.match, color))
-        nextstart = nextind(line, startidx, length(m.match))
-    end
-    nextstart <= lastindex(line) && push!(pieces, stencil_style_segment(line[nextstart:end]))
-    isempty(pieces) && return stencil_style_segment(line)
-    return Base.annotatedstring(pieces...)
-end
-
-stencil_style_lines(lines::AbstractVector{String}; color::Bool=false) = map(line -> stencil_style_line(line; color), lines)
-
-function stencil_join_lines(lines::AbstractVector{<:AbstractString})
-    isempty(lines) && return Base.annotatedstring("")
-    return reduce((left, right) -> Base.annotatedstring(left, "\n", right), lines)
-end
-
-function stencil_centered_block(lines::AbstractVector{<:AbstractString}, width::Integer)
-    # Center the visible stencil block, not the shared leading/trailing whitespace used inside
-    # each rendered slice for axis/tick alignment. PrettyTables adds one padding column on each
-    # side of the cell, so this helper only needs a 1-character internal margin.
-    trimmed = stencil_trim_visible_block(lines)
-    blockwidth = maximum(textwidth, trimmed; init=0)
-    inner_slack = max(0, width - blockwidth - 2)
-    leftpad = 1 + fld(inner_slack, 2)
-    padded = [rpad(repeat(" ", leftpad) * line, width) for line in trimmed]
-    return stencil_join_lines(padded)
-end
-
-function stencil_visible_width(lines::AbstractVector{<:AbstractString})
-    trimmed = stencil_trim_visible_block(lines)
-    return maximum(textwidth, trimmed; init=0)
-end
-
-function stencil_slice_lines_1d(halfcoords, bounds; show_ticks::Bool=true, show_axis_labels::Bool=true)
-    xmin, xmax = bounds[1]
-    active = Set(first(coord) for coord in halfcoords)
-    tickwidth = show_ticks ? maximum(x -> textwidth(string(x)), xmin:xmax) : 1
-    sepwidth = max(9, show_ticks ? tickwidth + 1 : 9)
-    prefixwidth = show_ticks ? tickwidth - 1 : 0
-    gridwidth = stencil_grid_width(xmax - xmin + 1, sepwidth)
-    lines = String[]
-    if show_axis_labels
-        push!(lines, stencil_centered_line(stencil_axis_name(1), prefixwidth, gridwidth))
-    end
-    push!(lines,
-          rpad("", prefixwidth) *
-          stencil_node_row_string((2x in active for x in xmin:xmax),
-                                  (2x + 1 in active for x in xmin:xmax-1),
-                                  sepwidth))
-    show_ticks && push!(lines, stencil_xlabels_line(xmin, xmax, prefixwidth, sepwidth))
-    return lines
-end
-
-function stencil_slice_lines_2d(coords, halfcoords, bounds, fixed::Tuple=();
-                                show_x_ticks::Bool=true,
-                                show_y_ticks::Bool=true,
-                                reserve_y_tick_space::Bool=show_y_ticks,
-                                show_x_axis_label::Bool=true,
-                                show_y_axis_label::Bool=true)
-    layout = stencil_slice_layout_2d(bounds; show_x_ticks, show_y_ticks, reserve_y_tick_space)
-    xmin, xmax = layout.xmin, layout.xmax
-    ymin, ymax = layout.ymin, layout.ymax
-    active = Set((halfcoord[1], halfcoord[2]) for (coord, halfcoord) in zip(coords, halfcoords) if stencil_slice_matches(coord, fixed))
-    labelwidth = layout.labelwidth
-    sepwidth = layout.sepwidth
-    prefixwidth = layout.prefixwidth
-    gridwidth = layout.gridwidth
-    nrows = ymax - ymin + 1
-    midrow = cld(nrows, 2)
-    midedge = fld(nrows, 2)
-    lines = String[]
-    show_x_axis_label && push!(lines, stencil_centered_line(stencil_axis_name(1), prefixwidth, gridwidth))
-    blankprefix = repeat(" ", prefixwidth)
-    for (row, y) in enumerate(ymax:-1:ymin)
-        prefix = show_y_ticks ? " $(lpad(string(y), labelwidth)) " : blankprefix
-        suffix = show_y_axis_label && isodd(nrows) && row == midrow ? " " * stencil_axis_name(2) : ""
-        push!(lines,
-              prefix *
-              stencil_node_row_string(((2x, 2y) in active for x in xmin:xmax),
-                                      ((2x + 1, 2y) in active for x in xmin:xmax-1),
-                                      sepwidth) *
-              suffix)
-        if row < ymax - ymin + 1
-            edgeprefix = show_y_ticks ? " $(repeat(" ", labelwidth)) " : blankprefix
-            centersuffix = show_y_axis_label && iseven(nrows) && row == midedge ? " " * stencil_axis_name(2) : ""
-            ncols = xmax - xmin + 1
-            hy = 2y - 1
-            push!(lines,
-                  edgeprefix *
-                  stencil_vertical_border_row_string(ncols, sepwidth))
-            push!(lines,
-                  edgeprefix *
-                  stencil_edge_row_string(((2x, hy) in active for x in xmin:xmax),
-                                          ((2x + 1, hy) in active for x in xmin:xmax-1),
-                                          sepwidth) *
-                  centersuffix)
-            push!(lines,
-                  edgeprefix *
-                  stencil_vertical_border_row_string(ncols, sepwidth))
-        end
-    end
-    show_x_ticks && push!(lines, stencil_xlabels_line(xmin, xmax, prefixwidth, sepwidth))
-    return lines
-end
-
-function stencil_render_lines(s::Stencil; show_ticks::Bool=true, show_axis_labels::Bool=true, color::Bool=false)
-    isempty(s.shifts) && return [Base.annotatedstring(sprint(show, s))]
-    coords = stencil_coords(s)
-    nd = length(first(coords))
-    halfcoords = stencil_halfgrid_coords(coords, min(nd, 2))
-    isnothing(halfcoords) && return [Base.annotatedstring(sprint(show, s))]
-    bounds = stencil_vertex_bounds(coords, min(nd, 2))
-    if nd == 1
-        return stencil_style_lines(stencil_slice_lines_1d(halfcoords, bounds; show_ticks, show_axis_labels); color)
-    elseif nd == 2
-        return stencil_style_lines(stencil_slice_lines_2d(coords, halfcoords, bounds;
-                                                          show_x_ticks=show_ticks,
-                                                          show_y_ticks=show_ticks,
-                                                          reserve_y_tick_space=show_ticks,
-                                                          show_x_axis_label=show_axis_labels,
-                                                          show_y_axis_label=show_axis_labels); color)
-    elseif nd != 3
-        return [Base.annotatedstring(sprint(show, s))]
-    end
-    ranges = [sort(unique(coord[d] for coord in coords)) for d in 3:nd]
+function StencilLayout3D(geometry::StencilGeometry{3}, opts::StencilRenderOptions)
+    ranges = [sort(unique(coord[d] for coord in geometry.coords)) for d in 3:3]
     fixeds = collect(Tuple(values) for values in Iterators.product(ranges...))
-    blocks = Vector{Vector{String}}()
-    gap = 1
+    slices = Stencil3DSlice[]
+    gap = opts.slice_gap
+
     for (i, fixed) in enumerate(fixeds)
-        # Horizontal slice layouts keep x ticks on every slice, but avoid repeated y ticks.
-        show_y_ticks = show_ticks && i == 1
-        slicelines = stencil_slice_lines_2d(coords, halfcoords, bounds, fixed;
-                                            show_x_ticks=show_ticks,
-                                            show_y_ticks=show_y_ticks,
-                                            reserve_y_tick_space=show_ticks,
-                                            show_x_axis_label=show_axis_labels,
-                                            show_y_axis_label=show_axis_labels && i == length(fixeds))
-        fixedline = stencil_fixed_indices_string(fixed)
-        layout = stencil_slice_layout_2d(bounds;
-                                         show_x_ticks=show_ticks,
-                                         show_y_ticks=show_y_ticks,
-                                         reserve_y_tick_space=show_ticks)
-        trimwidth = show_y_ticks ? 0 : minimum(stencil_leading_space_width, slicelines; init=0)
-        slicelines = trimwidth == 0 ? slicelines : map(line -> stencil_trim_prefix(line, trimwidth), slicelines)
-        blockwidth = maximum(textwidth, slicelines; init=0)
-        textwidth(fixedline) > blockwidth && (gap = 3)
-        # Align the `=` in the slice title under the `i` of the x-axis label.
-        titleline = stencil_anchor_text_line(fixedline,
-                                             '=',
-                                             stencil_axis_anchor_column(layout.prefixwidth, layout.gridwidth) - trimwidth,
-                                             blockwidth)
-        push!(blocks, [map(line -> stencil_pad_line(line, blockwidth), slicelines)..., titleline])
+        show_y_ticks = opts.y_ticks && i == 1
+        y_label = opts.y_axis_label && i == length(fixeds)
+        slice_opts = StencilRenderOptions(; x_ticks=opts.x_ticks,
+                                          y_ticks=opts.y_ticks,
+                                          x_axis_label=opts.x_axis_label,
+                                          y_axis_label=y_label,
+                                          slice_gap=opts.slice_gap)
+        slice = StencilSliceOptions(fixed, show_y_ticks, show_y_ticks)
+        layout = StencilLayout2D(geometry.bounds, slice_opts, slice)
+        title_pieces = Any[]
+        for (j, value) in enumerate(fixed)
+            j > 1 && push!(title_pieces, ", ")
+            push!(title_pieces, styled(SIndex(j + 2)), " = ", string(value))
+        end
+        title = annotatedstring(title_pieces...)
+        chars = collect(string(title))
+        anchor_idx = something(findfirst(==('='), chars), 1)
+        startcol = xaxis_col(layout) - anchor_idx + 1
+        twidth = max(layout.width, max(0, 1 - startcol) + startcol + textwidth(title) - 1)
+        twidth > layout.width && (gap = max(gap, 3))
+        push!(slices, Stencil3DSlice(slice_opts, slice, layout, title, twidth))
     end
-    return stencil_style_lines(stencil_hcat_blocks(blocks; gap); color)
+
+    width = sum(slice -> slice.width, slices; init=0) + gap * max(0, length(slices) - 1)
+    height = maximum(slice -> slice.layout.height + 1, slices; init=0)
+    return StencilLayout3D(slices, gap, width, height)
+end
+
+stencil_layout(geometry::StencilGeometry{1}, opts::StencilRenderOptions) = StencilLayout1D(geometry.bounds, opts)
+stencil_layout(geometry::StencilGeometry{2}, opts::StencilRenderOptions) = StencilLayout2D(geometry.bounds, opts, StencilSliceOptions(opts))
+stencil_layout(geometry::StencilGeometry{3}, opts::StencilRenderOptions) = StencilLayout3D(geometry, opts)
+
+function stencil_width(layout, opts::StencilRenderOptions)
+    natural_width = layout.width + opts.left_margin + opts.right_margin
+    return isnothing(opts.textwidth) ? natural_width : max(opts.textwidth, natural_width)
+end
+
+function draw_stencil!(canvas::StencilCanvas, row0::Integer, col0::Integer, geometry::StencilGeometry{1}, layout::StencilLayout1D)
+    active = active_halfcoords(geometry)
+    layout.x_axis_row != 0 && put!(canvas, row0 + layout.x_axis_row - 1, col0 + xaxis_col(layout) - 1, styled(SIndex(1)))
+
+    for x in layout.xmin:layout.xmax
+        node_active = (2x,) in active
+        put!(canvas, row0 + layout.glyph_row - 1, col0 + xnode_col(layout, x) - 1, stencil_vertex(node_active), node_active ? STENCIL_ACTIVE_FACE : nothing)
+        if x < layout.xmax
+            put_hline!(canvas, row0 + layout.glyph_row - 1, col0 + xnode_col(layout, x), col0 + xnode_col(layout, x + 1) - 2, '─')
+            edge_active = (2x + 1,) in active
+            put!(canvas, row0 + layout.glyph_row - 1, col0 + xedge_col(layout, x) - 1, stencil_xedge(edge_active), edge_active ? STENCIL_ACTIVE_FACE : nothing)
+        end
+        layout.x_tick_row != 0 && put_right_aligned!(canvas, row0 + layout.x_tick_row - 1, col0 + xnode_col(layout, x) - 1, string(x))
+    end
+    return canvas
+end
+
+function draw_stencil!(canvas::StencilCanvas, row0::Integer, col0::Integer, geometry::StencilGeometry{N}, layout::StencilLayout2D,
+                       slice::StencilSliceOptions=StencilSliceOptions((), layout.labelwidth > 0, layout.labelwidth > 0)) where {N}
+    active = active_halfcoords(geometry, slice.fixed)
+    layout.x_axis_row != 0 && put!(canvas, row0 + layout.x_axis_row - 1, col0 + xaxis_col(layout) - 1, styled(SIndex(1)))
+
+    for y in layout.ymax:-1:layout.ymin
+        node_row = row0 + ynode_row(layout, y) - 1
+        if slice.y_ticks
+            put!(canvas, node_row, col0, lpad(string(y), layout.labelwidth))
+        end
+        for x in layout.xmin:layout.xmax
+            node_active = (2x, 2y) in active
+            put!(canvas, node_row, col0 + xnode_col(layout, x) - 1, stencil_vertex(node_active), node_active ? STENCIL_ACTIVE_FACE : nothing)
+            if x < layout.xmax
+                put_hline!(canvas, node_row, col0 + xnode_col(layout, x), col0 + xnode_col(layout, x + 1) - 2, '─')
+                xedge_active = (2x + 1, 2y) in active
+                put!(canvas, node_row, col0 + xedge_col(layout, x) - 1, stencil_xedge(xedge_active), xedge_active ? STENCIL_ACTIVE_FACE : nothing)
+            end
+        end
+
+        y == layout.ymin && continue
+        hy = 2y - 1
+        for x in layout.xmin:layout.xmax
+            col = col0 + xnode_col(layout, x) - 1
+            put!(canvas, node_row + 1, col, '│')
+            yedge_active = (2x, hy) in active
+            put!(canvas, node_row + 2, col, stencil_yedge(yedge_active), yedge_active ? STENCIL_ACTIVE_FACE : nothing)
+            put!(canvas, node_row + 3, col, '│')
+            if x < layout.xmax
+                cell_active = (2x + 1, hy) in active
+                put!(canvas, node_row + 2, col0 + xedge_col(layout, x) - 1, stencil_cell(cell_active), cell_active ? STENCIL_ACTIVE_FACE : nothing)
+            end
+        end
+    end
+
+    if layout.x_tick_row != 0
+        for x in layout.xmin:layout.xmax
+            put_right_aligned!(canvas, row0 + layout.x_tick_row - 1, col0 + xnode_col(layout, x) - 1, string(x))
+        end
+    end
+    layout.y_axis_row != 0 && put!(canvas, row0 + layout.y_axis_row - 1, col0 + layout.y_axis_col - 1, styled(SIndex(2)))
+    return canvas
+end
+
+function draw_stencil!(canvas::StencilCanvas, row0::Integer, col0::Integer, geometry::StencilGeometry{3}, layout::StencilLayout3D)
+    col = 1
+    for slice in layout.slices
+        draw_stencil!(canvas, row0, col0 + col - 1, geometry, slice.layout, slice.slice)
+        chars = collect(string(slice.title))
+        anchor_idx = something(findfirst(==('='), chars), 1)
+        startcol = xaxis_col(slice.layout) - anchor_idx + 1
+        leftpad = max(0, 1 - startcol)
+        put!(canvas, row0 + slice.layout.height, col0 + col + leftpad + startcol - 2, slice.title)
+        col += slice.width + layout.gap
+    end
+    return canvas
+end
+
+function render_stencil(s::Stencil, opts::StencilRenderOptions)
+    N = ndims(s)
+    1 <= N <= 3 || throw(ArgumentError("stencil rendering supports only 1D, 2D, and 3D stencils, got $(N)D"))
+    isempty(s.shifts) && throw(ArgumentError("cannot render an empty stencil"))
+    geometry = StencilGeometry(s)
+    layout = stencil_layout(geometry, opts)
+    canvas = StencilCanvas(layout.height, stencil_width(layout, opts))
+    natural_width = layout.width + opts.left_margin + opts.right_margin
+    left_padding = opts.left_margin + fld(stencil_width(layout, opts) - natural_width, 2)
+    draw_stencil!(canvas, 1, left_padding + 1, geometry, layout)
+    return join(view(canvas.cells, 1:lastindex(canvas.cells)-1))
+end
+
+function render_stencil(s::Stencil; kwargs...)
+    # Public stencil renderer: normalize keyword options once, draw the stencil
+    # into an annotation-preserving framebuffer, and flatten that framebuffer
+    # directly into the AnnotatedString that `show` prints.
+    return render_stencil(s, StencilRenderOptions(; kwargs...))
+end
+
+function stencil_render_width(s::Stencil, opts::StencilRenderOptions)
+    return stencil_width(stencil_layout(StencilGeometry(s), opts), opts)
+end
+
+function stencil_render_height(s::Stencil, opts::StencilRenderOptions)
+    return stencil_layout(StencilGeometry(s), opts).height
 end
 
 function vertically_centered_cell(text::AbstractString, height::Integer)
-    # Pad only above/below the term so PrettyTables can keep the stencil cell untouched.
     top = max(0, fld(height - 1, 2))
     bottom = max(0, height - top - 1)
-    return join(vcat(fill("", top), [text], fill("", bottom)), '\n')
+    return annotated_join(vcat(fill(annotatedstring(""), top), [text], fill(annotatedstring(""), bottom)))
+end
+
+# Base.show entrypoints
+
+Base.show(io::IO, term::STerm) = print(io, styled(term))
+
+function Base.show(io::IO, ::MIME"text/plain", term::STerm)
+    isexpr(term) && print(io, "StaticExpression:\n ")
+    print(io, styled(term))
 end
 
 function Base.show(io::IO, ::MIME"text/plain", s::Stencil)
-    isempty(s.shifts) && return show(io, s)
-    ndims(s) > 3 && return show(io, s)
-    use_color = get(io, :color, false)
     print(io, "Stencil ($(ndims(s))D, $(length(s.shifts)) shifts")
     if !isnothing(s.location)
         print(io, ", location ")
         show_stencil_location(io, s.location)
     end
     print(io, "):\n")
-    print(io, stencil_join_lines(stencil_render_lines(s; color=use_color)))
+    print(io, render_stencil(s))
 end
 
 function Base.show(io::IO, nu::Nonuniforms)
     print(io, "Nonuniforms(")
     for (i, (term, stencil)) in enumerate(pairstuple(stencils(nu)))
         i > 1 && print(io, ", ")
-        print(io, term, " => ", stencil)
+        print(io, styled(term), " => ", stencil)
     end
     print(io, ')')
 end
@@ -779,25 +755,14 @@ end
 function Base.show(io::IO, ::MIME"text/plain", nu::Nonuniforms)
     pairs = pairstuple(stencils(nu))
     isempty(pairs) && return show(io, nu)
-    use_color = get(io, :color, false)
-    if any(ndims(stencil) > 3 for (_, stencil) in pairs)
-        padlength = maximum(term -> textwidth(term_display_string(term)), keys(stencils(nu)))
-        println(io, "Nonuniforms:")
-        for (term, stencil) in pairs
-            plain = term_display_string(term)
-            styled = term_table_text(term, use_color)
-            println(io, ' ', styled, repeat(" ", padlength - textwidth(plain)), " => ", stencil)
-        end
-        return
-    end
-    stencil_lines = [stencil_render_lines(stencil; color=use_color) for (_, stencil) in pairs]
-    stencil_width = maximum(stencil_visible_width, stencil_lines; init=0) + 2
+    stencil_opts = StencilRenderOptions(; left_margin=1, right_margin=1)
+    stencil_width = maximum(stencil -> stencil_render_width(stencil, stencil_opts), values(stencils(nu)); init=0)
+    cell_opts = StencilRenderOptions(; left_margin=1, right_margin=1, textwidth=stencil_width)
     data = Matrix{Any}(undef, length(pairs), 2)
     for (i, (term, stencil)) in enumerate(pairs)
-        lines = stencil_lines[i]
-        height = length(lines)
-        data[i, 1] = vertically_centered_cell(term_table_text(term, use_color), height)
-        data[i, 2] = stencil_centered_block(lines, stencil_width)
+        height = stencil_render_height(stencil, cell_opts)
+        data[i, 1] = vertically_centered_cell(styled(term), height)
+        data[i, 2] = render_stencil(stencil, cell_opts)
     end
     pretty_table(io, data;
                  column_labels=["term", "stencil"],
