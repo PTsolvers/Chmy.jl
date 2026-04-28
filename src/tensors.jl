@@ -350,7 +350,7 @@ Tensor{D}(t::Tensor{D}) where {D} = t
 Tensor{D}(s::STensor{0}) where {D} = s
 Tensor{D}(::SZeroTensor{R}) where {D,R} = ZeroTensor{D,R}()
 Tensor{D}(::SIdTensor{R}) where {D,R} = IdTensor{D,R}()
-@generated function Tensor{D}(s::STensor{R,K,U}) where {D,R,K,U}
+@generated function Tensor{D}(s::AbstractSTensor{R,K,U}) where {D,R,K,U}
     ex = Expr(:call, :(Tensor{$D,$R,$K}))
     comp_expr(I) = :(s[$(map(i -> :(SLiteral($i)), I)...)])
     if K <: NoKind
@@ -376,22 +376,22 @@ Tensor{D}(::SIdTensor{R}) where {D,R} = IdTensor{D,R}()
     end
     return ex
 end
-function Tensor{D}(expr::SExpr{Call}) where {D}
-    args = tuplemap(Tensor{D}, arguments(expr))
+Base.@assume_effects :foldable function Tensor{D}(expr::SExpr{Call}) where {D}
+    args = map(Tensor{D}, arguments(expr))
     op = operation(expr)
     return Tensor{D}(op, args...)
 end
-function Tensor{D}(expr::SExpr{Comp}) where {D}
+Base.@assume_effects :foldable function Tensor{D}(expr::SExpr{Comp}) where {D}
     arg = Tensor{D}(argument(expr))
-    return arg[tuplemap(Tensor{D}, indices(expr))...]
+    return arg[map(Tensor{D}, indices(expr))...]
 end
-function Tensor{D}(expr::SExpr{Loc}) where {D}
+Base.@assume_effects :foldable function Tensor{D}(expr::SExpr{Loc}) where {D}
     arg = Tensor{D}(argument(expr))
     return arg[location(expr)...]
 end
-function Tensor{D}(expr::SExpr{Ind}) where {D}
+Base.@assume_effects :foldable function Tensor{D}(expr::SExpr{Ind}) where {D}
     arg = Tensor{D}(argument(expr))
-    return arg[tuplemap(Tensor{D}, indices(expr))...]
+    return arg[map(Tensor{D}, indices(expr))...]
 end
 Tensor{D}(s::SRef) where {D} = s
 Tensor{D}(sf::SFun) where {D} = sf

@@ -28,6 +28,8 @@ Base.show(io::IO, t::CustomBaseShowTerm) = print(io, "base(", t.x, ")")
     @test sprint(show, sin.(a)) == "sin.(a)"
     @test sprint(show, n) == "(a + b)"
     @test sprint(show, n * c) == "c * (a + b)"
+    @test sprint(show, BoundaryTangent()) == "T"
+    @test sprint(show, Chmy.BasisVector{2}()) == "e₂"
 
     colored = sprint(show, n; context=:color => true)
     @test occursin("\e[31m(\e[39m", colored)

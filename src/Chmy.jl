@@ -65,7 +65,7 @@ include("binding.jl")
 
 export Shift, CartesianShift, AxisFace, Lower, Upper, Span, Face, Stencil, Nonuniforms
 export δ, adjacent_faces, boundary_rule, boundary_operator, dim, codim, nonuniforms
-export ExtensionRule, ExtensionSpec, ExtensionOperator, PolynomialReconstruction, LinearReconstruction, BoundaryNormal, project_boundary, reconstruct
+export ExtensionRule, ExtensionSpec, ExtensionOperator, PolynomialReconstruction, LinearReconstruction, BoundaryNormal, BoundaryTangent, BasisVector, project_boundary, reconstruct
 export BoundaryData, ValueData, DerivativeData
 export GridOperator, operator
 include("boundary_operators.jl")

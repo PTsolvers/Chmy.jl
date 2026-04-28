@@ -200,6 +200,7 @@ function same_location(a::Tuple, b::Tuple)
     return all(map((x, y) -> x === y, a, b))
 end
 
+# merge two sorted tuples into a sorted tuple while keeping only unique entries
 merge_sorted_unique(::Tuple{}, ::Tuple{}) = ()
 merge_sorted_unique(::Tuple{}, b::Tuple) = b
 merge_sorted_unique(a::Tuple, ::Tuple{}) = a
@@ -339,15 +340,32 @@ normal axis of the codim-1 face when a boundary rule is applied.
 """
 struct BoundaryNormal <: AbstractSTensor{1,NoKind,true} end
 
-struct FaceNormal{I} <: AbstractSTensor{1,NoKind,true} end
+"""
+    BoundaryTangent()
 
-Base.getindex(n::BoundaryNormal, i::IntegerOrSLiteral) = n[STerm(i)]
-Base.getindex(n::BoundaryNormal, i::SLiteral) = SExpr(Comp(), n, i)
+Symbolic boundary-tangent selector for boundary-condition expressions.
 
-Base.getindex(::FaceNormal{I}, ::SLiteral{J}) where {I,J} = SLiteral(I == J ? 1 : 0)
+`BoundaryTangent()` is resolved to one positive coordinate-basis vector for each
+tangent axis of that face, producing one scalarized extension spec per tangent
+direction.
+"""
+struct BoundaryTangent <: AbstractSTensor{1,NoKind,true} end
 
-function Tensor{D}(n::FaceNormal) where {D}
-    return Vec{D}(ntuple(i -> n[SLiteral(i)], Val(D))...)
+"""
+    BasisVector{I}()
+
+Positive coordinate-basis vector in direction `I`.
+
+`BasisVector{I}` materializes to a vector whose only non-zero component is
+`1` at index `I`. Boundary projection uses it to resolve
+[`BoundaryNormal`](@ref) and [`BoundaryTangent`](@ref) for a concrete face.
+"""
+struct BasisVector{I} <: AbstractSTensor{1,NoKind,true} end
+
+Base.getindex(::BasisVector{I}, ::SLiteral{J}) where {I,J} = SLiteral(I == J ? 1 : 0)
+
+function Tensor{D}(v::BasisVector) where {D}
+    return Vec{D}(ntuple(i -> v[SLiteral(i)], Val(D))...)
 end
 
 """
@@ -386,7 +404,7 @@ read.
 struct ExtensionRule{B} <: BoundaryRule
     specs::B
 end
-ExtensionRule(specs::Pair...) = ExtensionRule(Binding(map(extension_rule_pair, specs)...))
+ExtensionRule(specs::Pair...) = ExtensionRule(Binding(map(extension_pair, specs)...))
 
 """
     BoundaryData
@@ -487,12 +505,7 @@ Base.@assume_effects :foldable function apply_boundary_rule(rule::ExtensionRule,
     codim(face) == 1 || throw(ArgumentError("ExtensionRule can only be applied to codim-1 faces, got codim $(codim(face))"))
     I = normal_axis(face)
     axis = face.axes[I]
-    normal = FaceNormal{I}()
-    # Extension application is intentionally staged: first resolve
-    # BoundaryNormal() for this face, then expand tensor conditions to scalar
-    # component specs, then validate scalar fields before running the rewrite pass.
-    scalar_rule = Tensor{N}(project_boundary(rule, normal))
-    pairs = extension_field_pairs(pairstuple(scalar_rule.specs))
+    pairs = extension_field_pairs(pairstuple(project_boundary(rule, face).specs))
     return apply_extension_specs(pairs, expr, ExtensionApplication{I}(axis, shifts[I]))
 end
 
@@ -513,35 +526,100 @@ end
 normal_axis(face::Face) = findfirst(!=(Span()), face.axes)
 
 """
-    project_boundary(obj, normal)
+    project_boundary(rule, face)
 
-Project boundary-condition symbolic objects to a concrete face normal.
+Project boundary-condition symbolic objects to a concrete codim-1 face.
 
 Custom [`BoundaryData`](@ref) implementations can overload this method to
-replace [`BoundaryNormal`](@ref) inside their stored data.
+replace [`BoundaryNormal`](@ref) and [`BoundaryTangent`](@ref) inside their
+stored data.
 """
-project_boundary(term::STerm, normal) = subs(term, BoundaryNormal() => normal)
-project_boundary(data::ValueData, normal) = ValueData(project_boundary(data.value, normal))
-project_boundary(data::DerivativeData, normal) = DerivativeData(project_boundary(data.value, normal))
-project_boundary(spec::ExtensionSpec, normal) = ExtensionSpec(project_boundary(spec.data, normal), spec.op)
-project_boundary(rule::ExtensionRule, normal) = ExtensionRule(project_boundary_pairs(pairstuple(rule.specs), normal)...)
+Base.@assume_effects :foldable function project_boundary(rule::ExtensionRule, face::Face)
+    codim(face) == 1 || throw(ArgumentError("ExtensionRule can only be projected to codim-1 faces, got codim $(codim(face))"))
+    N = ndims(face)
+    I = normal_axis(face)
+    pairs = project_pairs(pairstuple(rule.specs), Val(N), Val(I))
+    return ExtensionRule(Binding(pairs...))
+end
 
-project_boundary_pairs(pairs::Tuple, normal) = map(pair -> project_boundary(pair.first, normal) => project_boundary(pair.second, normal), pairs)
+function project_boundary(term::STerm, ::Val{D}, ::Val{I}, ::Val{J}) where {D,I,J}
+    Tensor{D}(subs(term, BoundaryNormal() => BasisVector{I}(), BoundaryTangent() => BasisVector{J}()))
+end
+project_boundary(data::ValueData, ::Val{D}, ::Val{I}, ::Val{J}) where {D,I,J} = ValueData(project_boundary(data.value, Val(D), Val(I), Val(J)))
+project_boundary(data::DerivativeData, ::Val{D}, ::Val{I}, ::Val{J}) where {D,I,J} = DerivativeData(project_boundary(data.value, Val(D), Val(I), Val(J)))
+project_boundary(spec::ExtensionSpec, ::Val{D}, ::Val{I}, ::Val{J}) where {D,I,J} = ExtensionSpec(project_boundary(spec.data, Val(D), Val(I), Val(J)), spec.op)
+
+project_normal(term::STerm, ::Val{I}) where {I} = subs(term, BoundaryNormal() => BasisVector{I}())
+project_normal(spec::ExtensionSpec, ::Val{I}) where {I} = ExtensionSpec(project_normal(spec.data, Val(I)), spec.op)
+project_normal(data::DerivativeData, ::Val{I}) where {I} = DerivativeData(project_normal(data.value, Val(I)))
+project_normal(data::ValueData, ::Val{I}) where {I} = ValueData(project_normal(data.value, Val(I)))
+
+# `Tensor{D}` materializes symbolic tensor algebra, but boundary values are
+# wrapped in `ValueData`/`DerivativeData` and `ExtensionSpec`. Preserve those
+# wrappers while collapsing projected expressions such as `V ⋅ e₂` to `V[2]`.
+materialize_projected(term::STerm, ::Val{D}) where {D} = Tensor{D}(term)
+materialize_projected(spec::ExtensionSpec, ::Val{D}) where {D} = ExtensionSpec(materialize_projected(spec.data, Val(D)), spec.op)
+materialize_projected(data::ValueData, ::Val{D}) where {D} = ValueData(materialize_projected(data.value, Val(D)))
+materialize_projected(data::DerivativeData, ::Val{D}) where {D} = DerivativeData(materialize_projected(data.value, Val(D)))
+
+project_pairs(::Tuple{}, ::Val, ::Val) = ()
+function project_pairs(pairs::Tuple, ::Val{D}, ::Val{I}) where {D,I}
+    pair = first(pairs)
+    lhs = project_normal(pair.first, Val(I))
+    spec = project_normal(pair.second, Val(I))
+    component_pairs = project_pair(lhs, spec, Val(D), Val(I))
+    return (component_pairs..., project_pairs(Base.tail(pairs), Val(D), Val(I))...)
+end
+
+function project_pair(lhs, spec::ExtensionSpec, ::Val{D}, ::Val{I}) where {D,I}
+    return project_pair(lhs, spec, has_tangent(lhs), has_tangent(spec), Val(D), Val(I))
+end
+function project_pair(lhs, spec::ExtensionSpec, ::Val{false}, ::Val{false}, ::Val{D}, ::Val{I}) where {D,I}
+    return scalarize_pair(materialize_projected(lhs, Val(D)), materialize_projected(spec, Val(D)), Val(D))
+end
+function project_pair(lhs, spec::ExtensionSpec, ::Val, ::Val, ::Val{D}, ::Val{I}) where {D,I}
+    return project_tangent_pairs(lhs, spec, Val(D), Val(I))
+end
+
+@generated function project_tangent_pairs(lhs, spec, ::Val{D}, ::Val{I}) where {D,I}
+    ex = Expr(:tuple)
+    for J in 1:D
+        J == I && continue
+        projected = :(scalarize_pair(project_boundary(lhs, Val($D), Val($I), Val($J)),
+                                     project_boundary(spec, Val($D), Val($I), Val($J)),
+                                     Val($D)))
+        push!(ex.args, Expr(:..., projected))
+    end
+    return ex
+end
+
+has_tangent(::BoundaryTangent) = Val(true)
+has_tangent(expr::SExpr) = has_tangent(children(expr))
+has_tangent(data::ValueData) = has_tangent(data.value)
+has_tangent(data::DerivativeData) = has_tangent(data.value)
+has_tangent(spec::ExtensionSpec) = has_tangent(spec.data)
+has_tangent(::STerm) = Val(false)
+has_tangent(::Tuple{}) = Val(false)
+function has_tangent(args::Tuple)
+    return has_tangent(has_tangent(first(args)), Base.tail(args))
+end
+has_tangent(::Val{true}, ::Tuple) = Val(true)
+has_tangent(::Val{false}, args::Tuple) = has_tangent(args)
 
 function Tensor{D}(rule::ExtensionRule) where {D}
-    return ExtensionRule(scalarize_rule_pairs(pairstuple(rule.specs), Val(D))...)
+    return ExtensionRule(scalarize_pairs(pairstuple(rule.specs), Val(D))...)
 end
 
-scalarize_rule_pairs(::Tuple{}, ::Val) = ()
-function scalarize_rule_pairs(pairs::Tuple, ::Val{D}) where {D}
+scalarize_pairs(::Tuple{}, ::Val) = ()
+function scalarize_pairs(pairs::Tuple, ::Val{D}) where {D}
     pair = first(pairs)
-    component_pairs = scalarize_rule_pair(pair.first, pair.second, Val(D))
-    return (component_pairs..., scalarize_rule_pairs(Base.tail(pairs), Val(D))...)
+    component_pairs = scalarize_pair(pair.first, pair.second, Val(D))
+    return (component_pairs..., scalarize_pairs(Base.tail(pairs), Val(D))...)
 end
 
-function scalarize_rule_pair(lhs, spec::ExtensionSpec, ::Val{D}) where {D}
+function scalarize_pair(lhs, spec::ExtensionSpec, ::Val{D}) where {D}
     rank = tensorrank(lhs)
-    if rank != boundary_data_rank(spec)
+    if rank != tensorrank(spec)
         throw(ArgumentError("boundary data rank does not match lhs rank"))
     end
 
@@ -564,9 +642,9 @@ function scalarize_tensor_rule_pair(lhs, ::ExtensionSpec)
     throw(ArgumentError("tensor boundary condition must expand to a concrete Tensor, got $lhs"))
 end
 
-boundary_data_rank(spec::ExtensionSpec) = boundary_data_rank(spec.data)
-boundary_data_rank(data::ValueData) = tensorrank(data.value)
-boundary_data_rank(data::DerivativeData) = tensorrank(data.value)
+tensorrank(spec::ExtensionSpec) = tensorrank(spec.data)
+tensorrank(data::ValueData) = tensorrank(data.value)
+tensorrank(data::DerivativeData) = tensorrank(data.value)
 
 function scalarize_boundary_data(data::ValueData, lhs::Tensor{D,R,K}) where {D,R,K}
     return tuplemap(ValueData, tensor_with_kind(Tensor{D,R,K}, data.value).components)
@@ -583,16 +661,16 @@ function ExtensionApplication{I}(axis, shift) where {I}
     return ExtensionApplication{I,typeof(axis),typeof(shift)}(axis, shift)
 end
 
-apply_extension_specs(::Tuple{}, expr::STerm, ::ExtensionApplication) = expr
 function apply_extension_specs(pairs::Tuple, expr::STerm, app::ExtensionApplication)
-    pair = first(pairs)
-    next = apply_scalar_extension(pair.first, pair.second, expr, app)
-    return apply_extension_specs(Base.tail(pairs), next, app)
+    rules = extension_rewrite_rules(pairs, app)
+    return evaluate(ExtensionWalk(Chain(rules))(expr))
 end
 
-function apply_scalar_extension(field, spec::ExtensionSpec, expr::STerm, app::ExtensionApplication{I}) where {I}
-    er = ExtensionRewriteRule{I}(spec, field, app.axis, app.shift)
-    return evaluate(Postwalk(er)(expr))
+extension_rewrite_rules(::Tuple{}, ::ExtensionApplication) = ()
+function extension_rewrite_rules(pairs::Tuple, app::ExtensionApplication{I}) where {I}
+    pair = first(pairs)
+    rule = ExtensionRewriteRule{I}(pair.second, pair.first, app.axis, app.shift)
+    return (rule, extension_rewrite_rules(Base.tail(pairs), app)...)
 end
 
 extension_field_pairs(pairs::Tuple) = map(pair -> extension_field(pair.first) => pair.second, pairs)
@@ -603,15 +681,19 @@ function extension_field(field::SExpr{Comp})
     return field
 end
 extension_field(field::AbstractSTensor{0}) = field
+function extension_field(field::SNode)
+    tensorrank(field) == 0 || throw(ArgumentError("ExtensionRule node keys must be scalarized before application, got $field"))
+    return field
+end
 function extension_field(field)
     throw(ArgumentError("ExtensionRule scalar conditions must reduce to an unlocated scalar field or component, got $field"))
 end
 
-extension_rule_spec(spec::ExtensionSpec) = spec
-extension_rule_spec(value::STerm) = ExtensionSpec(value)
-extension_rule_spec(spec) = throw(ArgumentError("ExtensionRule values must be ExtensionSpec objects, got $spec"))
+extension_spec(spec::ExtensionSpec) = spec
+extension_spec(value::STerm) = ExtensionSpec(value)
+extension_spec(spec) = throw(ArgumentError("ExtensionRule values must be ExtensionSpec objects, got $spec"))
 
-extension_rule_pair(pair::Pair) = pair.first => extension_rule_spec(pair.second)
+extension_pair(pair::Pair) = pair.first => extension_spec(pair.second)
 
 # Carries the static context needed to decide whether an indexed read is inside
 # the domain or requires reconstruction.
@@ -625,6 +707,34 @@ function ExtensionRewriteRule{I}(spec, field, axis, shift) where {I}
     return ExtensionRewriteRule{I,typeof(spec),typeof(field),typeof(axis),typeof(shift)}(spec, field, axis, shift)
 end
 
+# Boundary extension is a top-down walk: the first matching spec owns a term, and
+# the replacement is visited again so nested/protected fields can still receive
+# their own boundary treatment. Ordinary symbolic walks keep `SNode` opaque; this
+# walker peels only lowered node reads, one wrapper at a time, once no spec
+# matched the still-protected read.
+struct ExtensionWalk{R} <: AbstractRule
+    rule::R
+end
+
+Base.@assume_effects :foldable function (walk::ExtensionWalk)(term::STerm)
+    rewritten = walk.rule(term)
+    isnothing(rewritten) || return walk(rewritten)
+
+    peeled = peel_node(term)
+    isnothing(peeled) || return walk(peeled)
+
+    isexpr(term) || return term
+    return SExpr(head(term), map(walk, children(term)))
+end
+
+peel_node(::STerm) = nothing
+peel_node(term::SExpr{Ind}) = peel_node(argument(term), indices(term))
+function peel_node(field::SExpr{Loc}, inds)
+    protected = argument(field)
+    protected isa SNode || return nothing
+    return argument(protected)[location(field)...][inds...]
+end
+
 # For a candidate read, convert its index displacement into the outward-positive
 # coordinate system of the boundary. Non-negative coordinates are reconstructed;
 # negative coordinates remain ordinary interior reads.
@@ -632,13 +742,16 @@ end
 
 rewrite_occurrence(::ExtensionRewriteRule, ::SExpr{Ind}, field) = nothing
 function rewrite_occurrence(er::ExtensionRewriteRule{I}, term::SExpr{Ind}, field::SExpr{Loc}) where {I}
+    # match the lhs
     argument(field) === er.field || return nothing
     loc = location(field)[I]
     inds = indices(term)
     x = SLiteral(er.shift + get_shift(inds[I])) + offset(loc)
     xn = normal_coordinate(er.axis, x)
+    # interior points don't need extending
     value(xn) < 0 && return nothing
     v = interior_values(er, field, inds, loc)
+    # Δb is the distance from the last point to the boudnary
     Δb = boundary_delta(loc)
     data = lower_boundary_data(er.spec.data, field, inds, er.shift, Val(I))
     return reconstruct(er.spec.op, data, v, Δb, xn + Δb)
@@ -648,18 +761,18 @@ end
 # staggering in the normal direction. Tangential staggering and indices follow
 # the matched read so data like `g` can vary along the boundary.
 function lower_boundary_data(data::ValueData, field::SExpr{Loc}, inds, shift, ::Val{I}) where {I}
-    loc = boundary_data_location(location(field), Val(I))
-    bnd_inds = boundary_data_indices(inds, shift, Val(I))
+    loc = boundary_location(location(field), Val(I))
+    bnd_inds = boundary_indices(inds, shift, Val(I))
     return ValueData(data.value[loc...][bnd_inds...])
 end
 function lower_boundary_data(data::DerivativeData, field::SExpr{Loc}, inds, shift, ::Val{I}) where {I}
-    loc = boundary_data_location(location(field), Val(I))
-    bnd_inds = boundary_data_indices(inds, shift, Val(I))
+    loc = boundary_location(location(field), Val(I))
+    bnd_inds = boundary_indices(inds, shift, Val(I))
     return DerivativeData(data.value[loc...][bnd_inds...])
 end
 
-boundary_data_location(loc::NTuple{N,Space}, ::Val{I}) where {N,I} = ntuple(j -> j == I ? Point() : loc[j], Val(N))
-boundary_data_indices(inds::NTuple{N,STerm}, shift::Shift, ::Val{I}) where {N,I} = ntuple(j -> j == I ? shifted_index(SIndex(I), -shift) : inds[j], Val(N))
+boundary_location(loc::NTuple{N,Space}, ::Val{I}) where {N,I} = ntuple(j -> j == I ? Point() : loc[j], Val(N))
+boundary_indices(inds::NTuple{N,STerm}, shift::Shift, ::Val{I}) where {N,I} = ntuple(j -> j == I ? shifted_index(SIndex(I), -shift) : inds[j], Val(N))
 
 shifted_index(ind::STerm, ::Shift{0}) = ind
 shifted_index(ind::STerm, ::Shift{O}) where {O} = O > 0 ? ind + SLiteral(O) : ind - SLiteral(-O)
