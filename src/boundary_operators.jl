@@ -284,7 +284,7 @@ end
 # `operator` is the user-facing dispatcher for `GridOperator`. It keeps the
 # interior expression path explicit too: even without a boundary rule the
 # expression is lowered at `loc` with canonical static indices.
-operator(op::GridOperator, ::Face{NTuple{N,Span}}, loc::NTuple{N,Space}, _) where {N} = op.expr[loc...][_canonical_indices(Val(N))...]
+operator(op::GridOperator, ::Face{NTuple{N,Span}}, loc::NTuple{N,Space}, _) where {N} = unwrap(op.expr[loc...][_canonical_indices(Val(N))...])
 function operator(op::GridOperator, f::Face, loc::NTuple{N,Space}, shifts) where {N}
     rule = combine_rules(op.rules, f)
     isnothing(rule) && return op.expr[loc...][_canonical_indices(Val(N))...]
