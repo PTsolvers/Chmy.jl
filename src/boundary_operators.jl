@@ -7,14 +7,12 @@ struct Shift{I} <: STerm end
 function Shift(I::Integer)
     return Shift{I}()
 end
-function Shift(I)
-    throw(ArgumentError("Shift must be constructed from an integer, got $I"))
-end
+Shift(I) = throw(ArgumentError("Shift must be constructed from an integer, got $I"))
 Shift(::SLiteral{I}) where {I} = Shift{I}()
 SLiteral(::Shift{I}) where {I} = SLiteral{I}()
 
 tensorrank(::Shift) = 0
-shift_value(::Shift{I}) where {I} = I
+value(::Shift{I}) where {I} = I
 isless_lex(::Shift{I}, ::Shift{J}) where {I,J} = isless(I, J)
 
 Base.:+(::Shift{A}, ::Shift{B}) where {A,B} = Shift(A + B)
@@ -154,12 +152,7 @@ function _adjacent_faces(axes::Tuple{Vararg{AxisFace}})
     return (Face(Span(), tail...), _prepend_axis(face, _adjacent_faces(tail))...)
 end
 
-_prepend_axis(::AxisFace, ::Tuple{}) = ()
-function _prepend_axis(axis::AxisFace, faces::Tuple{Vararg{Face}})
-    # Rebuild each face with the current leading axis restored after recursing on the tail.
-    face = first(faces)
-    return (Face(axis, face.axes...), _prepend_axis(axis, Base.tail(faces))...)
-end
+_prepend_axis(axis::AxisFace, faces::Tuple{Vararg{Face}}) = map(face -> Face(axis, face.axes...), faces)
 
 """
     Stencil(location, shifts...)
@@ -202,11 +195,9 @@ end
 same_location(::Nothing, ::Nothing) = true
 same_location(::Nothing, _) = false
 same_location(_, ::Nothing) = false
-same_location(a::Tuple{}, b::Tuple{}) = true
 function same_location(a::Tuple, b::Tuple)
     length(a) == length(b) || return false
-    typeof(first(a)) === typeof(first(b)) || return false
-    return same_location(Base.tail(a), Base.tail(b))
+    return all(map((x, y) -> x === y, a, b))
 end
 
 merge_sorted_unique(::Tuple{}, ::Tuple{}) = ()
@@ -336,11 +327,32 @@ function merge_rule_pairs(pairs::Tuple, rest::Tuple)
     return merge_rule_pairs(Base.tail(pairs), merged)
 end
 
-has_rule_pair(::Tuple{}, ::Face) = false
-function has_rule_pair(pairs::Tuple, face::Face)
-    pair = first(pairs)
-    pair.first === face && return true
-    return has_rule_pair(Base.tail(pairs), face)
+has_rule_pair(pairs::Tuple, face::Face) = any(map(pair -> pair.first === face, pairs))
+
+"""
+    BoundaryNormal()
+
+Symbolic outward unit normal vector for boundary-condition expressions.
+
+`BoundaryNormal()` is resolved to the normal of the codim-1 face when a
+boundary rule is applied.
+"""
+struct BoundaryNormal <: AbstractSTensor{1,NoKind,true} end
+
+struct FaceNormal{I,A} <: AbstractSTensor{1,NoKind,true} end
+
+FaceNormal{I}(axis::AxisFace) where {I} = FaceNormal{I,typeof(axis)}()
+
+Base.getindex(n::BoundaryNormal, i::IntegerOrSLiteral) = n[STerm(i)]
+Base.getindex(n::BoundaryNormal, i::SLiteral) = SExpr(Comp(), n, i)
+
+Base.getindex(n::FaceNormal, i::SLiteral) = face_normal_component(n, i)
+
+face_normal_component(::FaceNormal{I,Upper}, ::SLiteral{J}) where {I,J} = SLiteral(I == J ? 1 : 0)
+face_normal_component(::FaceNormal{I,Lower}, ::SLiteral{J}) where {I,J} = SLiteral(I == J ? -1 : 0)
+
+function Tensor{D}(n::FaceNormal) where {D}
+    return Vec{D}(ntuple(i -> n[SLiteral(i)], Val(D))...)
 end
 
 """
@@ -349,9 +361,9 @@ end
 
 Boundary data and reconstruction method for one field.
 
-Passing a [`BoundaryData`](@ref) object keeps that boundary data kind. Passing a
-plain Chmy expression stores it as [`ValueData`](@ref). If `op` is omitted,
-[`LinearReconstruction`](@ref) is used.
+Passing [`ValueData`](@ref) or [`DerivativeData`](@ref) keeps that boundary data
+kind. Passing a plain Chmy expression stores it as [`ValueData`](@ref). If `op`
+is omitted, [`LinearReconstruction`](@ref) is used.
 """
 struct ExtensionSpec{D,O}
     data::D
@@ -359,16 +371,22 @@ struct ExtensionSpec{D,O}
 end
 
 """
-    ExtensionRule(field => ExtensionSpec(data, op), ...)
-    ExtensionRule(field => value, ...)
+    ExtensionRule(condition => ExtensionSpec(data, op), ...)
+    ExtensionRule(condition => value, ...)
 
-Boundary rule that extends one or more scalar fields across a codim-1 face.
+Boundary rule that extends fields across a codim-1 face.
 
-Each key is an unlocated scalar field identity, such as `u` or `V[1]`. When the
-interior expression is lowered, the rule finds located occurrences such as
-`u[Point()]` or `V[1][Point(), Segment()]` and uses each occurrence's location
-to reconstruct boundary and ghost reads. Each value is an [`ExtensionSpec`](@ref)
-or a Chmy expression, which is treated as value data with linear reconstruction.
+Each key may be an unlocated scalar field identity, such as `u` or `V[1]`, or a
+tensor boundary condition such as `V` or `V ⋅ BoundaryNormal()`. Tensor
+conditions are projected to the concrete face and scalarized once
+[`boundary_rule`](@ref) knows the dimension. When the interior expression is
+lowered, the rule finds located occurrences such as `u[Point()]` or
+`V[1][Point(), Segment()]` and uses each occurrence's location to reconstruct
+boundary and ghost reads. Each value is an [`ExtensionSpec`](@ref) or a Chmy
+expression, which is treated as value data with linear reconstruction.
+Nonuniform boundary data is lowered at the boundary: the normal location is
+always `Point()`, and tangential locations are copied from the matched field
+read.
 """
 struct ExtensionRule{B} <: BoundaryRule
     specs::B
@@ -400,18 +418,6 @@ Outward-normal derivative data for field reconstruction.
 """
 struct DerivativeData{V} <: BoundaryData
     value::V
-end
-
-"""
-    RobinData(a, b)
-
-Placeholder for Robin boundary data.
-
-Robin reconstruction is not implemented yet and currently throws when used.
-"""
-struct RobinData{A,B} <: BoundaryData
-    a::A
-    b::B
 end
 
 """
@@ -482,20 +488,16 @@ end
 
 # A single extension rule is deliberately one-dimensional. Higher-codimension
 # regions are handled by `CombinedRule`, which folds several codim-1 rules.
-Base.@assume_effects :foldable function apply_boundary_rule(rule::ExtensionRule, expr::STerm, face::Face, loc, shifts)
+Base.@assume_effects :foldable function apply_boundary_rule(rule::ExtensionRule, expr::STerm, face::Face, loc::NTuple{N,Space}, shifts) where {N}
     codim(face) == 1 || throw(ArgumentError("ExtensionRule can only be applied to codim-1 faces, got codim $(codim(face))"))
     I = normal_axis(face)
     axis = face.axes[I]
-    return apply_extension_specs(rule.specs.exprs, rule.specs.data, expr, Val(I), axis, shifts[I])
-end
-
-apply_extension_specs(::Tuple{}, ::Tuple{}, expr::STerm, ::Val, _, _) = expr
-function apply_extension_specs(fields::Tuple, specs::Tuple, expr::STerm, ::Val{I}, axis, shift) where {I}
-    field = extension_rule_field(first(fields))
-    spec = extension_rule_spec(first(specs))
-    er = ExtensionRewriteRule{I}(spec, field, axis, shift)
-    next = evaluate(Postwalk(er)(expr))
-    return apply_extension_specs(Base.tail(fields), Base.tail(specs), next, Val(I), axis, shift)
+    normal = FaceNormal{I}(axis)
+    # Extension application is intentionally staged: first resolve
+    # BoundaryNormal() for this face, then expand tensor conditions to scalar
+    # component specs, then normalize scalar signs, then run the rewrite pass.
+    scalar_rule = normalize_rule(Tensor{N}(project_boundary(rule, normal)))
+    return apply_extension_specs(pairstuple(scalar_rule.specs), expr, ExtensionApplication{I}(axis, shifts[I]))
 end
 
 # Combined rules store flattened `Face => rule` pairs. Each pair carries the
@@ -514,10 +516,114 @@ end
 # Return the single non-`Span()` axis of a codim-1 face
 normal_axis(face::Face) = findfirst(!=(Span()), face.axes)
 
-extension_rule_field(field::SExpr{Loc}) = throw(ArgumentError("ExtensionRule keys must be unlocated scalar fields, got $field"))
-function extension_rule_field(field)
-    tensorrank(field) == 0 || throw(ArgumentError("ExtensionRule keys must be scalar fields, got $field"))
+"""
+    project_boundary(obj, normal)
+
+Project boundary-condition symbolic objects to a concrete face normal.
+
+Custom [`BoundaryData`](@ref) implementations can overload this method to
+replace [`BoundaryNormal`](@ref) inside their stored data.
+"""
+project_boundary(term::STerm, normal) = subs(term, BoundaryNormal() => normal)
+project_boundary(data::ValueData, normal) = ValueData(project_boundary(data.value, normal))
+project_boundary(data::DerivativeData, normal) = DerivativeData(project_boundary(data.value, normal))
+project_boundary(spec::ExtensionSpec, normal) = ExtensionSpec(project_boundary(spec.data, normal), spec.op)
+project_boundary(rule::ExtensionRule, normal) = ExtensionRule(project_boundary_pairs(pairstuple(rule.specs), normal)...)
+
+project_boundary_pairs(pairs::Tuple, normal) = map(pair -> project_boundary(pair.first, normal) => project_boundary(pair.second, normal), pairs)
+
+function Tensor{D}(rule::ExtensionRule) where {D}
+    return ExtensionRule(scalarize_rule_pairs(pairstuple(rule.specs), Val(D))...)
+end
+
+scalarize_rule_pairs(::Tuple{}, ::Val) = ()
+function scalarize_rule_pairs(pairs::Tuple, ::Val{D}) where {D}
+    pair = first(pairs)
+    component_pairs = scalarize_rule_pair(pair.first, pair.second, Val(D))
+    return (component_pairs..., scalarize_rule_pairs(Base.tail(pairs), Val(D))...)
+end
+
+function scalarize_rule_pair(lhs, spec::ExtensionSpec, ::Val{D}) where {D}
+    rank = tensorrank(lhs)
+    if rank != boundary_data_rank(spec)
+        throw(ArgumentError("boundary data rank does not match lhs rank"))
+    end
+
+    expanded_lhs = Tensor{D}(lhs)
+    rank == 0 && return (expanded_lhs => spec,)
+    return scalarize_tensor_rule_pair(expanded_lhs, spec)
+end
+
+function scalarize_tensor_rule_pair(lhs::Tensor{D,R,K}, spec::ExtensionSpec) where {D,R,K}
+    if length(lhs.components) == 0
+        throw(ArgumentError("boundary condition lhs has no scalar field components"))
+    end
+    specs = tuplemap(data -> ExtensionSpec(data, spec.op), scalarize_boundary_data(spec.data, lhs))
+    return component_pairs(lhs.components, specs)
+end
+
+component_pairs(fields::Tuple, specs::Tuple) = map((field, spec) -> field => spec, fields, specs)
+
+function scalarize_tensor_rule_pair(lhs, ::ExtensionSpec)
+    throw(ArgumentError("tensor boundary condition must expand to a concrete Tensor, got $lhs"))
+end
+
+boundary_data_rank(spec::ExtensionSpec) = boundary_data_rank(spec.data)
+boundary_data_rank(data::ValueData) = tensorrank(data.value)
+boundary_data_rank(data::DerivativeData) = tensorrank(data.value)
+
+function scalarize_boundary_data(data::ValueData, lhs::Tensor{D,R,K}) where {D,R,K}
+    return tuplemap(ValueData, tensor_with_kind(Tensor{D,R,K}, data.value).components)
+end
+function scalarize_boundary_data(data::DerivativeData, lhs::Tensor{D,R,K}) where {D,R,K}
+    return tuplemap(DerivativeData, tensor_with_kind(Tensor{D,R,K}, data.value).components)
+end
+
+struct ExtensionApplication{I,A,S}
+    axis::A
+    shift::S
+end
+function ExtensionApplication{I}(axis, shift) where {I}
+    return ExtensionApplication{I,typeof(axis),typeof(shift)}(axis, shift)
+end
+
+apply_extension_specs(::Tuple{}, expr::STerm, ::ExtensionApplication) = expr
+function apply_extension_specs(pairs::Tuple, expr::STerm, app::ExtensionApplication)
+    pair = first(pairs)
+    next = apply_scalar_extension(pair.first, pair.second, expr, app)
+    return apply_extension_specs(Base.tail(pairs), next, app)
+end
+
+function apply_scalar_extension(field, spec::ExtensionSpec, expr::STerm, app::ExtensionApplication{I}) where {I}
+    er = ExtensionRewriteRule{I}(spec, field, app.axis, app.shift)
+    return evaluate(Postwalk(er)(expr))
+end
+
+function normalize_rule(rule::ExtensionRule)
+    npairs = map(normalize_pair, pairstuple(rule.specs))
+    return ExtensionRule(npairs...)
+end
+
+function normalize_pair(pair::Pair)
+    lhs, rhs = pair
+    if isunaryminus(lhs)
+        arg = only(arguments(lhs))
+        return extension_field(arg) => ExtensionSpec(negate(rhs.data), rhs.op)
+    end
+    return extension_field(lhs) => rhs
+end
+
+negate(data::ValueData) = ValueData(-data.value)
+negate(data::DerivativeData) = DerivativeData(-data.value)
+
+extension_field(field::SExpr{Loc}) = throw(ArgumentError("ExtensionRule keys must be unlocated scalar fields or tensor expressions, got $field"))
+function extension_field(field::SExpr{Comp})
+    tensorrank(argument(field)) > 0 || throw(ArgumentError("ExtensionRule component keys must index tensor fields, got $field"))
     return field
+end
+extension_field(field::AbstractSTensor{0}) = field
+function extension_field(field)
+    throw(ArgumentError("ExtensionRule scalar conditions must reduce to an unlocated scalar field or component, got $field"))
 end
 
 extension_rule_spec(spec::ExtensionSpec) = spec
@@ -553,8 +659,29 @@ function rewrite_occurrence(er::ExtensionRewriteRule{I}, term::SExpr{Ind}, field
     value(xn) < 0 && return nothing
     v = interior_values(er, field, inds, loc)
     Δb = boundary_delta(loc)
-    return reconstruct(er.spec.op, er.spec.data, v, Δb, xn + Δb)
+    data = lower_boundary_data(er.spec.data, field, inds, er.shift, Val(I))
+    return reconstruct(er.spec.op, data, v, Δb, xn + Δb)
 end
+
+# Boundary data lives on the boundary itself, independent of the field
+# staggering in the normal direction. Tangential staggering and indices follow
+# the matched read so data like `g` can vary along the boundary.
+function lower_boundary_data(data::ValueData, field::SExpr{Loc}, inds, shift, ::Val{I}) where {I}
+    loc = boundary_data_location(location(field), Val(I))
+    bnd_inds = boundary_data_indices(inds, shift, Val(I))
+    return ValueData(data.value[loc...][bnd_inds...])
+end
+function lower_boundary_data(data::DerivativeData, field::SExpr{Loc}, inds, shift, ::Val{I}) where {I}
+    loc = boundary_data_location(location(field), Val(I))
+    bnd_inds = boundary_data_indices(inds, shift, Val(I))
+    return DerivativeData(data.value[loc...][bnd_inds...])
+end
+
+boundary_data_location(loc::NTuple{N,Space}, ::Val{I}) where {N,I} = ntuple(j -> j == I ? Point() : loc[j], Val(N))
+boundary_data_indices(inds::NTuple{N,STerm}, shift::Shift, ::Val{I}) where {N,I} = ntuple(j -> j == I ? shifted_index(SIndex(I), -shift) : inds[j], Val(N))
+
+shifted_index(ind::STerm, ::Shift{0}) = ind
+shifted_index(ind::STerm, ::Shift{O}) where {O} = O > 0 ? ind + SLiteral(O) : ind - SLiteral(-O)
 
 # Orient a boundary-normal coordinate so positive values point out of the domain.
 normal_coordinate(::Upper, coord) = coord
@@ -599,7 +726,4 @@ end
 function reconstruct(::PolynomialReconstruction{1}, bc::DerivativeData, v::Tuple{STerm}, Δb, Δg)
     x = only(v)
     return x + Δg * bc.value
-end
-function reconstruct(::PolynomialReconstruction{1}, bc::RobinData, v::Tuple{STerm}, Δb, Δg)
-    throw(ArgumentError("RobinData reconstruction is not supported yet"))
 end

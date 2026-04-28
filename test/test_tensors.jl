@@ -119,6 +119,24 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test Tensor{2,2}(SLiteral(1), SLiteral(0), SLiteral(0), SLiteral(1)) isa IdTensor{2,2}
         @test Tensor{2,2,DiagKind}(SLiteral(0), SLiteral(0)) isa ZeroTensor{2,2}
 
+        wide_zero_sym = Chmy.tensor_with_kind(Tensor{2,2,SymKind}, SZeroTensor{2}())
+        @test wide_zero_sym isa SymTensor{2,2}
+        @test !(wide_zero_sym isa ZeroTensor{2,2})
+        @test wide_zero_sym.components === (SLiteral(0), SLiteral(0), SLiteral(0))
+
+        wide_id_sym = Chmy.tensor_with_kind(Tensor{2,2,SymKind}, SIdTensor{2}())
+        @test wide_id_sym isa SymTensor{2,2}
+        @test wide_id_sym.components === (SLiteral(1), SLiteral(0), SLiteral(1))
+
+        diag_data = DiagTensor{2,2}(a, d)
+        wide_diag_sym = Chmy.tensor_with_kind(Tensor{2,2,SymKind}, diag_data)
+        @test wide_diag_sym isa SymTensor{2,2}
+        @test wide_diag_sym.components === (a, SLiteral(0), d)
+
+        wide_zero_alt = Chmy.tensor_with_kind(Tensor{3,2,AltKind}, SZeroTensor{2}())
+        @test wide_zero_alt isa AltTensor{3,2}
+        @test wide_zero_alt.components === (SLiteral(0), SLiteral(0), SLiteral(0))
+
         @test_throws ErrorException Tensor{2,2,SymKind}(a, b)
     end
 

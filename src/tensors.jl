@@ -420,6 +420,45 @@ end
 Tensor{D}(s::SLiteral) where {D} = s
 Tensor{D}(expr::SExpr) where {D} = SExpr(head(expr), tuplemap(Tensor{D}, children(expr))...)
 
+# Materialize `value` into the requested tensor kind without collapsing it back
+# to `ZeroTensor`, `DiagTensor`, etc. Boundary scalarization uses this when the
+# left-hand side determines the component layout and the right-hand side may be a
+# narrower tensor such as `SZeroTensor` or `SIdTensor`.
+function tensor_with_kind(::Type{Tensor{D,R,K}}, value) where {D,R,K}
+    t = Tensor{D}(value)
+    tensorrank(t) == R || throw(ArgumentError("tensor rank $(tensorrank(t)) does not match requested rank $R"))
+    components = tensor_kind_components(Tensor{D,R,K}, t)
+    return Tensor{D,R,K,typeof(components)}(components)
+end
+
+@generated function tensor_kind_components(::Type{Tensor{D,R,K}}, t) where {D,R,K}
+    K <: ZeroKind && return :(throw(ArgumentError("ZeroKind tensors do not store scalar components")))
+    K <: IdKind && return :(throw(ArgumentError("IdKind tensors do not store scalar components")))
+
+    comps = Expr(:tuple)
+    comp_expr(I) = :(t[$(map(i -> :(SLiteral($i)), I)...)])
+    if K <: NoKind
+        for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+            push!(comps.args, comp_expr(Tuple(idx)))
+        end
+    elseif K <: SymKind
+        foreach_nondecreasing(Val(D), Val(R)) do I
+            push!(comps.args, comp_expr(I))
+        end
+    elseif K <: AltKind
+        foreach_increasing(Val(D), Val(R)) do I
+            push!(comps.args, comp_expr(I))
+        end
+    elseif K <: DiagKind
+        for i in 1:D
+            push!(comps.args, comp_expr(ntuple(_ -> i, Val(R))))
+        end
+    else
+        error("unsupported tensor kind $K")
+    end
+    return comps
+end
+
 # construct the most specific tensor type based on the symmetries of the components
 function construct_tensor(::Type{Tensor{D,R,DiagKind}}, data::NTuple{N,STerm}) where {D,R,N}
     all(isstaticzero, data) && return ZeroTensor{D,R}()

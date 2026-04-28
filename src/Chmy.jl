@@ -3,7 +3,7 @@ module Chmy
 using KernelAbstractions
 using PrettyTables: pretty_table, TextTableFormat
 import StyledStrings
-using StyledStrings: face!
+using StyledStrings: annotatedstring, face!
 import Adapt
 
 import LinearAlgebra: ⋅, ×, tr, det, diag, transpose
@@ -65,8 +65,8 @@ include("binding.jl")
 
 export Shift, CartesianShift, AxisFace, Lower, Upper, Span, Face, Stencil, Nonuniforms
 export δ, adjacent_faces, boundary_rule, boundary_operator, dim, codim, nonuniforms
-export ExtensionRule, ExtensionSpec, ExtensionOperator, PolynomialReconstruction, LinearReconstruction, reconstruct
-export BoundaryData, ValueData, DerivativeData, RobinData
+export ExtensionRule, ExtensionSpec, ExtensionOperator, PolynomialReconstruction, LinearReconstruction, BoundaryNormal, project_boundary, reconstruct
+export BoundaryData, ValueData, DerivativeData
 export GridOperator, operator
 include("boundary_operators.jl")
 
