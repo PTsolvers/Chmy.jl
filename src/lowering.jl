@@ -30,7 +30,7 @@ function Base.getindex(expr::SExpr{Ind}, loc::Vararg{Space,N}) where {N}
     return arg[loc...][inds...]
 end
 
-function Base.getindex(t::Chmy.AbstractSTensor{R}, ::Vararg{SLiteral,N}) where {R,N}
+function Base.getindex(t::Chmy.AbstractSTensor{R}, I::Vararg{SLiteral,N}) where {R,N}
     N == R || throw(ArgumentError("expected $R tensor component indices, got $N"))
     return SExpr(Comp(), t, I...)
 end
