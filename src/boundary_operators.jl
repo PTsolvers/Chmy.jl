@@ -332,24 +332,19 @@ has_rule_pair(pairs::Tuple, face::Face) = any(map(pair -> pair.first === face, p
 """
     BoundaryNormal()
 
-Symbolic outward unit normal vector for boundary-condition expressions.
+Symbolic boundary-normal selector for boundary-condition expressions.
 
-`BoundaryNormal()` is resolved to the normal of the codim-1 face when a
-boundary rule is applied.
+`BoundaryNormal()` is resolved to a vector with positive unit component in the
+normal axis of the codim-1 face when a boundary rule is applied.
 """
 struct BoundaryNormal <: AbstractSTensor{1,NoKind,true} end
 
-struct FaceNormal{I,A} <: AbstractSTensor{1,NoKind,true} end
-
-FaceNormal{I}(axis::AxisFace) where {I} = FaceNormal{I,typeof(axis)}()
+struct FaceNormal{I} <: AbstractSTensor{1,NoKind,true} end
 
 Base.getindex(n::BoundaryNormal, i::IntegerOrSLiteral) = n[STerm(i)]
 Base.getindex(n::BoundaryNormal, i::SLiteral) = SExpr(Comp(), n, i)
 
-Base.getindex(n::FaceNormal, i::SLiteral) = face_normal_component(n, i)
-
-face_normal_component(::FaceNormal{I,Upper}, ::SLiteral{J}) where {I,J} = SLiteral(I == J ? 1 : 0)
-face_normal_component(::FaceNormal{I,Lower}, ::SLiteral{J}) where {I,J} = SLiteral(I == J ? -1 : 0)
+Base.getindex(::FaceNormal{I}, ::SLiteral{J}) where {I,J} = SLiteral(I == J ? 1 : 0)
 
 function Tensor{D}(n::FaceNormal) where {D}
     return Vec{D}(ntuple(i -> n[SLiteral(i)], Val(D))...)
@@ -492,12 +487,13 @@ Base.@assume_effects :foldable function apply_boundary_rule(rule::ExtensionRule,
     codim(face) == 1 || throw(ArgumentError("ExtensionRule can only be applied to codim-1 faces, got codim $(codim(face))"))
     I = normal_axis(face)
     axis = face.axes[I]
-    normal = FaceNormal{I}(axis)
+    normal = FaceNormal{I}()
     # Extension application is intentionally staged: first resolve
     # BoundaryNormal() for this face, then expand tensor conditions to scalar
-    # component specs, then normalize scalar signs, then run the rewrite pass.
-    scalar_rule = normalize_rule(Tensor{N}(project_boundary(rule, normal)))
-    return apply_extension_specs(pairstuple(scalar_rule.specs), expr, ExtensionApplication{I}(axis, shifts[I]))
+    # component specs, then validate scalar fields before running the rewrite pass.
+    scalar_rule = Tensor{N}(project_boundary(rule, normal))
+    pairs = extension_field_pairs(pairstuple(scalar_rule.specs))
+    return apply_extension_specs(pairs, expr, ExtensionApplication{I}(axis, shifts[I]))
 end
 
 # Combined rules store flattened `Face => rule` pairs. Each pair carries the
@@ -599,22 +595,7 @@ function apply_scalar_extension(field, spec::ExtensionSpec, expr::STerm, app::Ex
     return evaluate(Postwalk(er)(expr))
 end
 
-function normalize_rule(rule::ExtensionRule)
-    npairs = map(normalize_pair, pairstuple(rule.specs))
-    return ExtensionRule(npairs...)
-end
-
-function normalize_pair(pair::Pair)
-    lhs, rhs = pair
-    if isunaryminus(lhs)
-        arg = only(arguments(lhs))
-        return extension_field(arg) => ExtensionSpec(negate(rhs.data), rhs.op)
-    end
-    return extension_field(lhs) => rhs
-end
-
-negate(data::ValueData) = ValueData(-data.value)
-negate(data::DerivativeData) = DerivativeData(-data.value)
+extension_field_pairs(pairs::Tuple) = map(pair -> extension_field(pair.first) => pair.second, pairs)
 
 extension_field(field::SExpr{Loc}) = throw(ArgumentError("ExtensionRule keys must be unlocated scalar fields or tensor expressions, got $field"))
 function extension_field(field::SExpr{Comp})

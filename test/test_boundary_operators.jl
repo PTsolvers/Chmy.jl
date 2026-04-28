@@ -200,10 +200,10 @@ end
         Z = SZeroTensor{1}()
         N = BoundaryNormal()
 
-        projected = @inferred project_boundary(V ⋅ N, Chmy.FaceNormal{1,Upper}())
+        projected = @inferred project_boundary(V ⋅ N, Chmy.FaceNormal{1}())
         @test @inferred(Tensor{2}(projected)) === V[1]
 
-        projected_rule = @inferred project_boundary(ExtensionRule(V ⋅ N => b), Chmy.FaceNormal{1,Upper}())
+        projected_rule = @inferred project_boundary(ExtensionRule(V ⋅ N => b), Chmy.FaceNormal{1}())
         @test projected_rule isa ExtensionRule
         @test @inferred(Tensor{2}(projected_rule)).specs[V[1]].data.value === b
 
@@ -226,9 +226,8 @@ end
         @test map(first, alt_pairs) === (A[1, 2], A[1, 3], A[2, 3])
         @test map(p -> p.second.data.value, alt_pairs) === (SLiteral(0), SLiteral(0), SLiteral(0))
 
-        lower_projected = @inferred Tensor{2}(project_boundary(ExtensionRule(V ⋅ N => b), Chmy.FaceNormal{1,Lower}()))
-        lower_normalized = @inferred Chmy.normalize_rule(lower_projected)
-        @test lower_normalized.specs[V[1]].data.value === -b
+        normal_projected = @inferred Tensor{2}(project_boundary(ExtensionRule(V ⋅ N => b), Chmy.FaceNormal{1}()))
+        @test normal_projected.specs[V[1]].data.value === b
 
         zero_vec_rule = ExtensionRule(V => Z)
         shifted2 = BoundaryShiftPair{(1, 0)}()(V[1], V[2])
