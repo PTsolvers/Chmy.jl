@@ -11,9 +11,20 @@ Create an immutable dictionary mapping Chmy expressions to data.
 `Binding()` constructs an empty binding.
 """
 function Binding(kvs::Vararg{Pair,N}) where {N}
-    exprs = ntuple(i -> kvs[i].first, Val(N))
-    data = ntuple(i -> kvs[i].second, Val(N))
+    kvsu = sunique(kvs)
+    exprs = ntuple(i -> kvsu[i].first, Val(length(kvsu)))
+    data = ntuple(i -> kvsu[i].second, Val(length(kvsu)))
     return Binding(exprs, data)
+end
+
+# deduplicate the pairs by key
+sunique(kv::Tuple{}) = kv
+function sunique(kvs::Tuple{Vararg{Pair}})
+    kv1 = first(kvs)
+    rest = Base.tail(kvs)
+    idx = findfirst(kv2 -> kv1.first === kv2.first, rest)
+    isnothing(idx) && return (kv1, sunique(rest)...)
+    return sunique(rest)
 end
 
 expr_idx(bnd::Binding, expr) = findfirst(Base.Fix2(===, expr), bnd.exprs)
