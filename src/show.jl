@@ -317,11 +317,28 @@ end
 
 # Stencil geometry and line layout
 
-stencil_shift_coords(o::CartesianShift) = map(value, o.shifts)
-stencil_coords(o::CartesianShift, ::Nothing) = stencil_shift_coords(o)
-stencil_coords(o::CartesianShift, loc::Tuple) = tuplemap(stencil_coord, o.shifts, loc)
-stencil_coords(s::Stencil) = map(shift -> stencil_coords(shift, s.location), s.shifts)
-stencil_coord(shift::Shift, loc::Space) = value(SLiteral(shift) + offset(loc))
+function stencil_shift_coords(o::CartesianShift)
+    return map(value, o.shifts)
+end
+
+function stencil_coords(o::CartesianShift, ::Nothing)
+    return stencil_shift_coords(o)
+end
+
+function stencil_coords(o::CartesianShift, loc::Tuple)
+    return tuplemap(stencil_coord, o.shifts, loc)
+end
+
+function stencil_coords(s::Stencil)
+    return map(s.shifts) do shift
+        stencil_coords(shift, s.location)
+    end
+end
+
+function stencil_coord(shift::Shift, loc::Space)
+    shifted_location = SLiteral(shift) + offset(loc)
+    return value(shifted_location)
+end
 
 function Base.show(io::IO, shift::CartesianShift)
     print(io, "δ(")
@@ -338,7 +355,8 @@ function show_stencil_location(io::IO, loc::Tuple{<:Space})
 end
 function show_stencil_location(io::IO, loc::Tuple)
     print(io, '(')
-    join(io, map(stencil_location_name, loc), ", ")
+    names = map(stencil_location_name, loc)
+    join(io, names, ", ")
     print(io, ')')
 end
 
@@ -399,18 +417,35 @@ struct StencilGeometry{N,C,H,B}
     bounds::B
 end
 
+stencil_render_ndims(::StencilGeometry{N}) where {N} = min(N, 2)
+
 function StencilGeometry(s::Stencil{N}) where {N}
     coords = stencil_coords(s)
-    halfcoords = map(coord -> ntuple(i -> Int(2coord[i]), min(N, 2)), coords)
-    bounds = stencil_vertex_bounds(coords, min(N, 2))
+    nd = min(N, 2)
+    halfcoords = map(coord -> projected_halfcoord(coord, nd), coords)
+    bounds = stencil_vertex_bounds(coords, nd)
     return StencilGeometry{N,typeof(coords),typeof(halfcoords),typeof(bounds)}(coords, halfcoords, bounds)
 end
 
+function projected_halfcoord(coord, nd::Integer)
+    return ntuple(i -> Int(2coord[i]), nd)
+end
+
+function active_in_slice(coord, fixed::Tuple)
+    isempty(fixed) && return true
+    return all(eachindex(fixed)) do d
+        coord[d+2] == fixed[d]
+    end
+end
+
 function active_halfcoords(geometry::StencilGeometry{N}, fixed::Tuple=()) where {N}
-    nd = min(N, 2)
-    return Set(ntuple(i -> halfcoord[i], Val(nd))
-               for (coord, halfcoord) in zip(geometry.coords, geometry.halfcoords)
-               if (length(coord) == 2 && isempty(fixed)) || all(coord[d+2] == fixed[d] for d in eachindex(fixed)))
+    nd = stencil_render_ndims(geometry)
+    active = Set{NTuple{nd,Int}}()
+    for (coord, halfcoord) in zip(geometry.coords, geometry.halfcoords)
+        active_in_slice(coord, fixed) || continue
+        push!(active, ntuple(i -> halfcoord[i], Val(nd)))
+    end
+    return active
 end
 
 struct StencilLayout1D
@@ -426,15 +461,41 @@ struct StencilLayout1D
     x_tick_row::Int
 end
 
+function tick_label_width(values, visible::Bool)
+    visible || return 1
+    return maximum(value -> textwidth(string(value)), values)
+end
+
+function reserved_y_label_width(values, slice::StencilSliceOptions)
+    slice.reserve_y_tick_space || return 0
+    return maximum(value -> textwidth(string(value)), values)
+end
+
+function grid_center_col(prefixwidth::Integer, gridwidth::Integer)
+    centered_grid_col = max(0, (gridwidth - 1) ÷ 2) + 1
+    return prefixwidth + centered_grid_col
+end
+
+function axis_label_end_col(start_col::Integer, axis::Integer)
+    label_width = textwidth(styled(SIndex(axis)))
+    return start_col + label_width - 1
+end
+
 function StencilLayout1D(bounds, opts::StencilRenderOptions)
     xmin, xmax = bounds[1]
-    tickwidth = opts.x_ticks ? maximum(x -> textwidth(string(x)), xmin:xmax) : 1
+    tickwidth = tick_label_width(xmin:xmax, opts.x_ticks)
     sepwidth = max(9, opts.x_ticks ? tickwidth + 1 : 9)
     prefixwidth = opts.x_ticks ? tickwidth - 1 : 0
     gridwidth = stencil_grid_width(xmax - xmin + 1, sepwidth)
-    x_axis_col = prefixwidth + max(0, (gridwidth - 1) ÷ 2) + 1
-    width = max(prefixwidth + gridwidth,
-                opts.x_axis_label ? x_axis_col + textwidth(styled(SIndex(1))) - 1 : 0)
+    x_axis_col = grid_center_col(prefixwidth, gridwidth)
+
+    width = prefixwidth + gridwidth
+    if opts.x_axis_label
+        width = max(width, axis_label_end_col(x_axis_col, 1))
+    end
+
+    # Rows are assigned top-down. Optional labels use row 0 when disabled, so
+    # drawing code can test the stored row without duplicating option checks.
     row = 1
     x_axis_row = opts.x_axis_label ? row : 0
     row += opts.x_axis_label ? 1 : 0
@@ -467,19 +528,29 @@ end
 function StencilLayout2D(bounds, opts::StencilRenderOptions, slice::StencilSliceOptions)
     xmin, xmax = bounds[1]
     ymin, ymax = bounds[2]
-    labelwidth = slice.reserve_y_tick_space ? maximum(y -> textwidth(string(y)), ymin:ymax) : 0
-    tickwidth = opts.x_ticks ? maximum(x -> textwidth(string(x)), xmin:xmax) : 1
+    labelwidth = reserved_y_label_width(ymin:ymax, slice)
+    tickwidth = tick_label_width(xmin:xmax, opts.x_ticks)
     sepwidth = max(9, opts.x_ticks ? tickwidth + 1 : 9)
     # Prefix columns are owned by visible/reserved y tick labels plus one
     # separator before the grid. There is no anonymous left gutter.
-    prefixwidth = max(slice.reserve_y_tick_space ? labelwidth + 1 : 0, opts.x_ticks ? tickwidth - 1 : 0)
+    y_label_prefix = slice.reserve_y_tick_space ? labelwidth + 1 : 0
+    x_tick_prefix = opts.x_ticks ? tickwidth - 1 : 0
+    prefixwidth = max(y_label_prefix, x_tick_prefix)
     gridwidth = stencil_grid_width(xmax - xmin + 1, sepwidth)
     gridheight = 1 + 4 * (ymax - ymin)
-    x_axis_col = prefixwidth + max(0, (gridwidth - 1) ÷ 2) + 1
+    x_axis_col = grid_center_col(prefixwidth, gridwidth)
     y_axis_col = prefixwidth + gridwidth + 2
+
     width = prefixwidth + gridwidth
-    opts.x_axis_label && (width = max(width, x_axis_col + textwidth(styled(SIndex(1))) - 1))
-    opts.y_axis_label && (width = max(width, y_axis_col + textwidth(styled(SIndex(2))) - 1))
+    if opts.x_axis_label
+        width = max(width, axis_label_end_col(x_axis_col, 1))
+    end
+    if opts.y_axis_label
+        width = max(width, axis_label_end_col(y_axis_col, 2))
+    end
+
+    # The grid itself is the only fixed-height block. Axis labels and ticks are
+    # attached above/below it and recorded as absolute rows within the layout.
     row = 1
     x_axis_row = opts.x_axis_label ? row : 0
     row += opts.x_axis_label ? 1 : 0
@@ -487,30 +558,34 @@ function StencilLayout2D(bounds, opts::StencilRenderOptions, slice::StencilSlice
     row += gridheight
     x_tick_row = opts.x_ticks ? row : 0
     row += opts.x_ticks ? 1 : 0
-    if opts.y_axis_label
-        nrows = ymax - ymin + 1
-        if isodd(nrows)
-            midrow = cld(nrows, 2)
-            y = ymax - (midrow - 1)
-            y_axis_row = grid_start_row + 4 * (ymax - y)
-        else
-            midedge = fld(nrows, 2)
-            y = ymax - (midedge - 1)
-            y_axis_row = grid_start_row + 4 * (ymax - y) + 2
-        end
-    else
-        y_axis_row = 0
-    end
+
+    y_axis_row = opts.y_axis_label ? centered_y_axis_row(grid_start_row, ymin, ymax) : 0
     return StencilLayout2D(xmin, xmax, ymin, ymax, labelwidth, sepwidth, prefixwidth,
                            gridwidth, gridheight, width, row - 1, x_axis_row,
                            grid_start_row, x_tick_row, y_axis_row, y_axis_col)
 end
 
+function centered_y_axis_row(grid_start_row::Integer, ymin::Integer, ymax::Integer)
+    nrows = ymax - ymin + 1
+    if isodd(nrows)
+        midrow = cld(nrows, 2)
+        y = ymax - (midrow - 1)
+        return grid_start_row + 4 * (ymax - y)
+    else
+        midedge = fld(nrows, 2)
+        y = ymax - (midedge - 1)
+        return grid_start_row + 4 * (ymax - y) + 2
+    end
+end
+
 stencil_grid_width(nnodes::Integer, sepwidth::Integer) = nnodes + (nnodes - 1) * sepwidth
 
+# Canvas coordinates are one-based row/column positions. The layout keeps grid
+# coordinates (`x`, `y`) separate from draw coordinates; these helpers are the
+# only place where grid positions become terminal columns/rows.
 xnode_col(layout, x::Integer) = layout.prefixwidth + 1 + (x - layout.xmin) * (layout.sepwidth + 1)
 xedge_col(layout, x::Integer) = xnode_col(layout, x) + 1 + fld(layout.sepwidth - 1, 2)
-xaxis_col(layout) = layout.prefixwidth + max(0, (layout.gridwidth - 1) ÷ 2) + 1
+xaxis_col(layout) = grid_center_col(layout.prefixwidth, layout.gridwidth)
 ynode_row(layout::StencilLayout2D, y::Integer) = layout.grid_start_row + 4 * (layout.ymax - y)
 
 struct StencilCanvas
@@ -523,7 +598,11 @@ function StencilCanvas(height::Integer, width::Integer)
     return StencilCanvas(cells)
 end
 
-stencil_char(char::Char, face=nothing) = isnothing(face) ? Base.AnnotatedChar(char) : Base.AnnotatedChar(char, [(label=:face, value=face)])
+function stencil_char(char::Char, face=nothing)
+    isnothing(face) && return Base.AnnotatedChar(char)
+    annotations = [(label=:face, value=face)]
+    return Base.AnnotatedChar(char, annotations)
+end
 
 function put!(canvas::StencilCanvas, row::Integer, col::Integer, char::Base.AnnotatedChar)
     1 <= row <= size(canvas.cells, 2) || throw(BoundsError(canvas.cells, (row, col)))
@@ -532,8 +611,14 @@ function put!(canvas::StencilCanvas, row::Integer, col::Integer, char::Base.Anno
     return canvas
 end
 
-put!(canvas::StencilCanvas, row::Integer, col::Integer, char::Char) = put!(canvas, row, col, stencil_char(char))
-put!(canvas::StencilCanvas, row::Integer, col::Integer, char::Char, face) = put!(canvas, row, col, stencil_char(char, face))
+function put!(canvas::StencilCanvas, row::Integer, col::Integer, char::Char)
+    return put!(canvas, row, col, stencil_char(char))
+end
+
+function put!(canvas::StencilCanvas, row::Integer, col::Integer, char::Char, face)
+    annotated_char = stencil_char(char, face)
+    return put!(canvas, row, col, annotated_char)
+end
 
 function put!(canvas::StencilCanvas, row::Integer, col::Integer, text::AbstractString)
     cursor = col
@@ -553,7 +638,8 @@ end
 
 function put_right_aligned!(canvas::StencilCanvas, row::Integer, anchor_col::Integer, text)
     label = annotated_text(text)
-    return put!(canvas, row, anchor_col - textwidth(label) + 1, label)
+    start_col = anchor_col - textwidth(label) + 1
+    return put!(canvas, row, start_col, label)
 end
 
 struct Stencil3DSlice{O,S,L,T}
@@ -571,32 +657,57 @@ struct StencilLayout3D{S}
     height::Int
 end
 
+function stencil_slice_fixeds(geometry::StencilGeometry{3})
+    z_values = sort(unique(coord[3] for coord in geometry.coords))
+    return [(z,) for z in z_values]
+end
+
+function slice_render_options(opts::StencilRenderOptions, show_y_axis_label::Bool)
+    return StencilRenderOptions(; x_ticks=opts.x_ticks,
+                                y_ticks=opts.y_ticks,
+                                x_axis_label=opts.x_axis_label,
+                                y_axis_label=show_y_axis_label,
+                                slice_gap=opts.slice_gap)
+end
+
+function slice_title(fixed::Tuple)
+    title_pieces = Any[]
+    for (j, value) in enumerate(fixed)
+        j > 1 && push!(title_pieces, ", ")
+        push!(title_pieces, styled(SIndex(j + 2)), " = ", string(value))
+    end
+    return annotatedstring(title_pieces...)
+end
+
+function anchored_title_start_col(layout, title)
+    title_chars = collect(string(title))
+    anchor_idx = something(findfirst(==('='), title_chars), 1)
+    return xaxis_col(layout) - anchor_idx + 1
+end
+
+function slice_title_width(layout, title)
+    start_col = anchored_title_start_col(layout, title)
+    left_overflow = max(0, 1 - start_col)
+    title_end_col = start_col + textwidth(title) - 1
+    return max(layout.width, left_overflow + title_end_col)
+end
+
 function StencilLayout3D(geometry::StencilGeometry{3}, opts::StencilRenderOptions)
-    ranges = [sort(unique(coord[d] for coord in geometry.coords)) for d in 3:3]
-    fixeds = collect(Tuple(values) for values in Iterators.product(ranges...))
+    fixeds = stencil_slice_fixeds(geometry)
     slices = Stencil3DSlice[]
     gap = opts.slice_gap
 
+    # A 3D stencil is rendered as 2D z-slices. Only the first slice needs y tick
+    # labels; only the last slice gets the y-axis label, so adjacent slices can
+    # sit close together without repeating the same metadata.
     for (i, fixed) in enumerate(fixeds)
         show_y_ticks = opts.y_ticks && i == 1
         y_label = opts.y_axis_label && i == length(fixeds)
-        slice_opts = StencilRenderOptions(; x_ticks=opts.x_ticks,
-                                          y_ticks=opts.y_ticks,
-                                          x_axis_label=opts.x_axis_label,
-                                          y_axis_label=y_label,
-                                          slice_gap=opts.slice_gap)
+        slice_opts = slice_render_options(opts, y_label)
         slice = StencilSliceOptions(fixed, show_y_ticks, show_y_ticks)
         layout = StencilLayout2D(geometry.bounds, slice_opts, slice)
-        title_pieces = Any[]
-        for (j, value) in enumerate(fixed)
-            j > 1 && push!(title_pieces, ", ")
-            push!(title_pieces, styled(SIndex(j + 2)), " = ", string(value))
-        end
-        title = annotatedstring(title_pieces...)
-        chars = collect(string(title))
-        anchor_idx = something(findfirst(==('='), chars), 1)
-        startcol = xaxis_col(layout) - anchor_idx + 1
-        twidth = max(layout.width, max(0, 1 - startcol) + startcol + textwidth(title) - 1)
+        title = slice_title(fixed)
+        twidth = slice_title_width(layout, title)
         twidth > layout.width && (gap = max(gap, 3))
         push!(slices, Stencil3DSlice(slice_opts, slice, layout, title, twidth))
     end
@@ -615,19 +726,41 @@ function stencil_width(layout, opts::StencilRenderOptions)
     return isnothing(opts.textwidth) ? natural_width : max(opts.textwidth, natural_width)
 end
 
+canvas_row(row0::Integer, layout_row::Integer) = row0 + layout_row - 1
+canvas_col(col0::Integer, layout_col::Integer) = col0 + layout_col - 1
+active_face(active::Bool) = active ? STENCIL_ACTIVE_FACE : nothing
+
+function draw_x_axis_label!(canvas::StencilCanvas, row0::Integer, col0::Integer, layout)
+    layout.x_axis_row == 0 && return canvas
+    row = canvas_row(row0, layout.x_axis_row)
+    col = canvas_col(col0, xaxis_col(layout))
+    return put!(canvas, row, col, styled(SIndex(1)))
+end
+
 function draw_stencil!(canvas::StencilCanvas, row0::Integer, col0::Integer, geometry::StencilGeometry{1}, layout::StencilLayout1D)
     active = active_halfcoords(geometry)
-    layout.x_axis_row != 0 && put!(canvas, row0 + layout.x_axis_row - 1, col0 + xaxis_col(layout) - 1, styled(SIndex(1)))
+    draw_x_axis_label!(canvas, row0, col0, layout)
 
+    glyph_row = canvas_row(row0, layout.glyph_row)
     for x in layout.xmin:layout.xmax
         node_active = (2x,) in active
-        put!(canvas, row0 + layout.glyph_row - 1, col0 + xnode_col(layout, x) - 1, stencil_vertex(node_active), node_active ? STENCIL_ACTIVE_FACE : nothing)
+        node_col = canvas_col(col0, xnode_col(layout, x))
+        put!(canvas, glyph_row, node_col, stencil_vertex(node_active), active_face(node_active))
+
         if x < layout.xmax
-            put_hline!(canvas, row0 + layout.glyph_row - 1, col0 + xnode_col(layout, x), col0 + xnode_col(layout, x + 1) - 2, '─')
+            first_edge_col = canvas_col(col0, xnode_col(layout, x) + 1)
+            last_edge_col = canvas_col(col0, xnode_col(layout, x + 1) - 1)
+            put_hline!(canvas, glyph_row, first_edge_col, last_edge_col, '─')
+
             edge_active = (2x + 1,) in active
-            put!(canvas, row0 + layout.glyph_row - 1, col0 + xedge_col(layout, x) - 1, stencil_xedge(edge_active), edge_active ? STENCIL_ACTIVE_FACE : nothing)
+            edge_col = canvas_col(col0, xedge_col(layout, x))
+            put!(canvas, glyph_row, edge_col, stencil_xedge(edge_active), active_face(edge_active))
         end
-        layout.x_tick_row != 0 && put_right_aligned!(canvas, row0 + layout.x_tick_row - 1, col0 + xnode_col(layout, x) - 1, string(x))
+
+        if layout.x_tick_row != 0
+            tick_row = canvas_row(row0, layout.x_tick_row)
+            put_right_aligned!(canvas, tick_row, node_col, string(x))
+        end
     end
     return canvas
 end
@@ -635,44 +768,62 @@ end
 function draw_stencil!(canvas::StencilCanvas, row0::Integer, col0::Integer, geometry::StencilGeometry{N}, layout::StencilLayout2D,
                        slice::StencilSliceOptions=StencilSliceOptions((), layout.labelwidth > 0, layout.labelwidth > 0)) where {N}
     active = active_halfcoords(geometry, slice.fixed)
-    layout.x_axis_row != 0 && put!(canvas, row0 + layout.x_axis_row - 1, col0 + xaxis_col(layout) - 1, styled(SIndex(1)))
+    draw_x_axis_label!(canvas, row0, col0, layout)
 
+    # Draw one horizontal grid row at a time, then fill the vertical connectors,
+    # y-edges, and cell centers that live between this row and the next one.
     for y in layout.ymax:-1:layout.ymin
-        node_row = row0 + ynode_row(layout, y) - 1
+        node_row = canvas_row(row0, ynode_row(layout, y))
         if slice.y_ticks
             put!(canvas, node_row, col0, lpad(string(y), layout.labelwidth))
         end
+
         for x in layout.xmin:layout.xmax
             node_active = (2x, 2y) in active
-            put!(canvas, node_row, col0 + xnode_col(layout, x) - 1, stencil_vertex(node_active), node_active ? STENCIL_ACTIVE_FACE : nothing)
+            node_col = canvas_col(col0, xnode_col(layout, x))
+            put!(canvas, node_row, node_col, stencil_vertex(node_active), active_face(node_active))
+
             if x < layout.xmax
-                put_hline!(canvas, node_row, col0 + xnode_col(layout, x), col0 + xnode_col(layout, x + 1) - 2, '─')
+                first_edge_col = canvas_col(col0, xnode_col(layout, x) + 1)
+                last_edge_col = canvas_col(col0, xnode_col(layout, x + 1) - 1)
+                put_hline!(canvas, node_row, first_edge_col, last_edge_col, '─')
+
                 xedge_active = (2x + 1, 2y) in active
-                put!(canvas, node_row, col0 + xedge_col(layout, x) - 1, stencil_xedge(xedge_active), xedge_active ? STENCIL_ACTIVE_FACE : nothing)
+                edge_col = canvas_col(col0, xedge_col(layout, x))
+                put!(canvas, node_row, edge_col, stencil_xedge(xedge_active), active_face(xedge_active))
             end
         end
 
         y == layout.ymin && continue
         hy = 2y - 1
         for x in layout.xmin:layout.xmax
-            col = col0 + xnode_col(layout, x) - 1
-            put!(canvas, node_row + 1, col, '│')
+            node_col = canvas_col(col0, xnode_col(layout, x))
+            put!(canvas, node_row + 1, node_col, '│')
+
             yedge_active = (2x, hy) in active
-            put!(canvas, node_row + 2, col, stencil_yedge(yedge_active), yedge_active ? STENCIL_ACTIVE_FACE : nothing)
-            put!(canvas, node_row + 3, col, '│')
+            put!(canvas, node_row + 2, node_col, stencil_yedge(yedge_active), active_face(yedge_active))
+            put!(canvas, node_row + 3, node_col, '│')
+
             if x < layout.xmax
                 cell_active = (2x + 1, hy) in active
-                put!(canvas, node_row + 2, col0 + xedge_col(layout, x) - 1, stencil_cell(cell_active), cell_active ? STENCIL_ACTIVE_FACE : nothing)
+                cell_col = canvas_col(col0, xedge_col(layout, x))
+                put!(canvas, node_row + 2, cell_col, stencil_cell(cell_active), active_face(cell_active))
             end
         end
     end
 
     if layout.x_tick_row != 0
+        tick_row = canvas_row(row0, layout.x_tick_row)
         for x in layout.xmin:layout.xmax
-            put_right_aligned!(canvas, row0 + layout.x_tick_row - 1, col0 + xnode_col(layout, x) - 1, string(x))
+            node_col = canvas_col(col0, xnode_col(layout, x))
+            put_right_aligned!(canvas, tick_row, node_col, string(x))
         end
     end
-    layout.y_axis_row != 0 && put!(canvas, row0 + layout.y_axis_row - 1, col0 + layout.y_axis_col - 1, styled(SIndex(2)))
+    if layout.y_axis_row != 0
+        row = canvas_row(row0, layout.y_axis_row)
+        col = canvas_col(col0, layout.y_axis_col)
+        put!(canvas, row, col, styled(SIndex(2)))
+    end
     return canvas
 end
 
@@ -680,11 +831,11 @@ function draw_stencil!(canvas::StencilCanvas, row0::Integer, col0::Integer, geom
     col = 1
     for slice in layout.slices
         draw_stencil!(canvas, row0, col0 + col - 1, geometry, slice.layout, slice.slice)
-        chars = collect(string(slice.title))
-        anchor_idx = something(findfirst(==('='), chars), 1)
-        startcol = xaxis_col(slice.layout) - anchor_idx + 1
-        leftpad = max(0, 1 - startcol)
-        put!(canvas, row0 + slice.layout.height, col0 + col + leftpad + startcol - 2, slice.title)
+        start_col = anchored_title_start_col(slice.layout, slice.title)
+        left_padding = max(0, 1 - start_col)
+        title_row = row0 + slice.layout.height
+        title_col = col0 + col + left_padding + start_col - 2
+        put!(canvas, title_row, title_col, slice.title)
         col += slice.width + layout.gap
     end
     return canvas
@@ -695,10 +846,15 @@ function render_stencil(s::Stencil, opts::StencilRenderOptions)
     1 <= N <= 3 || throw(ArgumentError("stencil rendering supports only 1D, 2D, and 3D stencils, got $(N)D"))
     isempty(s.shifts) && throw(ArgumentError("cannot render an empty stencil"))
     geometry = StencilGeometry(s)
+    return render_stencil(geometry, opts)
+end
+
+function render_stencil(geometry::StencilGeometry, opts::StencilRenderOptions)
     layout = stencil_layout(geometry, opts)
-    canvas = StencilCanvas(layout.height, stencil_width(layout, opts))
+    width = stencil_width(layout, opts)
+    canvas = StencilCanvas(layout.height, width)
     natural_width = layout.width + opts.left_margin + opts.right_margin
-    left_padding = opts.left_margin + fld(stencil_width(layout, opts) - natural_width, 2)
+    left_padding = opts.left_margin + fld(width - natural_width, 2)
     draw_stencil!(canvas, 1, left_padding + 1, geometry, layout)
     return join(view(canvas.cells, 1:lastindex(canvas.cells)-1))
 end
@@ -711,17 +867,30 @@ function render_stencil(s::Stencil; kwargs...)
 end
 
 function stencil_render_width(s::Stencil, opts::StencilRenderOptions)
-    return stencil_width(stencil_layout(StencilGeometry(s), opts), opts)
+    geometry = StencilGeometry(s)
+    return stencil_render_width(geometry, opts)
+end
+
+function stencil_render_width(geometry::StencilGeometry, opts::StencilRenderOptions)
+    layout = stencil_layout(geometry, opts)
+    return stencil_width(layout, opts)
 end
 
 function stencil_render_height(s::Stencil, opts::StencilRenderOptions)
-    return stencil_layout(StencilGeometry(s), opts).height
+    geometry = StencilGeometry(s)
+    return stencil_render_height(geometry, opts)
+end
+
+function stencil_render_height(geometry::StencilGeometry, opts::StencilRenderOptions)
+    return stencil_layout(geometry, opts).height
 end
 
 function vertically_centered_cell(text::AbstractString, height::Integer)
     top = max(0, fld(height - 1, 2))
     bottom = max(0, height - top - 1)
-    return annotated_join(vcat(fill(annotatedstring(""), top), [text], fill(annotatedstring(""), bottom)))
+    leading_blanks = fill(annotatedstring(""), top)
+    trailing_blanks = fill(annotatedstring(""), bottom)
+    return annotated_join(vcat(leading_blanks, [text], trailing_blanks))
 end
 
 # Base.show entrypoints
@@ -752,20 +921,67 @@ function Base.show(io::IO, nu::Nonuniforms)
     print(io, ')')
 end
 
+function nonuniform_dimensions(pairs)
+    dimensions = map(pairs) do pair
+        ndims(last(pair))
+    end
+    return sort(unique(dimensions))
+end
+
+function combined_stencil_geometry(pairs, N::Integer)
+    coords = Any[]
+    for pair in pairs
+        stencil = last(pair)
+        ndims(stencil) == N || continue
+        append!(coords, stencil_coords(stencil))
+    end
+
+    nd = min(N, 2)
+    halfcoords = map(coord -> projected_halfcoord(coord, nd), coords)
+    bounds = stencil_vertex_bounds(coords, nd)
+    geometry = StencilGeometry{N,typeof(coords),typeof(halfcoords),typeof(bounds)}
+    return geometry(coords, halfcoords, bounds)
+end
+
+function nonuniform_total_geometries(pairs)
+    return map(nonuniform_dimensions(pairs)) do N
+        N => combined_stencil_geometry(pairs, N)
+    end
+end
+
 function Base.show(io::IO, ::MIME"text/plain", nu::Nonuniforms)
     pairs = pairstuple(stencils(nu))
     isempty(pairs) && return show(io, nu)
+
     stencil_opts = StencilRenderOptions(; left_margin=1, right_margin=1)
-    stencil_width = maximum(stencil -> stencil_render_width(stencil, stencil_opts), values(stencils(nu)); init=0)
-    cell_opts = StencilRenderOptions(; left_margin=1, right_margin=1, textwidth=stencil_width)
-    data = Matrix{Any}(undef, length(pairs), 2)
+
+    total_geometries = nonuniform_total_geometries(pairs)
+
+    total_width = maximum(total_geometries) do pair
+        stencil_render_width(last(pair), stencil_opts)
+    end
+    cell_width = maximum(values(stencils(nu)); init=total_width) do stencil
+        stencil_render_width(stencil, stencil_opts)
+    end
+    cell_opts = StencilRenderOptions(; left_margin=1, right_margin=1, textwidth=cell_width)
+
+    data = Matrix{Any}(undef, length(pairs) + length(total_geometries), 2)
+    for (i, (N, geometry)) in enumerate(total_geometries)
+        total_height = stencil_render_height(geometry, cell_opts)
+        data[i, 1] = vertically_centered_cell(annotatedstring("Full $(N)D"), total_height)
+        data[i, 2] = render_stencil(geometry, cell_opts)
+    end
+
     for (i, (term, stencil)) in enumerate(pairs)
         height = stencil_render_height(stencil, cell_opts)
-        data[i, 1] = vertically_centered_cell(styled(term), height)
-        data[i, 2] = render_stencil(stencil, cell_opts)
+        row = i + length(total_geometries)
+        data[row, 1] = vertically_centered_cell(styled(term), height)
+        data[row, 2] = render_stencil(stencil, cell_opts)
     end
     pretty_table(io, data;
-                 column_labels=["term", "stencil"],
+                 title="Nonuniforms",
+                 column_labels=["Term", "Stencil"],
+                 row_group_labels=[length(total_geometries) + 1 => "Fields"],
                  alignment=[:c, :l],
                  column_label_alignment=[:c, :c],
                  line_breaks=true,

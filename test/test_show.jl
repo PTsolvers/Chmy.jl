@@ -106,4 +106,21 @@ Base.show(io::IO, t::CustomBaseShowTerm) = print(io, "base(", t.x, ")")
     @test occursin("\e[1ma", colored_nu)
     @test occursin("i₁", colored_nu)
     @test occursin("i₂", colored_nu)
+
+    total_nu = sprint(show,
+                      MIME"text/plain"(),
+                      Nonuniforms(a[Segment(), Point()][i, j] => Stencil((Segment(), Point()), δ(0, 0)),
+                                  b[Point(), Segment()][i, j] => Stencil((Point(), Segment()), δ(0, 1))))
+    @test occursin("Full", total_nu)
+    @test occursin("Fields", total_nu)
+    @test findfirst("Full", total_nu) < findfirst("Fields", total_nu)
+
+    mixed_total_nu = sprint(show,
+                            MIME"text/plain"(),
+                            Nonuniforms(a[Segment()][i] => Stencil(Segment(), δ(0)),
+                                        b[Point(), Segment()][i, j] => Stencil((Point(), Segment()), δ(0, 1))))
+    @test occursin("Full 1D", mixed_total_nu)
+    @test occursin("Full 2D", mixed_total_nu)
+    @test occursin("Fields", mixed_total_nu)
+    @test findfirst("Full 1D", mixed_total_nu) < findfirst("Full 2D", mixed_total_nu) < findfirst("Fields", mixed_total_nu)
 end
