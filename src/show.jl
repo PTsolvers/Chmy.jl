@@ -13,9 +13,8 @@ const STENCIL_ACTIVE_FACE = StyledStrings.Face(; foreground=:blue, weight=:bold)
 
 show_style(::STerm) = NamedTuple()
 show_style(::SIndex) = (; italic=true)
-show_style(::STensor{R,<:Any,<:Any}) where {R} = (; bold=true, underline=(R > 0))
-show_style(::SZeroTensor) = (; bold=true, underline=true)
-show_style(::SIdTensor) = (; bold=true, underline=true)
+show_style(::AbstractSTensor{R}) where {R} = (; bold=true, underline=(R > 0))
+show_style(::BasisVector) = (; bold=true, underline=true, italic=true)
 
 function style_face(style::NamedTuple)
     props = Pair{Symbol,Any}[]
@@ -79,7 +78,8 @@ display_name(::Gradient) = :grad
 display_name(::Divergence) = :divg
 display_name(::Curl) = :curl
 display_name(::BoundaryNormal) = :N
-display_name(::FaceNormal) = :N
+display_name(::BoundaryTangent) = :T
+display_name(::BasisVector{I}) where {I} = Symbol(:e, to_subscript(Val(I)))
 display_name(::SIndex{I}) where {I} = Symbol(:i, to_subscript(Val(I)))
 display_name(::AbstractPartialDerivative{I}) where {I} = Symbol("∂", to_subscript(Val(I)))
 display_name(::AbstractPartialAveraging{I}) where {I} = Symbol("ℐ", to_subscript(Val(I)))
@@ -134,7 +134,7 @@ function styled_expr(term::STerm, ::Int)
 end
 
 function styled_expr(::Shift{S}, ::Int) where {S}
-    return annotatedstring("δ(", string(S), ")")
+    return annotatedstring("δ(", S, ")")
 end
 
 function styled_expr(node::SNode, ::Int)
@@ -161,7 +161,7 @@ function styled_broadcast(args, prec)
         return styled_operator(Symbol('.', opname), bargs, prec; parent_opname=opname)
     elseif opname isa Symbol
         op_prec = Base.operator_precedence(opname)
-        return annotatedstring(string(opname), ".(", styled_list(bargs, ", ", op_prec), ")")
+        return annotatedstring(opname, ".(", styled_list(bargs, ", ", op_prec), ")")
     end
     return default_annotated(SExpr(Call(), SRef(:broadcasted), args...))
 end
@@ -173,7 +173,7 @@ function styled_operator(display_opname::Symbol, args, prec; parent_opname::Symb
     # `parent_opname` is the semantic operator whose precedence Julia knows
     # (`+`). They differ only for dotted broadcast operators.
     body = if length(args) == 1
-        annotatedstring(string(display_opname), styled_expr(only(args), op_prec))
+        annotatedstring(display_opname, styled_expr(only(args), op_prec))
     else
         styled_list(args, operator_separator(display_opname, parent_opname, args), op_prec, parent_opname)
     end
