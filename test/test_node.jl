@@ -58,7 +58,7 @@ import Chmy: makeop
         q = node(grad(a))
         q1 = q[1][p, s][i, j]
         expr = divg(q)[s, s][i, j]
-        expected = -q[1][p, s][i, j] + q[1][p, s][i + 1, j] - q[2][s, p][i, j] + q[2][s, p][i, j + 1]
+        expected = -q[1][p, s][i, j] + q[1][p, s][i+1, j] - q[2][s, p][i, j] + q[2][s, p][i, j+1]
 
         @test q1 === node(grad.op[1](a))[p, s][i, j]
         @test expr === expected
@@ -91,7 +91,7 @@ import Chmy: makeop
         expr = (-divg(q))[s, s][i, j]
         bc = q[1][p, s][i, j] => SLiteral(0)
 
-        @test subs(expr, bc) === -q[1][p, s][i + 1, j] + q[2][s, p][i, j] - q[2][s, p][i, j + 1]
+        @test subs(expr, bc) === -q[1][p, s][i+1, j] + q[2][s, p][i, j] - q[2][s, p][i, j+1]
     end
 
     @testset "nodes wrap concrete tensors componentwise" begin
