@@ -46,55 +46,7 @@ function Chmy.stencil_rule(::BoundaryNormalCornerShift, args::Tuple{STerm,STerm}
     return Vx[loc...][i+1, j] + Vy[loc...][i, j+1]
 end
 
-@testset "boundary operators" begin
-    @testset "shift arithmetic" begin
-        @test @inferred(Shift(1) + Shift(2)) === Shift(3)
-        @test @inferred(Shift(1) + Shift(2) - Shift(1)) === Shift(2)
-        @test @inferred(Shift(1) - Shift(3)) === Shift(-2)
-        @test @inferred(-Shift(1)) === Shift(-1)
-        @test_throws ArgumentError Shift(1 // 2)
-        @test_throws ArgumentError δ(1 // 2)
-        @test offset(Point()) === SLiteral(0)
-        @test offset(Segment()) === SLiteral(1 // 2)
-    end
-
-    @testset "adjacent_faces" begin
-        @test @inferred(adjacent_faces(Face(Lower()))) === (Face(Span()),)
-        @test @inferred(adjacent_faces(Face(Upper()))) === (Face(Span()),)
-        @test @inferred(adjacent_faces(Face(Span()))) === ()
-
-        @test @inferred(adjacent_faces(Face(Lower(), Lower()))) === (Face(Span(), Lower()),
-                                                                     Face(Lower(), Span()))
-
-        @test @inferred(adjacent_faces(Face(Lower(), Span()))) === (Face(Span(), Span()),)
-
-        @test @inferred(adjacent_faces(Face(Span(), Upper()))) === (Face(Span(), Span()),)
-
-        @test @inferred(adjacent_faces(Face(Lower(), Lower(), Lower()))) === (Face(Span(), Lower(), Lower()),
-                                                                              Face(Lower(), Span(), Lower()),
-                                                                              Face(Lower(), Lower(), Span()))
-
-        @test @inferred(adjacent_faces(Face(Lower(), Lower(), Span()))) === (Face(Span(), Lower(), Span()),
-                                                                             Face(Lower(), Span(), Span()))
-
-        @test @inferred(adjacent_faces(Face(Span(), Span(), Span()))) === ()
-    end
-
-    @testset "nonuniform staggered shifts" begin
-        @scalars a b
-        i, j = SIndex(1), SIndex(2)
-
-        nu1 = nonuniforms(a[Segment()][i])
-        @test sprint(show, Chmy.stencil(nu1, a[Segment()])) == "Stencil(Segment(), δ(0))"
-
-        nu1_merged = nonuniforms(a[Point(), Segment()][i, j] + a[Point(), Segment()][i, j+1])
-        @test sprint(show, Chmy.stencil(nu1_merged, a[Point(), Segment()])) == "Stencil((Point(), Segment()), δ(0, 0), δ(0, 1))"
-
-        nu2 = nonuniforms(a[Segment(), Point()][i+1, j] + b[Point(), Segment()][i, j-1])
-        @test sprint(show, Chmy.stencil(nu2, a[Segment(), Point()])) == "Stencil((Segment(), Point()), δ(1, 0))"
-        @test sprint(show, Chmy.stencil(nu2, b[Point(), Segment()])) == "Stencil((Point(), Segment()), δ(0, -1))"
-    end
-
+@testset "field extensions" begin
     @testset "extension constructors" begin
         @scalars a b
         @vectors V
@@ -202,7 +154,7 @@ end
 
         shifted = MixedLocationShift()(a, b)
         @test @inferred(boundary_rule(rule, shifted, Face(Upper(), Span()),
-                                      (Point(), Segment()), (Shift(0), Shift(0)))) ===
+                                      (Point(), Segment()), (Shift(0),))) ===
               2 * c[Point(), Segment()][i, j-1] - a[Point(), Segment()][i-1, j-1] +
               4 * d[Point(), Point()][i, j+1] - 3 * b[Segment(), Point()][i-1, j+1]
     end
@@ -270,63 +222,63 @@ end
         zero_vec_rule = ExtensionRule(V => Z)
         shifted2 = BoundaryShiftPair{(1, 0)}()(V[1], V[2])
         @test @inferred(boundary_rule(zero_vec_rule, shifted2, Face(Upper(), Span()),
-                                      (Point(), Point()), (Shift(0), Shift(0)))) ===
+                                      (Point(), Point()), (Shift(0),))) ===
               -V[1][Point(), Point()][i-1, j] - V[2][Point(), Point()][i-1, j]
 
         diff = StaggeredCentralDifference()
         grad = Gradient(diff)
         q = node(grad(a))
         protected_grad = boundary_rule(ExtensionRule(q => Z), BoundaryShift{(1, 0)}()(q[1]),
-                                       Face(Upper(), Span()), (Point(), Segment()), (Shift(0), Shift(0)))
+                                       Face(Upper(), Span()), (Point(), Segment()), (Shift(0),))
         @test protected_grad === -grad.op[1](a)[Point(), Segment()][i-1, j]
         @test !contains_node(protected_grad)
 
         shifted3 = BoundaryShift{(0, 0, 1)}()(V[3])
         @test boundary_rule(zero_vec_rule, shifted3, Face(Span(), Span(), Upper()),
-                            (Point(), Point(), Point()), (Shift(0), Shift(0), Shift(0))) ===
+                            (Point(), Point(), Point()), (Shift(0),)) ===
               -V[3][Point(), Point(), Point()][i, j, k-1]
 
         normal_value = ExtensionRule(V ⋅ N => SLiteral(0))
         @test @inferred(boundary_rule(normal_value, BoundaryShift{(1, 0)}()(V[1]), Face(Upper(), Span()),
-                                      (Point(), Point()), (Shift(0), Shift(0)))) ===
+                                      (Point(), Point()), (Shift(0),))) ===
               -V[1][Point(), Point()][i-1, j]
         @test boundary_rule(normal_value, BoundaryShift{(-1, 0)}()(V[1]), Face(Lower(), Span()),
-                            (Point(), Point()), (Shift(0), Shift(0))) ===
+                            (Point(), Point()), (Shift(0),)) ===
               -V[1][Point(), Point()][i+1, j]
 
         tangent_value = ExtensionRule(V ⋅ T => SLiteral(0))
         @test @inferred(boundary_rule(tangent_value, BoundaryShift{(1, 0)}()(V[2]), Face(Upper(), Span()),
-                                      (Point(), Point()), (Shift(0), Shift(0)))) ===
+                                      (Point(), Point()), (Shift(0),))) ===
               -V[2][Point(), Point()][i-1, j]
         @test boundary_rule(tangent_value, BoundaryShift{(-1, 0)}()(V[2]), Face(Lower(), Span()),
-                            (Point(), Point()), (Shift(0), Shift(0))) ===
+                            (Point(), Point()), (Shift(0),)) ===
               -V[2][Point(), Point()][i+1, j]
         @test boundary_rule(tangent_value, BoundaryShift{(0, 1)}()(V[1]), Face(Span(), Upper()),
-                            (Point(), Point()), (Shift(0), Shift(0))) ===
+                            (Point(), Point()), (Shift(0),)) ===
               -V[1][Point(), Point()][i, j-1]
 
         tangent_value3 = ExtensionRule(V ⋅ T => SLiteral(0))
         tangent_shifted3 = BoundaryShiftPair{(1, 0, 0)}()(V[2], V[3])
         @test boundary_rule(tangent_value3, tangent_shifted3, Face(Upper(), Span(), Span()),
-                            (Point(), Point(), Point()), (Shift(0), Shift(0), Shift(0))) ===
+                            (Point(), Point(), Point()), (Shift(0),)) ===
               -V[2][Point(), Point(), Point()][i-1, j, k] -
               V[3][Point(), Point(), Point()][i-1, j, k]
 
         traction = ExtensionRule(σ ⋅ N => Z)
         shifted_traction = BoundaryShiftPair{(1, 0)}()(σ[1, 1], σ[2, 1])
         @test @inferred(boundary_rule(traction, shifted_traction, Face(Upper(), Span()),
-                                      (Point(), Point()), (Shift(0), Shift(0)))) ===
+                                      (Point(), Point()), (Shift(0),))) ===
               -σ[1, 1][Point(), Point()][i-1, j] - σ[2, 1][Point(), Point()][i-1, j]
 
         shifted_lower_traction = BoundaryShiftPair{(-1, 0)}()(σ[1, 1], σ[2, 1])
         @test boundary_rule(traction, shifted_lower_traction, Face(Lower(), Span()),
-                            (Point(), Point()), (Shift(0), Shift(0))) ===
+                            (Point(), Point()), (Shift(0),)) ===
               -σ[1, 1][Point(), Point()][i+1, j] - σ[2, 1][Point(), Point()][i+1, j]
 
         traction_tangent_rule = ExtensionRule((σ ⋅ N) ⋅ T => β * (V ⋅ T))
         shifted_tangent_traction = BoundaryShiftPair{(1, 0, 0)}()(σ[2, 1], σ[3, 1])
         @test boundary_rule(traction_tangent_rule, shifted_tangent_traction, Face(Upper(), Span(), Span()),
-                            (Point(), Point(), Point()), (Shift(0), Shift(0), Shift(0))) ===
+                            (Point(), Point(), Point()), (Shift(0),)) ===
               2 * (β*V[2])[Point(), Point(), Point()][i, j, k] -
               σ[2, 1][Point(), Point(), Point()][i-1, j, k] +
               2 * (β*V[3])[Point(), Point(), Point()][i, j, k] -
@@ -350,7 +302,7 @@ end
 
         shifted_tangent = BoundaryShift{(1, -1)}()(a)
         @test @inferred(boundary_rule(xrule, shifted_tangent, Face(Upper(), Span()),
-                                      (Point(), Point()), (Shift(0), Shift(-1)))) ===
+                                      (Point(), Point()), (Shift(0),))) ===
               2 * b[Point(), Point()][i, j-1] - a[Point(), Point()][i-1, j-1]
 
         rules = Binding(Face(Upper(), Span()) => xrule,
@@ -426,15 +378,15 @@ end
         grad = Gradient(diff)
         bad_expr_rule = ExtensionRule(grad(a) => SZeroTensor{1}())
         @test_throws ArgumentError boundary_rule(bad_expr_rule, a, Face(Upper(), Span()),
-                                                 (Point(), Segment()), (Shift(0), Shift(0)))
+                                                 (Point(), Segment()), (Shift(0),))
 
         bad_expr_component_rule = ExtensionRule(grad(a)[1] => b)
         @test_throws ArgumentError boundary_rule(bad_expr_component_rule, a, Face(Upper(), Span()),
-                                                 (Point(), Segment()), (Shift(0), Shift(0)))
+                                                 (Point(), Segment()), (Shift(0),))
 
         zero_target_rule = ExtensionRule(BoundaryNormal()[2] => b)
         @test_throws ArgumentError boundary_rule(zero_target_rule, BoundaryShift{(1, 0)}()(a),
-                                                 Face(Upper(), Span()), (Point(), Point()), (Shift(0), Shift(0)))
+                                                 Face(Upper(), Span()), (Point(), Point()), (Shift(0),))
 
         missing_rule = ExtensionRule(b => b)
         @test boundary_rule(missing_rule, CentralDifference()(a), Face(Upper()), (Point(),), (Shift(0),)) ===

@@ -381,8 +381,8 @@ det(::AltTensor{2,3}) = SLiteral(0)
 
 diag(t::Tensor{D,2}) where {D} = Vec(ntuple(i -> t[i, i], Val(D))...)
 
-adj(t::Tensor{2,2}) = Tensor{2,2}(t[2, 2], -t[1, 2], -t[2, 1], t[1, 1])
-adj(t::SymTensor{2,2}) = SymTensor{2,2}(t[1, 1], -t[1, 2], t[2, 2])
+adj(t::Tensor{2,2}) = Tensor{2,2}(t[2, 2], -t[2, 1], -t[1, 2], t[1, 1])
+adj(t::SymTensor{2,2}) = SymTensor{2,2}(t[2, 2], -t[1, 2], t[1, 1])
 adj(t::AltTensor{2,2}) = AltTensor{2,2}(-t[1, 2])
 function adj(t::Tensor{3,2})
     c11 = t[2, 2] * t[3, 3] - t[2, 3] * t[3, 2]
@@ -394,9 +394,9 @@ function adj(t::Tensor{3,2})
     c31 = t[1, 2] * t[2, 3] - t[1, 3] * t[2, 2]
     c32 = t[1, 3] * t[2, 1] - t[1, 1] * t[2, 3]
     c33 = t[1, 1] * t[2, 2] - t[1, 2] * t[2, 1]
-    return Tensor{3,2}(c11, c21, c31,
-                       c12, c22, c32,
-                       c13, c23, c33)
+    return Tensor{3,2}(c11, c12, c13,
+                       c21, c22, c23,
+                       c31, c32, c33)
 end
 function adj(t::SymTensor{2,3})
     c11 = t[2, 2] * t[3, 3] - t[2, 3]^2

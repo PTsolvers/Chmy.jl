@@ -64,11 +64,15 @@ export Binding, push, binding_types, pairstuple
 include("binding.jl")
 
 export Shift, CartesianShift, AxisFace, Lower, Upper, Span, Face, Stencil, Nonuniforms
-export δ, adjacent_faces, boundary_rule, boundary_operator, dim, codim, nonuniforms
+export δ, adjacent_faces, isfacet, facet, facets, boundary_rule, boundary_operator, dim, codim, nonuniforms, reach
 export ExtensionRule, ExtensionSpec, ExtensionOperator, PolynomialReconstruction, LinearReconstruction, BoundaryNormal, BoundaryTangent, BasisVector, project_boundary, reconstruct
 export BoundaryData, ValueData, DerivativeData
-export GridOperator, operator
-include("boundary_operators.jl")
+export GridOperator, CompiledGridOperator, operator
+include("grid_operator.jl")
+include("field_extensions.jl")
+
+export HaloArray, halowidths, interior, halo
+include("halo_array.jl")
 
 export isless_lex
 include("isless_lex.jl")

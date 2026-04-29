@@ -321,10 +321,6 @@ function stencil_shift_coords(o::CartesianShift)
     return map(value, o.shifts)
 end
 
-function stencil_coords(o::CartesianShift, ::Nothing)
-    return stencil_shift_coords(o)
-end
-
 function stencil_coords(o::CartesianShift, loc::Tuple)
     return tuplemap(stencil_coord, o.shifts, loc)
 end
@@ -349,7 +345,6 @@ end
 stencil_location_name(::Point) = "Point()"
 stencil_location_name(::Segment) = "Segment()"
 
-function show_stencil_location(io::IO, ::Nothing) end
 function show_stencil_location(io::IO, loc::Tuple{<:Space})
     print(io, stencil_location_name(only(loc)))
 end
@@ -362,10 +357,8 @@ end
 
 function Base.show(io::IO, s::Stencil)
     print(io, "Stencil(")
-    if !isnothing(s.location)
-        show_stencil_location(io, s.location)
-        !isempty(s.shifts) && print(io, ", ")
-    end
+    show_stencil_location(io, s.location)
+    !isempty(s.shifts) && print(io, ", ")
     join(io, s.shifts, ", ")
     print(io, ')')
 end
@@ -904,10 +897,8 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", s::Stencil)
     print(io, "Stencil ($(ndims(s))D, $(length(s.shifts)) shifts")
-    if !isnothing(s.location)
-        print(io, ", location ")
-        show_stencil_location(io, s.location)
-    end
+    print(io, ", location ")
+    show_stencil_location(io, s.location)
     print(io, "):\n")
     print(io, render_stencil(s))
 end

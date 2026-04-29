@@ -62,3 +62,6 @@ end
     end
     return ex
 end
+
+flatten(args::Tuple{Vararg{Tuple}}) = (Iterators.flatten(args)...,)
+flatten(args::Vararg{Tuple})        = flatten(args)
