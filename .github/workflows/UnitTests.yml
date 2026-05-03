@@ -34,8 +34,6 @@ jobs:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
-        arch:
-          - x64
         # include:
         #   - version: 'nightly'
         #     os: ubuntu-latest
