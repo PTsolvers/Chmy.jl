@@ -148,61 +148,151 @@ set!(fs::NamedTuple{names,<:NTuple{N,Field}}, args...) where {names,N} = foreach
 vector_location(::Val{dim}, ::Val{N}) where {dim,N} = ntuple(i -> i == dim ? Vertex() : Center(), Val(N))
 
 """
+    struct VectorField{N, C <: Tuple}
+
+A vector field of N components, each a `Field` at its staggered location.
+Components are accessible via dot notation (`v.x`, `v.y`, `v.z`) or integer indexing (`v[1]`, `v[2]`, `v[3]`).
+"""
+struct VectorField{N, C <: Tuple}
+    components::C
+    VectorField{N}(components::C) where {N, C <: Tuple} = new{N, C}(components)
+end
+
+"""
+    struct TensorField{N, C <: Tuple}
+
+A symmetric tensor field for N-dimensional space.
+Components are accessible via dot notation (`t.xx`, `t.xy`, etc.) or
+two-index notation (`t[1,1]`, `t[1,2]`, etc., with symmetry: `t[i,j] == t[j,i]`).
+
+2D components (in order): `xx, yy, xy`
+3D components (in order): `xx, yy, zz, xy, xz, yz`
+"""
+struct TensorField{N, C <: Tuple}
+    components::C
+    TensorField{N}(components::C) where {N, C <: Tuple} = new{N, C}(components)
+end
+
+# --- VectorField accessors ---
+
+function Base.getproperty(v::VectorField, s::Symbol)
+    s === :components && return getfield(v, :components)
+    s === :x          && return getfield(v, :components)[1]
+    s === :y          && return getfield(v, :components)[2]
+    s === :z          && return getfield(v, :components)[3]
+    error("VectorField has no property $s")
+end
+
+Base.propertynames(::VectorField{1}) = (:x,)
+Base.propertynames(::VectorField{2}) = (:x, :y)
+Base.propertynames(::VectorField{3}) = (:x, :y, :z)
+
+Base.getindex(v::VectorField, i::Int) = getfield(v, :components)[i]
+
+Base.iterate(v::VectorField, state...) = iterate(getfield(v, :components), state...)
+Base.length(::VectorField{N}) where {N} = N
+
+# --- TensorField accessors ---
+
+function Base.getproperty(t::TensorField{N}, s::Symbol) where {N}
+    s === :components && return getfield(t, :components)
+    s === :xx         && return getfield(t, :components)[1]
+    s === :yy         && return getfield(t, :components)[2]
+    if N == 3
+        s === :zz && return getfield(t, :components)[3]
+        s === :xy && return getfield(t, :components)[4]
+        s === :xz && return getfield(t, :components)[5]
+        s === :yz && return getfield(t, :components)[6]
+    else
+        s === :xy && return getfield(t, :components)[3]
+    end
+    error("TensorField has no property $s")
+end
+
+Base.propertynames(::TensorField{2}) = (:xx, :yy, :xy)
+Base.propertynames(::TensorField{3}) = (:xx, :yy, :zz, :xy, :xz, :yz)
+
+function Base.getindex(t::TensorField{N}, i::Int, j::Int) where {N}
+    a, b = minmax(i, j)
+    if N == 2
+        a == 1 && b == 1 && return getfield(t, :components)[1]
+        a == 2 && b == 2 && return getfield(t, :components)[2]
+        a == 1 && b == 2 && return getfield(t, :components)[3]
+    else
+        a == 1 && b == 1 && return getfield(t, :components)[1]
+        a == 2 && b == 2 && return getfield(t, :components)[2]
+        a == 3 && b == 3 && return getfield(t, :components)[3]
+        a == 1 && b == 2 && return getfield(t, :components)[4]
+        a == 1 && b == 3 && return getfield(t, :components)[5]
+        a == 2 && b == 3 && return getfield(t, :components)[6]
+    end
+    error("invalid tensor index ($i, $j) for $(N)D TensorField")
+end
+
+Base.iterate(t::TensorField, state...) = iterate(getfield(t, :components), state...)
+Base.length(::TensorField{N}) where {N} = N == 2 ? 3 : 6
+
+# --- set! ---
+
+set!(v::VectorField, args...) = foreach(f -> set!(f, args...), getfield(v, :components))
+set!(t::TensorField, args...) = foreach(f -> set!(f, args...), getfield(t, :components))
+
+# --- GPU adaptation ---
+
+Adapt.adapt_structure(to, v::VectorField{N}) where {N} =
+    VectorField{N}(map(f -> Adapt.adapt(to, f), getfield(v, :components)))
+
+Adapt.adapt_structure(to, t::TensorField{N}) where {N} =
+    TensorField{N}(map(f -> Adapt.adapt(to, f), getfield(t, :components)))
+
+# --- factory functions ---
+
+"""
     VectorField(backend::Backend, grid::StructuredGrid{N}, args...; kwargs...) where {N}
 
-Create a vector field in the form of a `NamedTuple` on the given `grid` using the specified `backend`. With each component being a `Field`.
-
-## Arguments:
-- `backend::Backend`: The backend to be used for computation.
-- `grid::StructuredGrid{N}`: The structured grid defining the computational domain.
-- `args...`: Additional positional arguments to pass to the `Field` constructor.
-- `kwargs...`: Additional keyword arguments to pass to the `Field` constructor.
+Create a `VectorField` on the given `grid`. Each of the N components is a `Field` staggered
+at `Vertex()` along its own dimension and `Center()` along all others.
+Components are accessible as `v.x`/`v.y`/`v.z` or `v[1]`/`v[2]`/`v[3]`.
 """
 function VectorField(backend::Backend, grid::StructuredGrid{N}, args...; kwargs...) where {N}
-    coord_names = axes_names(grid)
-    names = ntuple(i -> coord_names[i], Val(N))
-    values = ntuple(Val(N)) do D
+    components = ntuple(Val(N)) do D
         Base.@_inline_meta
         Field(backend, grid, vector_location(Val(D), Val(N)), args...; kwargs...)
     end
-    return NamedTuple{names}(values)
+    return VectorField{N}(components)
 end
 
 """
     TensorField(backend::Backend, grid::StructuredGrid{2}, args...; kwargs...)
 
-Create a 2D tensor field in the form of a named tuple on the given `grid` using the specified `backend`, with components `xx`, `yy`, and `xy` each being a `Field`.
-
-## Arguments:
-- `backend::Backend`: The backend to be used for computation.
-- `grid::StructuredGrid{2}`: The 2D structured grid defining the computational domain.
-- `args...`: Additional positional arguments to pass to the `Field` constructor.
-- `kwargs...`: Additional keyword arguments to pass to the `Field` constructor.
+Create a 2D symmetric `TensorField`. Components `(xx, yy, xy)` are stored in order.
+Access via `t.xx`/`t.yy`/`t.xy` or `t[1,1]`/`t[2,2]`/`t[1,2]` (symmetric: `t[i,j] == t[j,i]`).
 """
 function TensorField(backend::Backend, grid::StructuredGrid{2}, args...; kwargs...)
-    (xx = Field(backend, grid, Center(), args...; kwargs...),
-     yy = Field(backend, grid, Center(), args...; kwargs...),
-     xy = Field(backend, grid, Vertex(), args...; kwargs...))
+    components = (
+        Field(backend, grid, Center(), args...; kwargs...),
+        Field(backend, grid, Center(), args...; kwargs...),
+        Field(backend, grid, Vertex(), args...; kwargs...),
+    )
+    return TensorField{2}(components)
 end
 
 """
     TensorField(backend::Backend, grid::StructuredGrid{3}, args...; kwargs...)
 
-Create a 3D tensor field in the form of a named tuple on the given `grid` using the specified `backend`, with components `xx`, `yy`, `zz`, `xy`, `xz`, and `yz` each being a `Field`.
-
-## Arguments:
-- `backend::Backend`: The backend to be used for computation.
-- `grid::StructuredGrid{3}`: The 3D structured grid defining the computational domain.
-- `args...`: Additional positional arguments to pass to the `Field` constructor.
-- `kwargs...`: Additional keyword arguments to pass to the `Field` constructor.
+Create a 3D symmetric `TensorField`. Components `(xx, yy, zz, xy, xz, yz)` are stored in order.
+Access via `t.xx` etc. or `t[1,1]`/`t[1,2]` etc. (symmetric: `t[i,j] == t[j,i]`).
 """
 function TensorField(backend::Backend, grid::StructuredGrid{3}, args...; kwargs...)
-    (xx = Field(backend, grid, Center(), args...; kwargs...),
-     yy = Field(backend, grid, Center(), args...; kwargs...),
-     zz = Field(backend, grid, Center(), args...; kwargs...),
-     xy = Field(backend, grid, (Vertex(), Vertex(), Center()), args...; kwargs...),
-     xz = Field(backend, grid, (Vertex(), Center(), Vertex()), args...; kwargs...),
-     yz = Field(backend, grid, (Center(), Vertex(), Vertex()), args...; kwargs...))
+    components = (
+        Field(backend, grid, Center(), args...; kwargs...),
+        Field(backend, grid, Center(), args...; kwargs...),
+        Field(backend, grid, Center(), args...; kwargs...),
+        Field(backend, grid, (Vertex(), Vertex(), Center()), args...; kwargs...),
+        Field(backend, grid, (Vertex(), Center(), Vertex()), args...; kwargs...),
+        Field(backend, grid, (Center(), Vertex(), Vertex()), args...; kwargs...),
+    )
+    return TensorField{3}(components)
 end
 
 VectorField(arch::Architecture, args...; kwargs...) = VectorField(Architectures.get_backend(arch), args...; kwargs...)
