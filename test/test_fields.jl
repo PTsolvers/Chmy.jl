@@ -53,6 +53,24 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
                                                 0.0; 0.0;; 1.0; 1.0;; 2.0; 2.0]
             end
         end
+        @testset "VectorField indexing" begin
+            V = VectorField(backend, grid)
+            @test V[1] === V.x
+            @test V[2] === V.y
+            @test V[3] === V.z
+        end
+        @testset "TensorField indexing" begin
+            τ = TensorField(backend, grid)
+            @test τ[1, 1] === τ.xx
+            @test τ[2, 2] === τ.yy
+            @test τ[3, 3] === τ.zz
+            @test τ[1, 2] === τ.xy
+            @test τ[1, 3] === τ.xz
+            @test τ[2, 3] === τ.yz
+            @test τ[2, 1] === τ.xy  # symmetry
+            @test τ[3, 1] === τ.xz
+            @test τ[3, 2] === τ.yz
+        end
         @testset "constant field" begin
             @testset "zero" begin
                 field = ZeroField{Float64}()
