@@ -61,9 +61,17 @@ export
     lefty, righty, δy, ∂y, ∂²y, ∂k∂y,
     leftz, rightz, δz, ∂z, ∂²z, ∂k∂z,
 
+    left1, right1, δ1, ∂1, ∂²1, ∂k∂1,
+    left2, right2, δ2, ∂2, ∂²2, ∂k∂2,
+    left3, right3, δ3, ∂3, ∂²3, ∂k∂3,
+
     leftx_masked, rightx_masked, δx_masked, ∂x_masked, ∂²x_masked, ∂k∂x_masked,
     lefty_masked, righty_masked, δy_masked, ∂y_masked, ∂²y_masked, ∂k∂y_masked,
     leftz_masked, rightz_masked, δz_masked, ∂z_masked, ∂²z_masked, ∂k∂z_masked,
+
+    left1_masked, right1_masked, δ1_masked, ∂1_masked, ∂²1_masked, ∂k∂1_masked,
+    left2_masked, right2_masked, δ2_masked, ∂2_masked, ∂²2_masked, ∂k∂2_masked,
+    left3_masked, right3_masked, δ3_masked, ∂3_masked, ∂²3_masked, ∂k∂3_masked,
 
     # KernelLaunch
     Launcher,
