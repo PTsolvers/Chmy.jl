@@ -140,6 +140,12 @@ function regularise_exchange(grid, fields::NamedTuple{named_dims,<:Tuple{Vararg{
     return merge(default_exchange(grid), fields) |> Tuple
 end
 
+function regularise_exchange(grid, v::VectorField{N}) where {N}
+    names = axes_names(grid)
+    nt = NamedTuple{names}(getfield(v, :components))
+    return merge(default_exchange(grid), nt) |> Tuple
+end
+
 @inline function reorder(conditions::NTuple{K,NTuple{N,SidesBCs}}) where {K,N}
     ntuple(Val(N)) do D
         Base.@_inline_meta
