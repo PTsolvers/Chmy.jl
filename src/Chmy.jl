@@ -4,81 +4,71 @@ using MacroTools
 using KernelAbstractions
 
 export
-    # utils
-    Dim, Side, Left, Right, remove_dim, insert_dim, Offset,
+# utils
+      Dim, Side, Left, Right, remove_dim, insert_dim, Offset,
 
-    # Architectures
-    Architecture, SingleDeviceArchitecture, Arch, get_backend, get_device, activate!, set_device!,
-    heuristic_groupsize, pointertype,
+# Architectures
+      Architecture, SingleDeviceArchitecture, Arch, get_backend, get_device, activate!, set_device!,
+      heuristic_groupsize, pointertype,
 
-    # BoundaryConditions
-    FieldBoundaryCondition, FirstOrderBC, Dirichlet, Neumann, bc!,
-    BoundaryFunction,
-    DimSide,
-    AbstractBatch, FieldBatch, ExchangeBatch, EmptyBatch, BatchSet, batch,
+# BoundaryConditions
+      FieldBoundaryCondition, FirstOrderBC, Dirichlet, Neumann, bc!,
+      BoundaryFunction,
+      DimSide,
+      AbstractBatch, FieldBatch, ExchangeBatch, EmptyBatch, BatchSet, batch,
 
-    # Distributed
-    CartesianTopology, global_rank, shared_rank, node_name, cart_comm, shared_comm,
-    dims, cart_coords, neighbors, neighbor, has_neighbor, global_size, node_size,
-    DistributedArchitecture, topology, is_gpu_aware,
-    exchange_halo!, gather!,
+# Distributed
+      CartesianTopology, global_rank, shared_rank, node_name, cart_comm, shared_comm,
+      dims, cart_coords, neighbors, neighbor, has_neighbor, global_size, node_size,
+      DistributedArchitecture, topology, is_gpu_aware,
+      exchange_halo!, gather!,
 
-    # DoubleBuffer
-    DoubleBuffer, swap!, front, back,
+# DoubleBuffer
+      DoubleBuffer, swap!, front, back,
 
-    # Fields
-    AbstractField, Field, VectorField, TensorField, ConstantField, ZeroField, OneField, ValueField, FunctionField,
-    location, halo, interior, set!,
-    divg,
+# Fields
+      AbstractField, Field, VectorField, TensorField, ConstantField, ZeroField, OneField, ValueField, FunctionField,
+      location, halo, interior, set!,
+      divg,
 
-    # Grids
-    Location, Center, Vertex, flip,
-    Connectivity, Bounded, Connected, Periodic, Flat,
-    AbstractAxis, UniformAxis, FunctionAxis,
-    StructuredGrid, UniformGrid,
-    nvertices, ncenters, spacing, inv_spacing, Δ, iΔ, volume, inv_volume,
-    coord, coords, center, vertex, centers, vertices,
-    origin, extent, bounds, axis,
-    direction, axes_names, expand_loc,
-    connectivity,
+# Grids
+      Location, Center, Vertex, flip,
+      Connectivity, Bounded, Connected, Periodic, Flat,
+      AbstractAxis, UniformAxis, FunctionAxis,
+      StructuredGrid, UniformGrid,
+      nvertices, ncenters, spacing, inv_spacing, Δ, iΔ, volume, inv_volume,
+      coord, coords, center, vertex, centers, vertices,
+      origin, extent, bounds, axis,
+      direction, axes_names, expand_loc,
+      connectivity, Δx, Δy, Δz,
+      xcoord, ycoord, zcoord,
+      xcoords, ycoords, zcoords,
+      xvertex, yvertex, zvertex,
+      xcenter, ycenter, zcenter,
+      xvertices, yvertices, zvertices,
+      xcenters, ycenters, zcenters,
 
-    Δx, Δy, Δz,
-    xcoord, ycoord, zcoord,
-    xcoords, ycoords, zcoords,
-    xvertex, yvertex, zvertex,
-    xcenter, ycenter, zcenter,
-    xvertices, yvertices, zvertices,
-    xcenters, ycenters, zcenters,
+# GridOperators
+      left, right, δ, ∂, ∂², ∂k∂,
+      InterpolationRule, Linear, HarmonicLinear,
+      itp, lerp, hlerp,
+      divg, divg_grad, lapl, vmag,
+      AbstractMask, FieldMask, FieldMask1D, FieldMask2D, FieldMask3D, at, leftx, rightx, δx, ∂x, ∂²x, ∂k∂x,
+      lefty, righty, δy, ∂y, ∂²y, ∂k∂y,
+      leftz, rightz, δz, ∂z, ∂²z, ∂k∂z, left1, right1, δ1, ∂1, ∂²1, ∂k∂1,
+      left2, right2, δ2, ∂2, ∂²2, ∂k∂2,
+      left3, right3, δ3, ∂3, ∂²3, ∂k∂3, leftx_masked, rightx_masked, δx_masked, ∂x_masked, ∂²x_masked, ∂k∂x_masked,
+      lefty_masked, righty_masked, δy_masked, ∂y_masked, ∂²y_masked, ∂k∂y_masked,
+      leftz_masked, rightz_masked, δz_masked, ∂z_masked, ∂²z_masked, ∂k∂z_masked, left1_masked, right1_masked, δ1_masked, ∂1_masked, ∂²1_masked, ∂k∂1_masked,
+      left2_masked, right2_masked, δ2_masked, ∂2_masked, ∂²2_masked, ∂k∂2_masked,
+      left3_masked, right3_masked, δ3_masked, ∂3_masked, ∂²3_masked, ∂k∂3_masked,
 
-    # GridOperators
-    left, right, δ, ∂, ∂², ∂k∂,
-    InterpolationRule, Linear, HarmonicLinear,
-    itp, lerp, hlerp,
-    divg, divg_grad, lapl, vmag,
-    AbstractMask, FieldMask, FieldMask1D, FieldMask2D, FieldMask3D, at,
+# KernelLaunch
+      Launcher,
+      worksize, outer_width, inner_worksize, inner_offset, outer_worksize, outer_offset,
 
-    leftx, rightx, δx, ∂x, ∂²x, ∂k∂x,
-    lefty, righty, δy, ∂y, ∂²y, ∂k∂y,
-    leftz, rightz, δz, ∂z, ∂²z, ∂k∂z,
-
-    left1, right1, δ1, ∂1, ∂²1, ∂k∂1,
-    left2, right2, δ2, ∂2, ∂²2, ∂k∂2,
-    left3, right3, δ3, ∂3, ∂²3, ∂k∂3,
-
-    leftx_masked, rightx_masked, δx_masked, ∂x_masked, ∂²x_masked, ∂k∂x_masked,
-    lefty_masked, righty_masked, δy_masked, ∂y_masked, ∂²y_masked, ∂k∂y_masked,
-    leftz_masked, rightz_masked, δz_masked, ∂z_masked, ∂²z_masked, ∂k∂z_masked,
-
-    left1_masked, right1_masked, δ1_masked, ∂1_masked, ∂²1_masked, ∂k∂1_masked,
-    left2_masked, right2_masked, δ2_masked, ∂2_masked, ∂²2_masked, ∂k∂2_masked,
-    left3_masked, right3_masked, δ3_masked, ∂3_masked, ∂²3_masked, ∂k∂3_masked,
-
-    # KernelLaunch
-    Launcher,
-    worksize, outer_width, inner_worksize, inner_offset, outer_worksize, outer_offset,
-
-    # Workers
-    Worker
+# Workers
+      Worker
 
 include("macros.jl")
 include("utils.jl")
