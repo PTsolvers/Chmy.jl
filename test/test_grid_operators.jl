@@ -111,6 +111,38 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             end
         end
 
+        @testset "tensor notation (∂1==∂x, ∂2==∂y, ∂3==∂z)" begin
+            Ci    = Field(backend, grid, Center())
+            V_xyz = VectorField(backend, grid)
+            V_num = VectorField(backend, grid)
+
+            set!(Ci, grid, (x, y, z) -> exp(-x^2 - y^2 - z^2))
+
+            @kernel function partial_xyz!(V, F, g::StructuredGrid, O)
+                I = @index(Global, NTuple)
+                I = I + O
+                V.x[I...] = ∂x(F, g, I...)
+                V.y[I...] = ∂y(F, g, I...)
+                V.z[I...] = ∂z(F, g, I...)
+            end
+
+            @kernel function partial_num!(V, F, g::StructuredGrid, O)
+                I = @index(Global, NTuple)
+                I = I + O
+                V.x[I...] = ∂1(F, g, I...)
+                V.y[I...] = ∂2(F, g, I...)
+                V.z[I...] = ∂3(F, g, I...)
+            end
+
+            launch(arch, grid, partial_xyz! => (V_xyz, Ci, grid))
+            launch(arch, grid, partial_num! => (V_num, Ci, grid))
+
+            KernelAbstractions.synchronize(backend)
+            @test interior(V_xyz.x) == interior(V_num.x)
+            @test interior(V_xyz.y) == interior(V_num.y)
+            @test interior(V_xyz.z) == interior(V_num.z)
+        end
+
         @testset "vmag" begin
             V  = VectorField(backend, grid)
             C1 = Field(backend, grid, Center())

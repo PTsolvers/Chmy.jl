@@ -58,6 +58,17 @@ end
     return divg(V, grid, Tuple(I)...)
 end
 
+@propagate_inbounds @generated function divg(V::VectorField{N}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {N}
+    quote
+        @inline
+        Base.Cartesian.@ncall $N (+) D -> ∂(V[D], grid, Dim(D), I...)
+    end
+end
+
+@propagate_inbounds function divg(V::VectorField{N}, grid::StructuredGrid{N}, I::CartesianIndex{N}) where {N}
+    return divg(V, grid, Tuple(I)...)
+end
+
 """
     lapl(F, grid, I...)
 
@@ -121,5 +132,16 @@ Compute the magnitude of a vector field `V` at a given grid location `I` in a st
 end
 
 @propagate_inbounds function vmag(V::NamedTuple{names,<:NTuple{N,AbstractField}}, grid::StructuredGrid{N}, I::CartesianIndex{N}) where {names,N}
+    return vmag(V, grid, Tuple(I)...)
+end
+
+@propagate_inbounds @generated function vmag(V::VectorField{N}, grid::StructuredGrid{N}, I::Vararg{Integer,N}) where {N}
+    quote
+        @inline
+        sqrt(Base.Cartesian.@ncall $N (+) D -> lerp(V[D], Center(), grid, I...)^2)
+    end
+end
+
+@propagate_inbounds function vmag(V::VectorField{N}, grid::StructuredGrid{N}, I::CartesianIndex{N}) where {N}
     return vmag(V, grid, Tuple(I)...)
 end

@@ -65,6 +65,23 @@ end
     return divg(V, ω, grid, Tuple(I)...)
 end
 
+@propagate_inbounds @generated function divg(V::VectorField{N},
+                                             ω::AbstractMask{T,N},
+                                             grid::StructuredGrid{N},
+                                             I::Vararg{Integer,N}) where {N,T}
+    quote
+        @inline
+        Base.Cartesian.@ncall $N (+) D -> ∂(V[D], ω, grid, Dim(D), I...)
+    end
+end
+
+@propagate_inbounds function divg(V::VectorField{N},
+                                  ω::AbstractMask{T,N},
+                                  grid::StructuredGrid{N},
+                                  I::CartesianIndex{N}) where {N,T}
+    return divg(V, ω, grid, Tuple(I)...)
+end
+
 """
     lapl(F, ω, grid, I...)
 
