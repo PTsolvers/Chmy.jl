@@ -11,16 +11,14 @@ indexed expressions can read from array-valued bindings using `inds...`.
 
 Omitting `binding` uses an empty binding `Binding()`.
 """
-Base.@propagate_inbounds compute(expr::STerm, binding::Binding, inds::Vararg{Integer,N}) where {N} = compute_unwrapped(unwrap(expr), binding, inds...)
+Base.@propagate_inbounds compute(expr::STerm, binding::Binding, inds::Vararg{Integer,N}) where {N} = compute_expr(expr, binding, inds)
 Base.@propagate_inbounds compute(expr::STerm, inds::Vararg{Integer,N}) where {N} = compute(expr, Binding(), inds...)
-
-Base.@propagate_inbounds compute_unwrapped(expr::STerm, binding::Binding, inds::Vararg{Integer,N}) where {N} = compute_expr(expr, binding, inds)
 
 # `compute` is implemented as generated function so a fully static symbolic term and
 # the concrete binding types can be turned into plain Julia code with no
 # runtime overhead.
 @generated function compute_expr(expr, b, I)
-    expri = expr.instance
+    expri = unwrap(expr.instance)
     bndi = Binding(b.types[1].instance, Tuple(b.types[2].types))
     return quote
         Base.@_propagate_inbounds_meta
