@@ -21,8 +21,7 @@ steps:
                 using Pkg
                 Pkg.test("Chmy"; test_args=["--backends=CUDA"], coverage=true)'
     agents:
-      queue: "juliagpu"
-      cuda: "*"
+      queue: "cuda"
     timeout_in_minutes: 120
     soft_fail:
       - exit_status: 3
@@ -51,8 +50,7 @@ steps:
                 using Pkg
                 Pkg.test("Chmy"; test_args=["--backends=AMDGPU"], coverage=true)'
     agents:
-      queue: "juliagpu"
-      rocm: "*"
+      queue: "rocm"
       rocmgpu: "*"
     timeout_in_minutes: 120
     soft_fail:
@@ -60,7 +58,6 @@ steps:
     env:
       JULIA_NUM_THREADS: 4
 
-# We cannot sumbit coverage right now for Metal as this would require using a cryptic setup not enabled here.
   - label: "Metal Julia {{matrix.version}}"
     matrix:
       setup:
@@ -72,8 +69,8 @@ steps:
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"
-  #     - JuliaCI/julia-coverage#v1:
-  #         codecov: false
+      - JuliaCI/julia-coverage#v1:
+          codecov: true
     command: |
       julia -e 'println("--- :julia: Instantiating project")
                 using Pkg
@@ -81,11 +78,9 @@ steps:
 
       julia -e 'println("+++ :julia: Running tests")
                 using Pkg
-                Pkg.test("Chmy"; test_args=["--backends=Metal"], coverage=false)'
+                Pkg.test("Chmy"; test_args=["--backends=Metal"], coverage=true)'
     agents:
-      queue: "juliaecosystem"
-      os: "macos"
-      arch: "aarch64"
+      queue: "metal"
     timeout_in_minutes: 60
     soft_fail:
       - exit_status: 3
