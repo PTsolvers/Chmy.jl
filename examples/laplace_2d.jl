@@ -41,26 +41,16 @@ function laplace_2d(nx, ny; niter=50_000, display_fig=true)
     bc_r = q_r => SLiteral(0)
     bc_b = q_b => SLiteral(1) - f_c
     bc_t = q_t => f_c + SLiteral(1)
-    # side residuals
-    r_l = subs(r_c, bc_l)
-    r_r = subs(r_c, bc_r)
-    r_b = subs(r_c, bc_b)
-    r_t = subs(r_c, bc_t)
-    # corner residuals
-    r_bl = subs(r_b, bc_l)
-    r_br = subs(r_b, bc_r)
-    r_tl = subs(r_t, bc_l)
-    r_tr = subs(r_t, bc_r)
-
+    # residuals with bcs
     sys = (c  = r_c,
-           l  = r_l,
-           r  = r_r,
-           b  = r_b,
-           t  = r_t,
-           bl = r_bl,
-           br = r_br,
-           tl = r_tl,
-           tr = r_tr)
+           l  = subs(r_c, bc_l),
+           r  = subs(r_c, bc_r),
+           b  = subs(r_c, bc_b),
+           t  = subs(r_c, bc_t),
+           bl = subs(r_c, bc_b, bc_l),
+           br = subs(r_c, bc_b, bc_r),
+           tl = subs(r_c, bc_t, bc_l),
+           tr = subs(r_c, bc_t, bc_r))
 
     # arrays
     R = zeros(dims(grid, s, s))
@@ -111,4 +101,4 @@ function laplace_2d(nx, ny; niter=50_000, display_fig=true)
     return
 end
 
-laplace_2d(101, 101)
+laplace_2d(101, 101; niter=100)
