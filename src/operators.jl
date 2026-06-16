@@ -59,22 +59,23 @@ function check_tensor_ranks(::SRef{:broadcasted}, op::STerm, args::Vararg{STerm}
 end
 
 # operators for symbolic terms
-makeop(op::Symbol, arg1, args...) = SExpr(Call(), SRef(op), arg1, args...)
-canonop(op::Symbol, arg1, args...) = canonicalize(makeop(op, arg1, args...))
+macro makeop(op, args...)
+    :(SExpr(Call(), SRef($(esc(op))), $(esc.(args)...)))
+end
 
 # multiary operators
 for op in (:+, :*, :max, :min)
-    @eval Base.$op(args::Vararg{STerm}) = canonop($(Meta.quot(op)), args...)
+    @eval Base.$op(args::Vararg{STerm}) = @makeop($(Meta.quot(op)), args...)
 end
 
 # binary operators
 for op in (:-, :^, :<, :<=, :>, :>=, :(==), :!=, :&, :|, :xor)
-    @eval Base.$op(a::STerm, b::STerm) = canonop($(Meta.quot(op)), a, b)
+    @eval Base.$op(a::STerm, b::STerm) = @makeop($(Meta.quot(op)), a, b)
 end
 
 function Base.:/(a::STerm, b::STerm)
     (isstaticzero(a) && isstaticzero(b)) && throw(ArgumentError("division of zero by zero"))
-    return canonop(:/, a, b)
+    return @makeop(:/, a, b)
 end
 
 for op in (://, :÷)
@@ -83,7 +84,7 @@ for op in (://, :÷)
         isstaticzero(a) && return SLiteral(0)
         isstaticone(b) && return a
         a === b && return SLiteral(1)
-        return canonop($(Meta.quot(op)), a, b)
+        return @makeop($(Meta.quot(op)), a, b)
     end
 end
 
@@ -97,7 +98,7 @@ end
 
 function Base.adjoint(t::STerm)
     tensorrank(t) == 0 && return t
-    return canonop(:adjoint, t)
+    return @makeop(:adjoint, t)
 end
 
 """
@@ -105,14 +106,14 @@ end
 
 The double contraction operator, which contracts the first two indices of `a` with the first two indices of `b`.
 """
-⊡(a::STerm, b::STerm) = canonop(:⊡, a, b)
+⊡(a::STerm, b::STerm) = @makeop(:⊡, a, b)
 
 """
     ⊗(a, b)
 
 The outer product operator, which creates a tensor by combining all indices of `a` with all indices of `b`.
 """
-⊗(a::STerm, b::STerm) = canonop(:⊗, a, b)
+⊗(a::STerm, b::STerm) = @makeop(:⊗, a, b)
 
 # methods from LinearAlgebra
 transpose(t::STerm) = t'
@@ -120,7 +121,7 @@ transpose(t::STerm) = t'
 for op in (:det, :tr, :diag)
     @eval function $op(t::STerm)
         tensorrank(t) == 0 && return t
-        return canonop($(Meta.quot(op)), t)
+        return @makeop($(Meta.quot(op)), t)
     end
 end
 
@@ -128,10 +129,10 @@ function Base.inv(t::STerm)
     if iscall(t) && operation(t) === SRef(:inv)
         return only(arguments(t))
     end
-    return canonop(:inv, t)
+    return @makeop(:inv, t)
 end
 
-×(a::STerm, b::STerm) = canonop(:×, a, b)
+×(a::STerm, b::STerm) = @makeop(:×, a, b)
 
 function _isopof(op, x, y)
     if isexpr(x) && operation(x) === op && first(arguments(x)) === y
@@ -159,7 +160,7 @@ function ⋅(a::STerm, b::STerm)
     # a * adj(a) = det(a) * I, adj(b) * b = det(b) * I
     _isadjof(a, b) && return det(b) * SIdTensor{R}()
     _isadjof(b, a) && return det(a) * SIdTensor{R}()
-    return canonop(:⋅, a, b)
+    return @makeop(:⋅, a, b)
 end
 
 """
@@ -169,7 +170,7 @@ The adjugate of a second-rank tensor, defined as the transpose of the cofactor m
 """
 function adj(t::STerm)
     tensorrank(t) == 0 && return t
-    return canonop(:adj, t)
+    return @makeop(:adj, t)
 end
 
 """
@@ -179,7 +180,7 @@ The symmetric part of a second-rank tensor, defined as `(t + t') / 2`.
 """
 function sym(t::STerm)
     tensorrank(t) == 0 && return t
-    return canonop(:sym, t)
+    return @makeop(:sym, t)
 end
 
 """
@@ -189,13 +190,13 @@ The antisymmetric part of a second-rank tensor, defined as `(t - t') / 2`.
 """
 function asym(t::STerm)
     tensorrank(t) == 0 && return SLiteral(0)
-    return canonop(:asym, t)
+    return @makeop(:asym, t)
 end
 
 for op in (:gram, :cogram)
     @eval function $op(t::STerm)
         tensorrank(t) == 0 && return t^2
-        return canonop($(Meta.quot(op)), t)
+        return @makeop($(Meta.quot(op)), t)
     end
 end
 
@@ -204,9 +205,9 @@ isunaryminus(expr::STerm) = iscall(expr) && operation(expr) === SRef(:-) && arit
 
 function Base.:-(arg::STerm)
     if iscall(arg) && (operation(arg) === SRef(:-) || operation(arg) === SRef(:+))
-        return canonop(:-, arg)
+        return @makeop(:-, arg)
     end
-    return makeop(:-, arg)
+    return @makeop(:-, arg)
 end
 Base.:-(::SLiteral{S}) where {S} = SLiteral{-S}()
 Base.:-(arg::SLiteral{0}) = arg
@@ -224,21 +225,21 @@ for op in (:sqrt, :abs,
            :log, :log1p, :log2, :log10,
            :exp, :expm1, :exp2, :exp10)
     @eval function Base.$op(arg::STerm)
-        return canonop($(Meta.quot(op)), arg)
+        return @makeop($(Meta.quot(op)), arg)
     end
 end
 
 # overloading broadcasting
 function Base.Broadcast.broadcasted(f, args::Vararg{STerm})
-    return canonop(:broadcasted, SFun(f), args...)
+    return @makeop(:broadcasted, SFun(f), args...)
 end
 function Base.Broadcast.broadcasted(::typeof(Base.literal_pow), f, t::STerm, n::Val{N}) where {N}
-    return canonop(:broadcasted, SRef(:^), t, SLiteral(N))
+    return @makeop(:broadcasted, SRef(:^), t, SLiteral(N))
 end
 Base.Broadcast.broadcasted(f, a::STerm, b::Number) = Base.Broadcast.broadcasted(f, a, SLiteral(b))
 Base.Broadcast.broadcasted(f, a::Number, b::STerm) = Base.Broadcast.broadcasted(f, SLiteral(a), b)
 
-Base.ifelse(cond::STerm, x::STerm, y::STerm) = canonop(:ifelse, cond, x, y)
+Base.ifelse(cond::STerm, x::STerm, y::STerm) = @makeop(:ifelse, cond, x, y)
 Base.ifelse(cond::STerm, x::Number, y::STerm) = ifelse(cond, SLiteral(x), y)
 Base.ifelse(cond::STerm, x::STerm, y::Number) = ifelse(cond, x, SLiteral(y))
 Base.ifelse(cond::STerm, x::Number, y::Number) = ifelse(cond, SLiteral(x), SLiteral(y))

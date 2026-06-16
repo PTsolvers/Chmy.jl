@@ -82,16 +82,16 @@ function laplace_2d(nx, ny; niter=50_000, display_fig=true)
     @time for _ in 1:niter
         # compute residual
         # inner points
-        for iy in 2:Ny-1, ix in 2:Nx-1
+        for iy in 2:(Ny-1), ix in 2:(Nx-1)
             R[ix, iy] = compute(sys.c, B, ix, iy)
         end
         # x sides
-        for iy in 2:Ny-1
+        for iy in 2:(Ny-1)
             R[1, iy]  = compute(sys.l, B, 1, iy)
             R[Nx, iy] = compute(sys.r, B, Nx, iy)
         end
         # y sides
-        for ix in 2:Nx-1
+        for ix in 2:(Nx-1)
             R[ix, 1]  = compute(sys.b, B, ix, 1)
             R[ix, Ny] = compute(sys.t, B, ix, Ny)
         end

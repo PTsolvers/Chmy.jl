@@ -168,8 +168,8 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         tex = Tensor{2}(expr)
 
         @test tex isa Vec{2}
-        @test tex[1] === S[1, 1] * u[1] + S[1, 2] * u[2] + 2 * v[1]
-        @test tex[2] === S[1, 2] * u[1] + S[2, 2] * u[2] + 2 * v[2]
+        @test tex[1] === (S[1, 1] * u[1] + S[1, 2] * u[2]) + 2 * v[1]
+        @test tex[2] === (S[1, 2] * u[1] + S[2, 2] * u[2]) + 2 * v[2]
 
         @test Tensor{3}(S[1, 1]) === S[1, 1]
         @test Tensor{3}(S[1, 1] + S[2, 2]) === S[1, 1] + S[2, 2]
@@ -179,38 +179,43 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
 
         I = SIdTensor{2}()
         negI = @inferred Tensor{2}(-a * I)
-        @test negI isa DiagTensor{2,2}
-        @test negI[1, 1] === -a
-        @test negI[2, 2] === -a
+        @test negI isa SymTensor{2,2}
+        @test negI[1, 1] === (-a) * SLiteral(1)
+        @test negI[1, 2] === (-a) * SLiteral(0)
+        @test negI[2, 2] === (-a) * SLiteral(1)
 
         stress = -a * I + S
-        @test stress[1, 1] === -a + S[1, 1]
-        @test stress[1, 2] === S[1, 2]
+        @test canonicalize(stress[1, 1]) === -a + S[1, 1]
+        @test canonicalize(stress[1, 2]) === S[1, 2]
         @test (v / a)[1] === v[1] / a
         tstress = Tensor{2}(stress)
         @test tstress isa SymTensor{2,2}
-        @test tstress[1, 1] === -a + S[1, 1]
-        @test tstress[1, 2] === S[1, 2]
-        @test tstress[2, 2] === -a + S[2, 2]
+        @test tstress[1, 1] === (-a) * SLiteral(1) + S[1, 1]
+        @test tstress[1, 2] === (-a) * SLiteral(0) + S[1, 2]
+        @test tstress[2, 2] === (-a) * SLiteral(1) + S[2, 2]
 
         rawI = IdTensor{2,2}()
         left_scaled = @inferred(a * rawI)
         right_scaled = @inferred(rawI * a)
-        @test left_scaled isa DiagTensor{2,2}
-        @test left_scaled[1, 1] === a
-        @test left_scaled[2, 2] === a
-        @test right_scaled isa DiagTensor{2,2}
-        @test right_scaled[1, 1] === a
-        @test right_scaled[2, 2] === a
+        @test left_scaled isa SymTensor{2,2}
+        @test left_scaled[1, 1] === a * SLiteral(1)
+        @test left_scaled[1, 2] === a * SLiteral(0)
+        @test left_scaled[2, 2] === a * SLiteral(1)
+        @test right_scaled isa SymTensor{2,2}
+        @test right_scaled[1, 1] === SLiteral(1) * a
+        @test right_scaled[1, 2] === SLiteral(0) * a
+        @test right_scaled[2, 2] === SLiteral(1) * a
 
         zero_broadcast = @inferred Base.Broadcast.broadcasted(sin, ZeroTensor{2,2}())
-        @test zero_broadcast isa ZeroTensor{2,2}
+        @test zero_broadcast isa SymTensor{2,2}
+        @test zero_broadcast[1, 1] === sin(SLiteral(0))
+        @test zero_broadcast[1, 2] === sin(SLiteral(0))
 
         id_broadcast = @inferred Base.Broadcast.broadcasted(sin, rawI)
-        @test id_broadcast isa DiagTensor{2,2}
+        @test id_broadcast isa SymTensor{2,2}
         @test !(id_broadcast isa IdTensor{2,2})
         @test id_broadcast[1, 1] === sin(SLiteral(1))
-        @test id_broadcast[1, 2] === SLiteral(0)
+        @test id_broadcast[1, 2] === sin(SLiteral(0))
 
         widened = @inferred Base.Broadcast.broadcasted(exp, ZeroTensor{2,2}())
         @test widened isa SymTensor{2,2}
@@ -223,6 +228,40 @@ import Chmy: NoKind, SymKind, AltKind, DiagKind
         @test tst[1, 1] === sin(2S[1, 1])
         @test tst[1, 2] === sin(2S[1, 2])
         @test tst[2, 2] === sin(2S[2, 2])
+    end
+
+    @testset "tensor canonicalization and simplification" begin
+        @scalars a
+
+        rawI = IdTensor{2,2}()
+
+        left_scaled = a * rawI
+        @test left_scaled isa SymTensor{2,2}
+        @test length(left_scaled) == 3
+
+        canonical_left_scaled = canonicalize(left_scaled)
+        @test canonical_left_scaled isa DiagTensor{2,2}
+        @test length(canonical_left_scaled) == 2
+        @test canonical_left_scaled[1, 1] === a
+        @test canonical_left_scaled[1, 2] === SLiteral(0)
+        @test canonical_left_scaled[2, 2] === a
+
+        zero_broadcast = Base.Broadcast.broadcasted(sin, ZeroTensor{2,2}())
+        @test zero_broadcast isa SymTensor{2,2}
+        @test length(zero_broadcast) == 3
+
+        canonical_zero_broadcast = canonicalize(zero_broadcast)
+        @test canonical_zero_broadcast isa ZeroTensor{2,2}
+        @test length(canonical_zero_broadcast) == 0
+
+        deep_zero = Tensor{2,2}(sin(a - a), SLiteral(0), SLiteral(0), sin(a - a))
+        @test deep_zero isa DiagTensor{2,2}
+        @test length(deep_zero) == 2
+        @test canonicalize(deep_zero) isa DiagTensor{2,2}
+
+        simplified_deep_zero = simplify(deep_zero)
+        @test simplified_deep_zero isa ZeroTensor{2,2}
+        @test length(simplified_deep_zero) == 0
     end
 
     @testset "uniform compute bindings" begin

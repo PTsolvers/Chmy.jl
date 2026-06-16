@@ -1,6 +1,5 @@
 using Test
 using Chmy
-import Chmy: makeop
 
 @testset "isless_lex" begin
     @scalars a b c
@@ -50,8 +49,8 @@ import Chmy: makeop
         @test isless_lex(sin(a), sin(b))
         @test !isless_lex(sin(b), sin(a))
 
-        @test isless_lex(makeop(:+, a, c), makeop(:+, b, a))
-        @test !isless_lex(makeop(:+, b, a), makeop(:+, a, c))
+        @test isless_lex(a + c, b + a)
+        @test !isless_lex(b + a, a + c)
 
         @test isless_lex(v[1], v[2])
         @test !isless_lex(v[2], v[1])

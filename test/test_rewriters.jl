@@ -1,8 +1,6 @@
 using Test
 using Chmy
 
-@inline sameterm(a::STerm, b::STerm) = a === b
-
 @testset "rewriters" begin
     @scalars a b c
     i = SIndex(1)
@@ -18,8 +16,8 @@ using Chmy
         passthrough = Passthrough(replace_a)
 
         @test Passthrough(passthrough) === passthrough
-        @test sameterm(passthrough(a), b)
-        @test sameterm(passthrough(c), c)
+        @test passthrough(a) === b
+        @test passthrough(c) === c
     end
 
     @testset "Chain" begin
@@ -31,8 +29,8 @@ using Chmy
         safe_chain = Chain(replace_a, replace_a_again)
 
         @test Chain(chain) === chain
-        @test sameterm(chain(a), b)
-        @test sameterm(Chain((replace_a, replace_a_again))(a), b)
+        @test chain(a) === b
+        @test Chain((replace_a, replace_a_again))(a) === b
         @test isnothing(safe_chain(c))
         @test isnothing(Chain()(a))
 
@@ -51,48 +49,42 @@ using Chmy
             return nothing
         end
 
-        @test sameterm(Prewalk(rule)(expr), b[i])
-        @test sameterm(Postwalk(rule)(expr), c)
+        @test Prewalk(rule)(expr) === b[i]
+        @test Postwalk(rule)(expr) === c
     end
 
     @testset "Fixpoint" begin
         chain = t -> t === a ? b : (t === b ? c : nothing)
-        @test sameterm(Fixpoint(chain)(a), c)
-        @test sameterm(Fixpoint(chain)(c), c)
+        @test Fixpoint(chain)(a) === c
+        @test Fixpoint(chain)(c) === c
     end
 
     @testset "stencil_rule" begin
-        @test sameterm(stencil_rule(SRef(:+), (a, b), (i, j)), a[i, j] + b[i, j])
-        @test sameterm(stencil_rule(SRef(:+), (a, b), (seg, pt), (i, j)), a[seg, pt][i, j] + b[seg, pt][i, j])
+        @test stencil_rule(SRef(:+), (a, b), (i, j)) === a[i, j] + b[i, j]
+        @test stencil_rule(SRef(:+), (a, b), (seg, pt), (i, j)) === a[seg, pt][i, j] + b[seg, pt][i, j]
     end
 
     @testset "immediate indexing" begin
-        @test sameterm((a+b)[i, j], a[i, j] + b[i, j])
+        @test (a+b)[i, j] === a[i, j] + b[i, j]
 
-        @test sameterm((a[seg, pt]+b)[i, j], b[i, j] + a[seg, pt][i, j])
+        @test (a[seg, pt]+b)[i, j] === a[seg, pt][i, j] + b[i, j]
 
-        @test sameterm(a[seg][i], a[seg][i])
-        @test sameterm(sin(a + b)[seg, pt], sin(a[seg, pt] + b[seg, pt]))
+        @test a[seg][i] === a[seg][i]
+        @test sin(a + b)[seg, pt] === sin(a[seg, pt] + b[seg, pt])
     end
 
     @testset "lift" begin
         @test @inferred(Chmy.replace_index((i, j), c, Val(2))) === (i, c)
-
-        @test sameterm(lift(SRef(:+), (a, b), (i, j), Val(1)),
-                       a[i, j] + b[i, j])
-
-        @test sameterm(lift(SRef(:+), (a, b), (i, j), Val(2)),
-                       a[i, j] + b[i, j])
-
-        @test sameterm(lift(SRef(:+), (a, b), (seg, pt), (i, j), Val(2)),
-                       a[seg, pt][i, j] + b[seg, pt][i, j])
+        @test lift(SRef(:+), (a, b), (i, j), Val(1)) === a[i, j] + b[i, j]
+        @test lift(SRef(:+), (a, b), (i, j), Val(2)) === a[i, j] + b[i, j]
+        @test lift(SRef(:+), (a, b), (seg, pt), (i, j), Val(2)) === a[seg, pt][i, j] + b[seg, pt][i, j]
     end
 
     @testset "subs" begin
-        @test sameterm(subs(a, a => c), c)
-        @test sameterm(subs(a + b, a => c), b + c)
-        @test sameterm(subs((a + b)[i], a[i] => c[i]), b[i] + c[i])
-        @test sameterm(subs(a + b, a => c, b => a), a + c)
-        @test sameterm(subs(a, a => b, a => c), b)
+        @test subs(a, a => c) === c
+        @test subs(a + b, a => c) === b + c
+        @test subs((a+b)[i], a[i] => c[i]) === b[i] + c[i]
+        @test subs(a + b, a => c, b => a) === a + c
+        @test subs(a, a => b, a => c) === b
     end
 end

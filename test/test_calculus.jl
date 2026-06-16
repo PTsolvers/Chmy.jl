@@ -43,14 +43,14 @@ using Chmy
 
         @test !isuniform(diff(a))
         @test !isuniform(grad(a))
-        @test diff(a)[i] === SLiteral(0)
-        @test diff(sin(a))[i] === SLiteral(0)
-        @test grad(a)[1][i] === SLiteral(0)
-        @test grad(u)[1, 1][i] === SLiteral(0)
-        @test grad(T)[1, 1, 1][i] === SLiteral(0)
-        @test divg(u)[i] === SLiteral(0)
-        @test divg(T)[1][i] === SLiteral(0)
-        @test Tensor{2}(curl(u))[i, j] === SLiteral(0)
+        @test simplify(diff(a)[i]) === SLiteral(0)
+        @test simplify(diff(sin(a))[i]) === SLiteral(0)
+        @test simplify(grad(a)[1][i]) === SLiteral(0)
+        @test simplify(grad(u)[1, 1][i]) === SLiteral(0)
+        @test simplify(grad(T)[1, 1, 1][i]) === SLiteral(0)
+        @test simplify(divg(u)[i]) === SLiteral(0)
+        @test simplify(divg(T)[1][i]) === SLiteral(0)
+        @test simplify(Tensor{2}(curl(u))[i, j]) === SLiteral(0)
         @test a[p, s][i, j] === a
     end
 
@@ -104,7 +104,7 @@ using Chmy
 
         expr = divg(grad(a))
         @test expr[s, s][i, j] === Tensor{2}(expr)[s, s][i, j]
-        @test (-grad(a))[1][p, s][i, j] === -a[s, s][i, j] + a[s, s][i - 1, j]
+        @test simplify((-grad(a))[1][p, s][i, j]) === -a[s, s][i, j] + a[s, s][i-1, j]
     end
 
     @testset "immediate lowering inference" begin

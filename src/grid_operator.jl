@@ -309,7 +309,7 @@ Return the maximum reach of all the stencils in the object.
 reach(nu::Nonuniforms) = reach_nonuniforms(values(stencils(nu)))
 
 reach_nonuniforms(::Tuple{}) = Binding()
-reach_nonuniforms(stencils::Tuple) = mergewith(max, map(reach, stencils)...)
+reach_nonuniforms(stencils::Tuple) = mergewith(constval ∘ max, map(reach, stencils)...)
 
 """
     nonuniforms(expr)

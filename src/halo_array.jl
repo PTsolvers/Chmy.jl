@@ -127,7 +127,7 @@ _interior_ranges(A::HaloArray{T,N}) where {T,N} = ntuple(i -> _interior_range(A,
 
 function _interior_range(A::HaloArray, i)
     lower = halowidths(A)[i][1]
-    return lower+1:lower+size(A, i)
+    return (lower+1):(lower+size(A, i))
 end
 
 function _halo_range(A::HaloArray, ::Lower, i)
@@ -139,7 +139,7 @@ function _halo_range(A::HaloArray, ::Upper, i)
     lower = halowidths(A)[i][1]
     interior_size = size(A, i)
     upper = halowidths(A)[i][2]
-    return lower+interior_size+1:lower+interior_size+upper
+    return (lower+interior_size+1):(lower+interior_size+upper)
 end
 
 _halo_range(A::HaloArray, ::Span, i) = _interior_range(A, i)

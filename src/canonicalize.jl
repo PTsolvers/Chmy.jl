@@ -45,9 +45,9 @@ tensorrank(monomial::Monomial) = maximum(tensorrank, keys(monomial.powers); init
 function addpower(binding, term, power)
     if haskey(binding, term)
         # keep merged exponents canonicalized as we accumulate factors
-        return push(binding, term => binding[term] + power)
+        return push(binding, term => canonicalize_sum(binding[term] + power))
     else
-        return push(binding, term => power)
+        return push(binding, term => canonicalize_sum(power))
     end
 end
 
@@ -57,7 +57,7 @@ Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff,
     if op === SRef(:*)
         # flatten the tree and accumulate powers
         coeff, binding = collect_powers(first(arguments(term)), coeff, binding, npow)
-        rest = makeop(:*, Base.tail(arguments(term))...)
+        rest = *(Base.tail(arguments(term))...)
         coeff, binding = collect_powers(rest, coeff, binding, npow)
     elseif op === SRef(:/)
         # a / b is treated as a * b^-1, so powers in the denominator are negated
@@ -84,7 +84,7 @@ Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff,
     elseif op === SRef(:^)
         # fold nested powers by multiplying exponents
         base, exp = arguments(term)
-        newnpow = isstaticone(npow) ? exp : npow * exp
+        newnpow = isstaticone(npow) ? exp : canonicalize_product(npow * exp)
         coeff, binding = collect_powers(base, coeff, binding, newnpow)
     else
         binding = addpower(binding, term, npow)
@@ -118,9 +118,9 @@ function splitpower(num, den, base, npow)
         if isstaticone(-npow)
             return num, (den..., base)
         end
-        return num, (den..., makeop(:^, base, -npow))
+        return num, (den..., base^(-npow))
     else
-        return (num..., makeop(:^, base, npow)), den
+        return (num..., base^npow), den
     end
 end
 
@@ -140,18 +140,18 @@ function abs_product_expr(m::Monomial)
 
     if isempty(num)
         isempty(den) && return SLiteral(c)
-        isone(c) && return makeop(:inv, makeop(:*, den...))
-        return makeop(:/, SLiteral(c), makeop(:*, den...))
+        isone(c) && return inv(*(den...))
+        return SLiteral(c) / *(den...)
     end
 
     if isempty(den)
-        isone(c) && return makeop(:*, num...)
-        return makeop(:*, SLiteral(c), num...)
+        isone(c) && return *(num...)
+        return *(SLiteral(c), num...)
     end
 
-    expr = makeop(:/, makeop(:*, num...), makeop(:*, den...))
+    expr = *(num...) / *(den...)
 
-    return isone(c) ? expr : makeop(:*, SLiteral(c), expr)
+    return isone(c) ? expr : SLiteral(c) * expr
 end
 
 function STerm(monomial::Monomial)
@@ -210,18 +210,27 @@ end
 
 canonicalize_product(expr::STerm) = STerm(Monomial(expr))
 
+function addfactor(binding, term, factor)
+    if haskey(binding, term)
+        # keep merged exponents canonicalized as we accumulate factors
+        return push(binding, term => binding[term] + factor)
+    else
+        return push(binding, term => factor)
+    end
+end
+
 collect_terms(expr::STerm) = collect_terms(expr, Binding(), StaticCoeff(1))
 function collect_terms(expr::STerm, binding, add)
     # map each monomial basis to its accumulated scalar coefficient
     mon = Monomial(expr)
-    return addpower(binding, mon.powers, add * mon.coeff)
+    return addfactor(binding, mon.powers, add * mon.coeff)
 end
 Base.@assume_effects :foldable function collect_terms(expr::SExpr{Call}, binding, add)
     op = operation(expr)
     if op === SRef(:+)
         arg = first(arguments(expr))
         binding = collect_terms(arg, binding, add)
-        rest = makeop(:+, Base.tail(arguments(expr))...)
+        rest = +(Base.tail(arguments(expr))...)
         binding = collect_terms(rest, binding, add)
     elseif op === SRef(:-)
         if arity(expr) == 1
@@ -234,7 +243,7 @@ Base.@assume_effects :foldable function collect_terms(expr::SExpr{Call}, binding
         end
     else
         mon = Monomial(expr)
-        binding = addpower(binding, mon.powers, add * mon.coeff)
+        binding = addfactor(binding, mon.powers, add * mon.coeff)
     end
     return binding
 end
@@ -244,11 +253,11 @@ function build_tree(expr, monomials)
     mon = first(monomials)
     # rebuild as `+`/`-` to preserve readable signs in the final tree
     if isnegative(mon.coeff)
-        new_expr = makeop(:-, expr, abs_product_expr(mon))
+        new_expr = expr - abs_product_expr(mon)
     elseif iscall(expr) && operation(expr) === SRef(:+)
         new_expr = SExpr(Call(), children(expr)..., abs_product_expr(mon))
     else
-        new_expr = makeop(:+, expr, abs_product_expr(mon))
+        new_expr = expr + abs_product_expr(mon)
     end
     return build_tree(new_expr, Base.tail(monomials))
 end
@@ -290,9 +299,26 @@ Canonicalization is not recursively applied to subterms, for a recursive version
 """
 canonicalize(expr::STerm) = Passthrough(CanonicalizeRule())(expr)
 
+@generated function map_tensor_components(f, t::Tensor{D,R}) where {D,R}
+    components = Expr(:tuple)
+    for idx in CartesianIndices(ntuple(_ -> D, Val(R)))
+        I = Tuple(idx)
+        push!(components.args, :(f(t[$(I...)])))
+    end
+    return components
+end
+
+function canonicalize(t::Tensor{D,R}) where {D,R}
+    return Tensor{D,R}(map_tensor_components(canonicalize, t)...)
+end
+
 """
     simplify(expr)
 
 Return a simplified form of a symbolic expression `expr` by recursively applying `canonicalize` to all subterms of `expr`.
 """
 simplify(expr::STerm) = Postwalk(CanonicalizeRule())(expr)
+
+function simplify(t::Tensor{D,R}) where {D,R}
+    return Tensor{D,R}(map_tensor_components(simplify, t)...)
+end

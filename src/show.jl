@@ -325,7 +325,7 @@ function stencil_coords(s::Stencil)
 end
 
 function stencil_coord(shift::Shift, loc::Space)
-    shifted_location = SLiteral(shift) + offset(loc)
+    shifted_location = constval(SLiteral(shift) + offset(loc))
     return value(shifted_location)
 end
 
@@ -842,7 +842,7 @@ function render_stencil(geometry::StencilGeometry, opts::StencilRenderOptions)
     natural_width = layout.width + opts.left_margin + opts.right_margin
     left_padding = opts.left_margin + fld(width - natural_width, 2)
     draw_stencil!(canvas, 1, left_padding + 1, geometry, layout)
-    return join(view(canvas.cells, 1:lastindex(canvas.cells)-1))
+    return join(view(canvas.cells, 1:(lastindex(canvas.cells)-1)))
 end
 
 function render_stencil(s::Stencil; kwargs...)
@@ -971,5 +971,5 @@ function Base.show(io::IO, ::MIME"text/plain", nu::Nonuniforms)
                  line_breaks=true,
                  fit_table_in_display_horizontally=false,
                  fit_table_in_display_vertically=false,
-                 table_format=TextTableFormat(; horizontal_lines_at_data_rows=:all),)
+                 table_format=TextTableFormat(; horizontal_lines_at_data_rows=:all))
 end

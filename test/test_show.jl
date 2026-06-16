@@ -1,6 +1,6 @@
 using Test
 using Chmy
-import Chmy: makeop, render_stencil
+import Chmy: render_stencil
 
 struct UnknownShowTerm <: Chmy.STerm
     x::Int
@@ -22,7 +22,7 @@ Base.show(io::IO, t::CustomBaseShowTerm) = print(io, "base(", t.x, ")")
     @test sprint(show, -a + b) == "-a + b"
     @test sprint(show, (-a)^b) == "(-a) ^ b"
     @test sprint(show, a + b - a / b) == "a + b - a / b"
-    @test sprint(show, makeop(:-, a, makeop(:+, b, a^b))) == "a - (b + a ^ b)"
+    @test sprint(show, a - (b + a^b)) == "a - (b + a ^ b)"
     @test sprint(show, a .+ b) == "a .+ b"
     @test sprint(show, sin.(a)) == "sin.(a)"
     @test sprint(show, BoundaryTangent()) == "T"

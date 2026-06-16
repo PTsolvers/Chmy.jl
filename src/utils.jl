@@ -1,6 +1,6 @@
 function inversion_count(t::NTuple{N}) where {N}
     s = 0
-    for i in 1:N-1, j in i+1:N
+    for i in 1:(N-1), j in (i+1):N
         s += t[i] > t[j]
     end
     return s
