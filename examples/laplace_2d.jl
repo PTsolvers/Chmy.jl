@@ -101,4 +101,4 @@ function laplace_2d(nx, ny; niter=50_000, display_fig=true)
     return
 end
 
-laplace_2d(101, 101; niter=100)
+laplace_2d(101, 101)
