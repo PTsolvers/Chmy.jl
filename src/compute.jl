@@ -11,7 +11,7 @@ indexed expressions can read from array-valued bindings using `inds...`.
 
 Omitting `binding` uses an empty binding `Binding()`.
 """
-Base.@propagate_inbounds compute(expr::STerm, binding::Binding, inds::Vararg{Integer,N}) where {N} = compute_expr(expr, binding, inds)
+Base.@propagate_inbounds compute(expr::STerm, binding::Binding, inds::Vararg{Integer,N}) where {N} = compute_expr(simplify(expr), binding, inds)
 Base.@propagate_inbounds compute(expr::STerm, inds::Vararg{Integer,N}) where {N} = compute(expr, Binding(), inds...)
 
 # `compute` is implemented as generated function so a fully static symbolic term and
