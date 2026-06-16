@@ -82,9 +82,9 @@ using Chmy
 
     @testset "subs" begin
         @test subs(a, a => c) === c
-        @test subs(a + b, a => c) === b + c
-        @test subs((a+b)[i], a[i] => c[i]) === b[i] + c[i]
-        @test subs(a + b, a => c, b => a) === a + c
+        @test subs(a + b, a => c) === c + b
+        @test subs((a+b)[i], a[i] => c[i]) === c[i] + b[i]
+        @test subs(a + b, a => c, b => a) === c + a
         @test subs(a, a => b, a => c) === b
     end
 end

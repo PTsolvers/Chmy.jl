@@ -6,7 +6,7 @@ tried in the given order, and the first matching pair is applied.
 """
 function subs(expr::STerm, kvs::Pair...)
     rules = map(SubsRule, kvs)
-    return simplify(Postwalk(Chain(rules))(expr))
+    return Postwalk(Chain(rules))(expr)
 end
 
 struct SubsRule{Lhs,Rhs} <: AbstractRule
