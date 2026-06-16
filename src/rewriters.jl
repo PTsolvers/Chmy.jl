@@ -45,7 +45,6 @@ Chain(chain::Chain) = chain
 Chain(rules...) = Chain(rules)
 
 _chainfirst(::Tuple{}, ::STerm) = nothing
-
 function _chainfirst(rules::Tuple, term::STerm)
     new_term = first(rules)(term)
     isnothing(new_term) || return new_term

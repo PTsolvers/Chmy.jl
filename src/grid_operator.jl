@@ -34,6 +34,9 @@ struct CartesianShift{N,S}
 end
 CartesianShift(shifts::Vararg{Shift}) = CartesianShift(shifts)
 
+CartesianShift(inds::NTuple{N,STerm}) where {N} = CartesianShift(map(Shift, inds))
+CartesianShift(inds::Vararg{STerm}) = CartesianShift(inds)
+
 """
     δ(shifts...)
 
@@ -46,9 +49,9 @@ Base.isless(a::CartesianShift, b::CartesianShift) = isless_tuple(a.shifts, b.shi
 
 Base.getindex(s::STerm, o::CartesianShift) = getindex(s, o.shifts...)
 
-get_shift(::SIndex) = Shift(0)
-get_shift(shift::Shift) = shift
-function get_shift(ind::SExpr{Call})
+Shift(::SIndex) = Shift(0)
+Shift(shift::Shift) = shift
+function Shift(ind::SExpr{Call})
     op = operation(ind)
     i, o = arguments(ind)
     if !(op === SRef(:+) || op === SRef(:-)) || !isa(i, SIndex) || !isa(o, SLiteral)
@@ -56,10 +59,6 @@ function get_shift(ind::SExpr{Call})
     end
     return operation(ind) === SRef(:+) ? Shift(o) : Shift(-o)
 end
-
-nonuniform_location(_) = nothing
-nonuniform_location(arg::SExpr{Loc}) = location(arg)
-nonuniform_shift(_, inds) = CartesianShift(map(get_shift, inds))
 
 """
     AxisFace
@@ -320,10 +319,16 @@ Returns a Binding containing pairs of nonuniform fields and their corresponding 
 nonuniforms(::STerm) = Nonuniforms()
 nonuniforms(expr::SExpr{Call}) = mergewith(merge, map(nonuniforms, arguments(expr))...)
 function nonuniforms(expr::SExpr{Ind})
-    shift = nonuniform_shift(argument(expr), indices(expr))
-    stencil = Stencil(nonuniform_location(argument(expr)), shift)
-    return Nonuniforms(argument(expr) => stencil)
+    inds = indices(expr)
+    shift = CartesianShift(inds)
+    arg = argument(expr)
+    loc = nonuniform_location(arg, inds)
+    stencil = Stencil(loc, shift)
+    return Nonuniforms(arg => stencil)
 end
+
+nonuniform_location(_, inds::Tuple{Vararg{STerm,N}}) where {N} = ntuple(i -> Point(), Val(N))
+nonuniform_location(arg::SExpr{Loc}, ::Tuple{Vararg{STerm,N}}) where {N} = location(arg)
 
 """
     GridOperator(expr, rules)
@@ -370,7 +375,7 @@ _canonical_indices(::Val{N}) where {N} = ntuple(SIndex, Val(N))
 
 interior_face(::Val{N}) where {N} = Face(ntuple(_ -> Span(), Val(N))...)
 
-lowered_interior(expr::STerm, loc::NTuple{N,Space}) where {N} = unwrap(expr[loc...][_canonical_indices(Val(N))...])
+lowered_interior(expr::STerm, loc::NTuple{N,Space}) where {N} = expr[loc...][_canonical_indices(Val(N))...]
 
 codim_shift_tuple(face::Face, shifts::CartesianShift) = codim_shift_tuple(face, shifts.shifts)
 function codim_shift_tuple(face::Face, ::Tuple{})
@@ -432,7 +437,7 @@ end
 
 Return the expression for `op` on `face` at `loc` and codimension-sized `shift`.
 
-If no rule applies to `face`, this returns the unwrapped lowered interior
+If no rule applies to `face`, this returns the lowered interior
 expression. For higher-codimension faces, only available adjacent boundary
 rules are applied.
 """
@@ -561,220 +566,3 @@ Base.getindex(::BasisVector{I}, ::SLiteral{J}) where {I,J} = SLiteral(I == J ? 1
 function Tensor{D}(v::BasisVector) where {D}
     return Vec{D}(ntuple(i -> v[SLiteral(i)], Val(D))...)
 end
-
-"""
-    CompiledGridOperator(op, loc)
-
-Precompute a [`GridOperator`](@ref) at the grid location `loc`.
-
-The compiled operator stores expressions in a two-level [`Binding`](@ref):
-faces map to bindings whose keys are codimension-sized [`CartesianShift`](@ref)
-objects and whose values are lowered, ready-to-compute symbolic expressions.
-Only shifts that can actually require boundary treatment are compiled. Axes
-without an applicable boundary rule are kept inactive, so lookups that vary only
-along those axes share the same expression and preserve untouched halo reads.
-"""
-struct CompiledGridOperator{N,L,E,A}
-    loc::L
-    exprs::E
-    active::A
-end
-
-Base.ndims(::CompiledGridOperator{N}) where {N} = N
-
-function CompiledGridOperator(op::GridOperator, loc::NTuple{N,Space}) where {N}
-    interior = lowered_interior(op.expr, loc)
-    reach = stencil_reach(interior, loc)
-    expr_pairs, active_pairs = compile_face_pairs(op, loc, reach, all_faces(Val(N)))
-    exprs = Binding(interior_face(Val(N)) => Binding(δ() => interior), expr_pairs...)
-    active_axes = Binding(active_pairs...)
-    return CompiledGridOperator{N,typeof(loc),typeof(exprs),typeof(active_axes)}(loc, exprs, active_axes)
-end
-
-"""
-    operator(compiled, face, shift)
-
-Return the precomputed expression for `face` and codimension-sized `shift`.
-
-If the face or shift does not require boundary treatment, the compiled interior
-expression is returned. Shift coordinates for inactive axes are ignored.
-"""
-function operator(op::CompiledGridOperator{N}, face::Face, shift) where {N}
-    ndims(face) == N || throw(ArgumentError("face dimension $(ndims(face)) does not match compiled operator dimension $N"))
-    shifts = codim_shift_tuple(face, shift)
-
-    if haskey(op.exprs, face)
-        bnd = op.exprs[face]
-        mask = get(op.active, face, ntuple(_ -> false, Val(codim(face))))
-        key = CartesianShift(tuplemap(inactive_to_zero, shifts, mask))
-        haskey(bnd, key) && return bnd[key]
-    end
-
-    return compiled_interior(op)
-end
-
-inactive_to_zero(shift::Shift, active::Bool) = active ? shift : Shift(0)
-
-compiled_interior(op::CompiledGridOperator{N}) where {N} = op.exprs[interior_face(Val(N))][δ()]
-
-all_faces(::Val{0}) = (Face(),)
-function all_faces(::Val{N}) where {N}
-    tail = all_faces(Val(N - 1))
-    return (_prepend_axis(Lower(), tail)...,
-            _prepend_axis(Span(), tail)...,
-            _prepend_axis(Upper(), tail)...)
-end
-
-compile_face_pairs(::GridOperator, _, _, ::Tuple{}) = (), ()
-function compile_face_pairs(op::GridOperator, loc, reach, faces::Tuple)
-    face = first(faces)
-    expr_tail, active_tail = compile_face_pairs(op, loc, reach, Base.tail(faces))
-    codim(face) == 0 && return expr_tail, active_tail
-
-    rule = combine_rules(op.rules, face)
-    isnothing(rule) && return expr_tail, active_tail
-
-    ranges, mask = compiled_shift_ranges(rule, face, reach)
-    tuple_any(mask) || return expr_tail, active_tail
-
-    expr_pair = face => compile_face(op, face, loc, ranges)
-    active_pair = face => mask
-    return (expr_pair, expr_tail...), (active_pair, active_tail...)
-end
-
-function compile_face(op::GridOperator, face::Face, loc, ranges::Tuple)
-    return Binding(compile_shift_pairs(op, face, loc, ranges)...)
-end
-
-function compile_shift_pairs(op::GridOperator, face::Face, loc, ranges::Tuple)
-    return compile_shift_pairs(op, face, loc, ranges, ())
-end
-function compile_shift_pairs(op::GridOperator, face::Face, loc, ::Tuple{}, prefix::Tuple)
-    shift = CartesianShift(prefix...)
-    return (shift => operator(op, face, loc, shift),)
-end
-function compile_shift_pairs(op::GridOperator, face::Face, loc, ranges::Tuple, prefix::Tuple)
-    return compile_shift_range(op, face, loc, first(ranges), Base.tail(ranges), prefix)
-end
-
-compile_shift_range(::GridOperator, ::Face, _, ::Tuple{}, ::Tuple, ::Tuple) = ()
-function compile_shift_range(op::GridOperator, face::Face, loc, range::Tuple, rest::Tuple, prefix::Tuple)
-    shift = first(range)
-    pairs = compile_shift_pairs(op, face, loc, rest, (prefix..., shift))
-    return (pairs..., compile_shift_range(op, face, loc, Base.tail(range), rest, prefix)...)
-end
-
-function compiled_shift_ranges(rule, face::Face, reach)
-    active_axes = rule_axes(rule, face)
-    return compiled_shift_ranges(boundary_axes(face), active_axes, face, reach, Val(ndims(face)))
-end
-
-compiled_shift_ranges(::Tuple{}, ::Tuple, ::Face, _, ::Val) = (), ()
-function compiled_shift_ranges(axes::Tuple, active_axes::Tuple, face::Face, reach, ::Val{N}) where {N}
-    I = first(axes)
-    side_face = codim1_face(Val(N), Val(I), face.axes[I])
-    active = has_axis(active_axes, I) && haskey(reach, side_face)
-    range = active ? reach[side_face] : (Shift(0),)
-    rest_ranges, rest_mask = compiled_shift_ranges(Base.tail(axes), active_axes, face, reach, Val(N))
-    return (range, rest_ranges...), (active, rest_mask...)
-end
-
-tuple_any(::Tuple{}) = false
-function tuple_any(values::Tuple)
-    first(values) && return true
-    return tuple_any(Base.tail(values))
-end
-
-rule_axes(rule, face::Face) = boundary_axes(face)
-function rule_axes(rule::CombinedRule, face::Face)
-    return rule_pair_axes(rule.rules)
-end
-
-rule_pair_axes(::Tuple{}) = ()
-function rule_pair_axes(pairs::Tuple)
-    pair = first(pairs)
-    return merge_axes(boundary_axes(pair.first), rule_pair_axes(Base.tail(pairs)))
-end
-
-merge_axes(::Tuple{}, axes::Tuple) = axes
-function merge_axes(axes::Tuple, rest::Tuple)
-    axis = first(axes)
-    merged = has_axis(rest, axis) ? rest : (axis, rest...)
-    return merge_axes(Base.tail(axes), merged)
-end
-
-has_axis(::Tuple{}, ::Integer) = false
-function has_axis(axes::Tuple, axis::Integer)
-    first(axes) == axis && return true
-    return has_axis(Base.tail(axes), axis)
-end
-
-function codim1_face(::Val{N}, ::Val{I}, axis::A) where {N,I,A<:AxisFace}
-    return Face(ntuple(j -> j == I ? axis : Span(), Val(N))...)
-end
-
-function stencil_reach(expr::STerm, loc::NTuple{N,Space}) where {N}
-    nu = nonuniforms(expr)
-    return Binding(stencil_reach_pairs(nu, loc, Val(1), Val(N))...)
-end
-
-function stencil_reach_pairs(nu::Nonuniforms, loc, ::Val{I}, ::Val{N}) where {I,N}
-    I > N && return ()
-    lower = axis_reach(nu, loc, Val(I), Lower())
-    upper = axis_reach(nu, loc, Val(I), Upper())
-    lower_pairs = isempty(lower) ? () : (codim1_face(Val(N), Val(I), Lower()) => lower,)
-    upper_pairs = isempty(upper) ? () : (codim1_face(Val(N), Val(I), Upper()) => upper,)
-    return (lower_pairs..., upper_pairs..., stencil_reach_pairs(nu, loc, Val(I + 1), Val(N))...)
-end
-
-function axis_reach(nu::Nonuniforms, loc, ::Val{I}, ::Lower) where {I}
-    maxshift = lower_reach_stencils(values(stencils(nu)), loc, Val(I), -1)
-    return maxshift < 0 ? () : shift_range(0, maxshift)
-end
-
-function axis_reach(nu::Nonuniforms, loc, ::Val{I}, ::Upper) where {I}
-    start = upper_start_shift(loc[I])
-    minshift = upper_reach_stencils(values(stencils(nu)), loc, Val(I), start, start + 1)
-    return minshift > start ? () : shift_range(minshift, start)
-end
-
-lower_reach_stencils(::Tuple{}, _, ::Val, maxshift) = maxshift
-function lower_reach_stencils(stencils::Tuple, loc, ::Val{I}, maxshift) where {I}
-    stencil = first(stencils)
-    read_loc = stencil_axis_location(stencil, loc, Val(I))
-    next = lower_reach_shifts(stencil.shifts, value(offset(read_loc)), Val(I), maxshift)
-    return lower_reach_stencils(Base.tail(stencils), loc, Val(I), next)
-end
-
-lower_reach_shifts(::Tuple{}, _, ::Val, maxshift) = maxshift
-function lower_reach_shifts(shifts::Tuple, off, ::Val{I}, maxshift) where {I}
-    shift = first(shifts)
-    bound = floor(Int, -(value(shift.shifts[I]) + off))
-    return lower_reach_shifts(Base.tail(shifts), off, Val(I), max(maxshift, bound))
-end
-
-upper_reach_stencils(::Tuple{}, _, ::Val, _, minshift) = minshift
-function upper_reach_stencils(stencils::Tuple, loc, ::Val{I}, start, minshift) where {I}
-    stencil = first(stencils)
-    read_loc = stencil_axis_location(stencil, loc, Val(I))
-    next = upper_reach_shifts(stencil.shifts, value(offset(read_loc)), Val(I), start, minshift)
-    return upper_reach_stencils(Base.tail(stencils), loc, Val(I), start, next)
-end
-
-upper_reach_shifts(::Tuple{}, _, ::Val, _, minshift) = minshift
-function upper_reach_shifts(shifts::Tuple, off, ::Val{I}, start, minshift) where {I}
-    shift = first(shifts)
-    bound = ceil(Int, -(value(shift.shifts[I]) + off))
-    next = bound <= start ? min(minshift, bound) : minshift
-    return upper_reach_shifts(Base.tail(shifts), off, Val(I), start, next)
-end
-
-function shift_range(first::Integer, last::Integer)
-    first > last && return ()
-    return (Shift(first), shift_range(first + 1, last)...)
-end
-
-stencil_axis_location(stencil::Stencil, loc, ::Val{I}) where {I} = stencil.location[I]
-
-upper_start_shift(::Point) = 0
-upper_start_shift(::Segment) = -1

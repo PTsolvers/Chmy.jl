@@ -38,9 +38,6 @@ export Tensor, SymTensor, AltTensor, DiagTensor, Vec, ZeroTensor, IdTensor
 export tensorrank, tensorkind, name
 include("tensors.jl")
 
-export SNode, node, unwrap
-include("snode.jl")
-
 export @scalars, @vectors, @tensors, @uniform, @sym, @diag, @alt, @id, @zero
 include("macros.jl")
 
@@ -64,12 +61,10 @@ export Binding, push, binding_types, pairstuple
 include("binding.jl")
 
 export Shift, CartesianShift, AxisFace, Lower, Upper, Span, Face, Stencil, Nonuniforms
-export δ, adjacent_faces, isfacet, facet, facets, boundary_rule, boundary_operator, dim, codim, nonuniforms, reach
-export ExtensionRule, ExtensionSpec, ExtensionOperator, PolynomialReconstruction, LinearReconstruction, BoundaryNormal, BoundaryTangent, BasisVector, project_boundary, reconstruct
-export BoundaryData, ValueData, DerivativeData
-export GridOperator, CompiledGridOperator, operator
+export δ, adjacent_faces, dim, codim, nonuniforms, reach, facet, facets, isfacet
+export BoundaryNormal, BoundaryTangent, BasisVector
+export GridOperator, operator
 include("grid_operator.jl")
-include("field_extensions.jl")
 
 export HaloArray, halowidths, interior, halo
 include("halo_array.jl")

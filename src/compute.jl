@@ -18,7 +18,7 @@ Base.@propagate_inbounds compute(expr::STerm, inds::Vararg{Integer,N}) where {N}
 # the concrete binding types can be turned into plain Julia code with no
 # runtime overhead.
 @generated function compute_expr(expr, b, I)
-    expri = unwrap(expr.instance)
+    expri = expr.instance
     bndi = Binding(b.types[1].instance, Tuple(b.types[2].types))
     return quote
         Base.@_propagate_inbounds_meta
@@ -54,7 +54,6 @@ to_expr(sf::SFun, bnd) = sf.f
 
 # Calls are lowered structurally by recursively translating all children.
 to_expr(expr::SExpr{Call}, bnd) = Expr(:call, map(arg -> to_expr(arg, bnd), children(expr))...)
-to_expr(expr::SNode, bnd) = to_expr(unwrap(expr), bnd)
 to_expr(::SLiteral{Value}, bnd) where {Value} = Value
 to_expr(::SIndex{i}, bnd) where {i} = :(I[$i])
 function to_expr(expr::SExpr{Ind}, bnd)

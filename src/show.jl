@@ -8,7 +8,6 @@ function to_subscript(::Val{i}) where {i}
     end
 end
 
-const SHOW_NODE_FACE = StyledStrings.Face(; foreground=:red)
 const STENCIL_ACTIVE_FACE = StyledStrings.Face(; foreground=:blue, weight=:bold)
 
 show_style(::STerm) = NamedTuple()
@@ -135,12 +134,6 @@ end
 
 function styled_expr(::Shift{S}, ::Int) where {S}
     return annotatedstring("δ(", S, ")")
-end
-
-function styled_expr(node::SNode, ::Int)
-    return annotatedstring(annotated_text("(", SHOW_NODE_FACE),
-                           styled_expr(argument(node), 0),
-                           annotated_text(")", SHOW_NODE_FACE))
 end
 
 function styled_expr(t::STensor{R,<:Any,<:Any,N}, ::Int) where {R,N}

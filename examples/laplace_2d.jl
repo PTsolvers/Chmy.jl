@@ -25,7 +25,7 @@ function laplace_2d(nx, ny; niter=50_000, display_fig=true)
     @scalars f
     # Keep flux components structurally intact so boundary substitutions can
     # still match them after the residual is simplified.
-    q = node(-grad(f))
+    q = -grad(f)
     r = -divg(q)
     r_c = r[s, s][i, j]
 

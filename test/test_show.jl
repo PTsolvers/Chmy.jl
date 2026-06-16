@@ -18,7 +18,6 @@ Base.show(io::IO, t::CustomBaseShowTerm) = print(io, "base(", t.x, ")")
 
 @testset "show" begin
     @scalars a b c
-    n = node(a + b)
 
     @test sprint(show, -a + b) == "-a + b"
     @test sprint(show, (-a)^b) == "(-a) ^ b"
@@ -26,14 +25,8 @@ Base.show(io::IO, t::CustomBaseShowTerm) = print(io, "base(", t.x, ")")
     @test sprint(show, makeop(:-, a, makeop(:+, b, a^b))) == "a - (b + a ^ b)"
     @test sprint(show, a .+ b) == "a .+ b"
     @test sprint(show, sin.(a)) == "sin.(a)"
-    @test sprint(show, n) == "(a + b)"
-    @test sprint(show, n * c) == "c * (a + b)"
     @test sprint(show, BoundaryTangent()) == "T"
     @test sprint(show, Chmy.BasisVector{2}()) == "e₂"
-
-    colored = sprint(show, n; context=:color => true)
-    @test occursin("\e[31m(\e[39m", colored)
-    @test occursin(r"\e\[31m(?:\e\[[0-9;]*m)*\)\e\[39m", colored)
 
     @test endswith(sprint(show, UnknownShowTerm(1)), "UnknownShowTerm(1)")
     @test sprint(show, StyledShowTerm(2)) == "styled(2)"

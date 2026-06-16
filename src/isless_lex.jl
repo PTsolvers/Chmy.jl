@@ -4,9 +4,8 @@ termrank(::STensor)     = 0x1
 termrank(::SZeroTensor) = 0x2
 termrank(::SIdTensor)   = 0x3
 termrank(::SLiteral)    = 0x4
-termrank(::SNode)       = 0x5
-termrank(::SExpr)       = 0x6
-termrank(t::STerm)      = 0x7 + objectid(t)
+termrank(::SExpr)       = 0x5
+termrank(t::STerm)      = 0x6 + objectid(t)
 
 # operator terms
 oprank(::SRef)                    = 0x0
@@ -30,7 +29,6 @@ headrank(expr::SExpr)  = headrank(head(expr))
 isless_lex(::SIndex{I}, ::SIndex{J}) where {I,J} = isless(I, J)
 isless_lex(::SRef{F1}, ::SRef{F2}) where {F1,F2} = isless(F1, F2)
 isless_lex(x::SFun, y::SFun) = isless(nameof(x.f), nameof(y.f))
-isless_lex(x::SNode, y::SNode) = isless_lex(argument(x), argument(y))
 isless_lex(::Point, ::Segment) = true
 isless_lex(::Segment, ::Point) = false
 
