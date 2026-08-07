@@ -21,7 +21,6 @@ Wrap a rule so unmatched terms are returned unchanged instead of `nothing`.
 struct Passthrough{R} <: AbstractRule
     rule::R
 end
-
 Passthrough(rule::Passthrough) = rule
 
 function (p::Passthrough)(term::STerm)
@@ -40,7 +39,6 @@ that is not `nothing`). If no rule matches, return `nothing`.
 struct Chain{Rs<:Tuple} <: AbstractRule
     rules::Rs
 end
-
 Chain(chain::Chain) = chain
 Chain(rules...) = Chain(rules)
 
