@@ -51,13 +51,13 @@ Base.getindex(s::STerm, o::CartesianShift) = getindex(s, o.shifts...)
 
 Shift(::SIndex) = Shift(0)
 Shift(shift::Shift) = shift
-function Shift(ind::SExpr{Call})
+function Shift(ind::SExpr{SFun})
     op = operation(ind)
     i, o = arguments(ind)
-    if !(op === SRef(:+) || op === SRef(:-)) || !isa(i, SIndex) || !isa(o, SLiteral)
+    if !(op === SFun(+) || op === SFun(-)) || !isa(i, SIndex) || !isa(o, SLiteral)
         error("only indexing expression of the format `(i + c)` or `(i - c)` are supported, where c is `SLiteral` are supported, got '$ind'")
     end
-    return operation(ind) === SRef(:+) ? Shift(o) : Shift(-o)
+    return operation(ind) === SFun(+) ? Shift(o) : Shift(-o)
 end
 
 """
@@ -317,8 +317,8 @@ reach_nonuniforms(stencils::Tuple) = mergewith(constval ∘ max, map(reach, sten
 Returns a Binding containing pairs of nonuniform fields and their corresponding stencils.
 """
 nonuniforms(::STerm) = Nonuniforms()
-nonuniforms(expr::SExpr{Call}) = mergewith(merge, map(nonuniforms, arguments(expr))...)
-function nonuniforms(expr::SExpr{Ind})
+nonuniforms(expr::SExpr{SFun}) = mergewith(merge, map(nonuniforms, arguments(expr))...)
+function nonuniforms(expr::SExpr{SSub})
     inds = indices(expr)
     shift = CartesianShift(inds)
     arg = argument(expr)
@@ -328,241 +328,4 @@ function nonuniforms(expr::SExpr{Ind})
 end
 
 nonuniform_location(_, inds::Tuple{Vararg{STerm,N}}) where {N} = ntuple(i -> Point(), Val(N))
-nonuniform_location(arg::SExpr{Loc}, ::Tuple{Vararg{STerm,N}}) where {N} = location(arg)
-
-"""
-    GridOperator(expr, rules)
-
-Symbolic grid operator made from an interior expression and boundary rules.
-
-Use [`boundary_operator`](@ref) for the public constructor that accepts
-`Face => BoundaryRule` pairs.
-"""
-struct GridOperator{E,R}
-    expr::E
-    rules::R
-end
-GridOperator(expr, rules...) = GridOperator(expr, rules)
-
-"""
-    boundary_operator(expr, rules...)
-    boundary_operator(expr, rules::Binding)
-
-Construct a grid operator from an interior expression and boundary rules.
-
-Rules are stored as a `Binding` from [`Face`](@ref) to [`BoundaryRule`](@ref).
-When an operator is requested on a lower-dimensional face, Chmy first tries a
-direct rule for that face and otherwise combines adjacent face rules.
-"""
-boundary_operator(expr, rules::Binding) = GridOperator(expr, rules)
-boundary_operator(expr, rules::Pair...) = GridOperator(expr, Binding(rules...))
-
-"""
-    BoundaryRule
-
-Abstract base type for symbolic boundary rules.
-
-Boundary rules transform an already-defined interior Chmy expression into the
-expression that should be evaluated on or near a boundary.
-"""
-abstract type BoundaryRule end
-
-struct CombinedRule{R} <: BoundaryRule
-    rules::R
-end
-
-_canonical_indices(::Val{N}) where {N} = ntuple(SIndex, Val(N))
-
-interior_face(::Val{N}) where {N} = Face(ntuple(_ -> Span(), Val(N))...)
-
-lowered_interior(expr::STerm, loc::NTuple{N,Space}) where {N} = expr[loc...][_canonical_indices(Val(N))...]
-
-codim_shift_tuple(face::Face, shifts::CartesianShift) = codim_shift_tuple(face, shifts.shifts)
-function codim_shift_tuple(face::Face, ::Tuple{})
-    c = codim(face)
-    c == 0 || throw(ArgumentError("face codimension $c requires $c shifts, got 0"))
-    return ()
-end
-function codim_shift_tuple(face::Face, shifts::NTuple{C,<:Integer}) where {C}
-    return codim_shift_tuple(face, tuplemap(Shift, shifts))
-end
-function codim_shift_tuple(face::Face, shifts::NTuple{C,Shift}) where {C}
-    c = codim(face)
-    C == c || throw(ArgumentError("face codimension $c requires $c shifts, got $C"))
-    return shifts
-end
-
-"""
-    boundary_axes(face)
-
-Return the coordinate axes where `face` lies on a lower or upper boundary.
-
-The order of this tuple defines the public shift order for boundary operators:
-shift `k` belongs to `boundary_axes(face)[k]`.
-"""
-boundary_axes(face::Face) = _boundary_axes(face.axes, 1)
-
-_boundary_axes(::Tuple{}, _) = ()
-function _boundary_axes(axes::Tuple{Span,Vararg{AxisFace}}, i)
-    return _boundary_axes(Base.tail(axes), i + 1)
-end
-function _boundary_axes(axes::Tuple{Vararg{AxisFace}}, i)
-    return (i, _boundary_axes(Base.tail(axes), i + 1)...)
-end
-
-function shift_for_axis(face::Face, shifts::Tuple, ::Val{I}) where {I}
-    return shift_for_axis(boundary_axes(face), shifts, Val(I))
-end
-
-shift_for_axis(::Tuple{}, ::Tuple{}, ::Val{I}) where {I} = throw(ArgumentError("axis $I is not a boundary axis"))
-function shift_for_axis(axes::Tuple, shifts::Tuple, ::Val{I}) where {I}
-    first(axes) == I && return first(shifts)
-    return shift_for_axis(Base.tail(axes), Base.tail(shifts), Val(I))
-end
-
-subface_shifts(parent::Face, shifts::Tuple, face::Face) = _subface_shifts(parent, shifts, face.axes, 1)
-_subface_shifts(::Face, ::Tuple, ::Tuple{}, _) = ()
-function _subface_shifts(parent::Face, shifts::Tuple, axes::Tuple{Span,Vararg{AxisFace}}, i)
-    return _subface_shifts(parent, shifts, Base.tail(axes), i + 1)
-end
-function _subface_shifts(parent::Face, shifts::Tuple, axes::Tuple{Vararg{AxisFace}}, i)
-    return (shift_for_axis(parent, shifts, Val(i)), _subface_shifts(parent, shifts, Base.tail(axes), i + 1)...)
-end
-
-# `operator` is the user-facing dispatcher for `GridOperator`. It keeps the
-# interior expression path explicit too: even without a boundary rule the
-# expression is lowered at `loc` with canonical static indices.
-"""
-    operator(op::GridOperator, face, loc, shift)
-
-Return the expression for `op` on `face` at `loc` and codimension-sized `shift`.
-
-If no rule applies to `face`, this returns the lowered interior
-expression. For higher-codimension faces, only available adjacent boundary
-rules are applied.
-"""
-function operator(op::GridOperator, f::Face, loc::NTuple{N,Space}, shifts) where {N}
-    ndims(f) == N || throw(ArgumentError("face dimension $(ndims(f)) does not match location dimension $N"))
-    shifts = codim_shift_tuple(f, shifts)
-    rule = combine_rules(op.rules, f)
-    isnothing(rule) && return lowered_interior(op.expr, loc)
-    return boundary_rule(rule, op.expr, f, loc, shifts)
-end
-
-# Choose the rule for a face. Direct user-provided rules take precedence; lower
-# dimensional faces are otherwise reconstructed from whichever adjacent face
-# rules exist. Missing rules are deliberately ignored so halo or periodic axes
-# can leave their out-of-domain reads untouched.
-function combine_rules(rules, f::Face)
-    haskey(rules, f) && return rules[f]
-    codim(f) == 1 && return nothing
-    pairs = combine_adjacent_rules(rules, adjacent_faces(f))
-    isempty(pairs) && return nothing
-    return CombinedRule(pairs)
-end
-
-# Recursively walk adjacent faces, keeping only the rules that are present.
-combine_adjacent_rules(_, ::Tuple{}) = ()
-function combine_adjacent_rules(rules, faces::Tuple)
-    face = first(faces)
-    rule = combine_rules(rules, face)
-    rest = combine_adjacent_rules(rules, Base.tail(faces))
-    isnothing(rule) && return rest
-    return merge_rule_pairs(rule_pairs(face, rule), rest)
-end
-
-# A nested combined rule already contains the codim-1 face identities that must
-# be applied, so flatten it rather than applying an intermediate face wrapper.
-rule_pairs(face::Face, rule) = (face => rule,)
-rule_pairs(::Face, rule::CombinedRule) = rule.rules
-
-# Deduplicate codim-1 face applications while combining higher-codimension
-# faces. In a 3D corner the same face can be discovered through more than one
-# adjacent edge.
-merge_rule_pairs(::Tuple{}, pairs::Tuple) = pairs
-function merge_rule_pairs(pairs::Tuple, rest::Tuple)
-    pair = first(pairs)
-    merged = has_rule_pair(rest, pair.first) ? rest : (pair, rest...)
-    return merge_rule_pairs(Base.tail(pairs), merged)
-end
-
-has_rule_pair(::Tuple{}, ::Face) = false
-function has_rule_pair(pairs::Tuple, face::Face)
-    first(pairs).first === face && return true
-    return has_rule_pair(Base.tail(pairs), face)
-end
-
-"""
-    boundary_rule(rule, expr, face, loc, shifts)
-
-Transform an interior expression for evaluation on or near a boundary.
-
-`shifts` has length `codim(face)` and is ordered by [`boundary_axes`](@ref).
-The expression is lowered at `loc` with canonical static indices before
-`rule` is applied. Boundary rules may leave unmatched out-of-domain reads
-untouched, which is how halo and future periodic axes can coexist with
-explicit boundary conditions on other axes.
-"""
-function boundary_rule(rule, expr::STerm, face::Face, loc::NTuple{N,Space}, shifts::CartesianShift) where {N}
-    return boundary_rule(rule, expr, face, loc, shifts.shifts)
-end
-function boundary_rule(rule, expr::STerm, face::Face, loc::NTuple{N,Space}, shifts::NTuple{C,<:Integer}) where {N,C}
-    return boundary_rule(rule, expr, face, loc, tuplemap(Shift, shifts))
-end
-function boundary_rule(rule, expr::STerm, face::Face, loc::NTuple{N,Space}, shifts::NTuple{C,Shift}) where {N,C}
-    ndims(face) == N || throw(ArgumentError("face dimension $(ndims(face)) does not match location dimension $N"))
-    shifts = codim_shift_tuple(face, shifts)
-    lowered = expr[loc...][_canonical_indices(Val(N))...]
-    return apply_boundary_rule(rule, lowered, face, loc, shifts)
-end
-
-# Combined rules store flattened `Face => rule` pairs. Each pair carries the
-# face needed to recover the subtuple of the parent face shift it should see.
-function apply_boundary_rule(rule::CombinedRule, expr::STerm, face::Face, loc, shifts)
-    return apply_combined_rules(rule.rules, expr, face, loc, shifts)
-end
-
-apply_combined_rules(::Tuple{}, expr::STerm, ::Face, _, _) = expr
-function apply_combined_rules(rules::Tuple, expr::STerm, face::Face, loc, shifts)
-    pair = first(rules)
-    next = apply_boundary_rule(pair.second, expr, pair.first, loc, subface_shifts(face, shifts, pair.first))
-    return apply_combined_rules(Base.tail(rules), next, face, loc, shifts)
-end
-
-"""
-    BoundaryNormal()
-
-Symbolic boundary-normal selector for boundary-condition expressions.
-
-`BoundaryNormal()` is resolved to a vector with positive unit component in the
-normal axis of the codim-1 face when a boundary rule is applied.
-"""
-struct BoundaryNormal <: AbstractSTensor{1,NoKind,true} end
-
-"""
-    BoundaryTangent()
-
-Symbolic boundary-tangent selector for boundary-condition expressions.
-
-`BoundaryTangent()` is resolved to one positive coordinate-basis vector for each
-tangent axis of that face, producing one scalarized extension spec per tangent
-direction.
-"""
-struct BoundaryTangent <: AbstractSTensor{1,NoKind,true} end
-
-"""
-    BasisVector{I}()
-
-Positive coordinate-basis vector in direction `I`.
-
-`BasisVector{I}` materializes to a vector whose only non-zero component is
-`1` at index `I`. Boundary projection uses it to resolve
-[`BoundaryNormal`](@ref) and [`BoundaryTangent`](@ref) for a concrete face.
-"""
-struct BasisVector{I} <: AbstractSTensor{1,NoKind,true} end
-
-Base.getindex(::BasisVector{I}, ::SLiteral{J}) where {I,J} = SLiteral(I == J ? 1 : 0)
-
-function Tensor{D}(v::BasisVector) where {D}
-    return Vec{D}(ntuple(i -> v[SLiteral(i)], Val(D))...)
-end
+nonuniform_location(arg::SExpr{SAt}, ::Tuple{Vararg{STerm,N}}) where {N} = locations(arg)

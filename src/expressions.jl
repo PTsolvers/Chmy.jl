@@ -72,7 +72,7 @@ end
 isuniform(::SFun) = true
 
 function (f::SFun)(args::Vararg{STerm})
-    SExpr(Call(), f, args...)
+    SExpr(f, args...)
 end
 
 struct SIndex{I} <: STerm end
@@ -92,16 +92,16 @@ end
 
 SExpr(head::SExprHead, children::Vararg{STerm}) = SExpr(head, children)
 
-SExpr(::Call, ::SRef{:*}, x::STerm) = x
-SExpr(::Call, ::SRef{:+}, x::STerm) = x
+SExpr(::SFun{typeof(+)}, x::STerm) = x
+SExpr(::SFun{typeof(*)}, x::STerm) = x
 
-function check_tensor_ranks(f::SRef, args...)
+function check_tensor_ranks(f::SFun, args...)
     if any(x -> tensorrank(x) != 0, args)
         throw(ArgumentError("'$f' can only be applied to scalar terms, consider using broadcasting"))
     end
 end
 
-function SExpr(::Call, f::SRef, args::STerm...)
+function SExpr(f::SFun, args::STerm...)
     check_tensor_ranks(f, args...)
     return SExpr(Call(), (f, args...))
 end

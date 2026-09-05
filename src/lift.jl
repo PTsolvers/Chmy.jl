@@ -44,7 +44,7 @@ unstub(expr::SExpr) = SExpr(head(expr), tuplemap(unstub, children(expr))...)
 
 Base.getindex(stub::Stub, inds::Vararg{STerm}) = SExpr(Ind(), stub, inds...)
 Base.getindex(stub::Stub, loc::Vararg{Space}) = SExpr(Loc(), stub, loc...)
-function Base.getindex(expr::SExpr{Loc,<:Tuple{Stub,Vararg}}, inds::Vararg{STerm,N}) where {N}
+function Base.getindex(expr::SExpr{SAt,<:Tuple{Stub,Vararg}}, inds::Vararg{STerm,N}) where {N}
     return SExpr(Ind(), expr, inds...)
 end
 
@@ -57,7 +57,7 @@ function InsertRule{I}(inds::NTuple{N,STerm}) where {I,N}
     return InsertRule{I,N,typeof(inds)}(inds)
 end
 
-function (rule::InsertRule{I,N})(term::SExpr{Ind}) where {I,N}
+function (rule::InsertRule{I,N})(term::SExpr{SSub}) where {I,N}
     ind = only(indices(term))
     new_inds = replace_index(rule.inds, ind, Val(I))
     return SExpr(Ind(), argument(term), new_inds...)
@@ -73,12 +73,12 @@ function InsertRuleLoc{I}(loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where {I,
     return InsertRuleLoc{I,N,typeof(loc),typeof(inds)}(loc, inds)
 end
 
-function (rule::InsertRuleLoc{I,N})(term::SExpr{Loc}) where {I,N}
+function (rule::InsertRuleLoc{I,N})(term::SExpr{SAt}) where {I,N}
     loc = only(location(term))
     new_loc = replace_index(rule.loc, loc, Val(I))
     return SExpr(Loc(), argument(term), new_loc...)
 end
-function (rule::InsertRuleLoc{I,N})(term::SExpr{Ind}) where {I,N}
+function (rule::InsertRuleLoc{I,N})(term::SExpr{SSub}) where {I,N}
     ind = only(indices(term))
     new_inds = replace_index(rule.inds, ind, Val(I))
     return SExpr(Ind(), argument(term), new_inds...)

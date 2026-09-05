@@ -1,91 +1,134 @@
 module Chmy
 
 using KernelAbstractions
+
+using Moshi: Data.@data, Data.isa_variant, Match.@match
+
 using PrettyTables: pretty_table, TextTableFormat
-import StyledStrings
-using StyledStrings: annotatedstring, face!
 import Adapt
 
 import LinearAlgebra: ⋅, ×, tr, det, diag, transpose
-
 import Base: broadcasted
 
 # re-export from LinearAlgebra
 export ⋅, ×, tr, det, diag, transpose
 
-include("utils.jl")
-include("staticcoef.jl")
+export Operator
 
-export STerm, SExprHead, Call, Comp, Loc, Ind, SLiteral, SRef, SFun, SIndex, SExpr
-export isexpr, iscall, isind, isloc, head, children, operation, arguments, argument, arity, indices, location
-export isuniform, isliteral
-export value, isstaticzero, isstaticone
-include("expressions.jl")
+export ==ₛ
 
-export AbstractRule, Passthrough, Chain, Prewalk, Postwalk, Fixpoint
-include("rewriters.jl")
+"""
+Abstract supertype for all Chmy operators.
+"""
+abstract type Operator end
 
-export Space, Segment, Point
-export offset
-include("spaces.jl")
+export 𝓅, 𝓈
+include("locations.jl")
 
-export Grid, dims
-include("grids.jl")
+module Kind
 
-export STensor, SUTensor, SScalar, SUScalar, SVec, SUVec
-export SSymTensor, SUSymTensor, SAltTensor, SUAltTensor, SDiagTensor, SUDiagTensor, SZeroTensor, SIdTensor
-export Tensor, SymTensor, AltTensor, DiagTensor, Vec, ZeroTensor, IdTensor
-export tensorrank, tensorkind, name
-include("tensors.jl")
+struct Sym end
+struct Alt end
+struct Diag end
+struct None end
 
-export @scalars, @vectors, @tensors, @uniform, @sym, @diag, @alt, @id, @zero
-include("macros.jl")
+end
+
+const TensorKind = Union{Kind.Sym,Kind.Alt,Kind.Diag,Kind.None}
+
+export isexpr, iscall
+export isliteral, isindex, istensor, iscomp, islocs, isinds, isuniform
+export head, args, operation, arguments
+export value, argument, arity, isunary, isbinary
+export components, locations, indices
+export tensorrank, tensorname, tensorkind
+
+export DTerm, ==ₛ
+include("dterm.jl")
+
+export 𝑖, 𝑗, 𝑘
+
+const 𝑖 = Index(1)
+const 𝑗 = Index(2)
+const 𝑘 = Index(3)
 
 export ⊡, ⊗, sym, asym, adj, gram, cogram
 include("operators.jl")
 
-export AbstractDerivative, AbstractPartialDerivative, CentralDifference, StaggeredCentralDifference, PartialDerivative
-include("derivatives.jl")
+# include("operators.jl")
 
-export AbstractAveraging, AbstractPartialAveraging, StaggeredLinearAveraging, PartialAveraging
-include("averaging.jl")
+include("utils.jl")
+# include("staticcoef.jl")
 
-export DifferentialOperator
-export Gradient, Divergence, Curl
-include("calculus.jl")
+# export STerm, SExprHead, Call, Comp, Loc, Ind, SLiteral, SRef, SFun, SIndex, SExpr
+# export isexpr, iscall, isind, isloc, head, children, operation, arguments, argument, arity, indices, location
+# export isuniform, isliteral
+# export value, isstaticzero, isstaticone
+# include("expressions.jl")
 
-export stencil_rule
-include("lowering.jl")
+# export AbstractRule, Passthrough, Chain, Prewalk, Postwalk, Fixpoint
+# include("rewriters.jl")
 
-export Binding, push, binding_types, pairstuple
-include("binding.jl")
+# export Space, Segment, Point
+# export offset
+# include("spaces.jl")
 
-export Shift, CartesianShift, AxisFace, Lower, Upper, Span, Face, Stencil, Nonuniforms
-export δ, adjacent_faces, dim, codim, nonuniforms, reach, facet, facets, isfacet
-export BoundaryNormal, BoundaryTangent, BasisVector
-export GridOperator, operator
-include("grid_operator.jl")
+# export Grid, dims
+# include("grids.jl")
 
-export HaloArray, halowidths, interior, halo
-include("halo_array.jl")
+# export STensor, SUTensor, SScalar, SUScalar, SVec, SUVec
+# export SSymTensor, SUSymTensor, SAltTensor, SUAltTensor, SDiagTensor, SUDiagTensor, SZeroTensor, SIdTensor
+# export Tensor, SymTensor, AltTensor, DiagTensor, Vec, ZeroTensor, IdTensor
+# export tensorrank, tensorkind, name
+include("tensors.jl")
 
-export isless_lex
-include("isless_lex.jl")
+include("tensor_components.jl")
 
-export canonicalize, simplify
-include("canonicalize.jl")
+# export @scalars, @vectors, @tensors, @uniform, @sym, @diag, @alt, @id, @zero
+# include("macros.jl")
 
-export evaluate
-include("evaluate.jl")
+# export AbstractDerivative, AbstractPartialDerivative, CentralDifference, StaggeredCentralDifference, PartialDerivative
+# include("derivatives.jl")
 
-export compute, to_expr
-include("compute.jl")
+# export AbstractAveraging, AbstractPartialAveraging, StaggeredLinearAveraging, PartialAveraging
+# include("averaging.jl")
 
-export lift
-include("lift.jl")
+# export DifferentialOperator
+# export Gradient, Divergence, Curl
+# include("calculus.jl")
 
-export subs
-include("subs.jl")
+# export stencil_rule
+# include("lowering.jl")
+
+# export Binding, push, binding_types, pairstuple
+# include("binding.jl")
+
+# export Shift, CartesianShift, AxisFace, Lower, Upper, Span, Face, Stencil, Nonuniforms
+# export δ, adjacent_faces, dim, codim, nonuniforms, reach, facet, facets, isfacet
+# export BoundaryNormal, BoundaryTangent, BasisVector
+# export GridOperator, operator
+# include("grid_operator.jl")
+
+# export HaloArray, halowidths, interior, halo
+# include("halo_array.jl")
+
+# export isless_lex
+# include("isless_lex.jl")
+
+# export canonicalize, simplify
+# include("canonicalize.jl")
+
+# export evaluate
+# include("evaluate.jl")
+
+# export compute, to_expr
+# include("compute.jl")
+
+# export lift
+# include("lift.jl")
+
+# export subs
+# include("subs.jl")
 
 include("show.jl")
 

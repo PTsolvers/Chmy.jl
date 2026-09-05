@@ -1,6 +1,6 @@
-abstract type DifferentialOperator <: STerm end
+abstract type DifferentialOperator <: SHead end
 
-(op::DifferentialOperator)(args::Vararg{STerm}) = SExpr(Call(), op, args...)
+(op::DifferentialOperator)(args::Vararg{STerm}) = SExpr(op, args...)
 
 struct Gradient{Op} <: DifferentialOperator
     op::Op

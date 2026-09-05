@@ -49,14 +49,13 @@ function to_expr(expr::STerm, bnd)
     end
 end
 
-to_expr(::SRef{F}, bnd) where {F} = F
 to_expr(sf::SFun, bnd) = sf.f
 
 # Calls are lowered structurally by recursively translating all children.
-to_expr(expr::SExpr{Call}, bnd) = Expr(:call, map(arg -> to_expr(arg, bnd), children(expr))...)
+to_expr(expr::SExpr{SFun}, bnd) = Expr(:call, map(arg -> to_expr(arg, bnd), children(expr))...)
 to_expr(::SLiteral{Value}, bnd) where {Value} = Value
 to_expr(::SIndex{i}, bnd) where {i} = :(I[$i])
-function to_expr(expr::SExpr{Ind}, bnd)
+function to_expr(expr::SExpr{SSub}, bnd)
     arg = argument(expr)
     inds = indices(expr)
     idx = expr_idx(bnd, arg)

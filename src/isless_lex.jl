@@ -8,26 +8,24 @@ termrank(::SExpr)       = 0x5
 termrank(t::STerm)      = 0x6 + objectid(t)
 
 # operator terms
-oprank(::SRef)                    = 0x0
-oprank(::SFun)                    = 0x1
-oprank(::AbstractDerivative)      = 0x2
-oprank(::LiftedPartialDerivative) = 0x3
-oprank(::Gradient)                = 0x4
-oprank(::Divergence)              = 0x5
-oprank(::Curl)                    = 0x6
-oprank(t::STerm)                  = 0x7 + objectid(t)
+oprank(::Fun)                    = 0x0
+oprank(::AbstractDerivative)      = 0x1
+oprank(::LiftedPartialDerivative) = 0x2
+oprank(::Gradient)                = 0x3
+oprank(::Divergence)              = 0x4
+oprank(::Curl)                    = 0x5
+oprank(t::STerm)                  = 0x6 + objectid(t)
 
 # comparing heads of expressions
-headrank(::Comp)       = 0x0
-headrank(::Loc)        = 0x1
-headrank(::Ind)        = 0x2
-headrank(::Call)       = 0x3
-headrank(h::SExprHead) = 0x4 + objectid(h)
-headrank(expr::SExpr)  = headrank(head(expr))
+headrank(::SComp)     = 0x0
+headrank(::SAt)       = 0x1
+headrank(::SSub)      = 0x2
+headrank(::SFun)      = 0x3
+headrank(h::SHead)    = 0x4 + objectid(h)
+headrank(expr::SExpr) = headrank(head(expr))
 
 # comparing STerms lexicographically
 isless_lex(::SIndex{I}, ::SIndex{J}) where {I,J} = isless(I, J)
-isless_lex(::SRef{F1}, ::SRef{F2}) where {F1,F2} = isless(F1, F2)
 isless_lex(x::SFun, y::SFun) = isless(nameof(x.f), nameof(y.f))
 isless_lex(::Point, ::Segment) = true
 isless_lex(::Segment, ::Point) = false
@@ -86,7 +84,7 @@ function isless_expr(x::SExpr, y::SExpr)
 end
 
 # special logic for comparing call expressions
-function isless_expr(x::SExpr{Call}, y::SExpr{Call})
+function isless_expr(x::SExpr{SFun}, y::SExpr{SFun})
     # compare operations
     opx = operation(x)
     opy = operation(y)

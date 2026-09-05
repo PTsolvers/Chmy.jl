@@ -1,10 +1,10 @@
-abstract type AbstractAveraging <: STerm end
+abstract type AbstractAveraging <: SHead end
 
-(a::AbstractAveraging)(args::Vararg{STerm}) = SExpr(Call(), a, args...)
+(a::AbstractAveraging)(args::Vararg{STerm}) = SExpr(a, args...)
 
-abstract type AbstractPartialAveraging{I} <: STerm end
+abstract type AbstractPartialAveraging{I} <: SHead end
 
-(pd::AbstractPartialAveraging)(arg::STerm) = SExpr(Call(), pd, arg)
+(pd::AbstractPartialAveraging)(arg::STerm) = SExpr(pd, arg)
 
 struct LiftedPartialAveraging{I,Op} <: AbstractPartialAveraging{I}
     op::Op
@@ -12,7 +12,7 @@ end
 
 LiftedPartialAveraging{I}(op::STerm) where {I} = LiftedPartialAveraging{I,typeof(op)}(op)
 
-(∂::LiftedPartialAveraging)(arg::STerm) = SExpr(Call(), ∂, arg)
+(∂::LiftedPartialAveraging)(arg::STerm) = SExpr(∂, arg)
 
 function stencil_rule(∂::LiftedPartialAveraging{I}, args, loc, inds) where {I}
     return lift(∂.op, args, loc, inds, Val(I))

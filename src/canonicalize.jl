@@ -1,25 +1,16 @@
 # static evaluation
 isstaticconst(::STerm) = false
 isstaticconst(::SLiteral) = true
-isstaticconst(expr::SExpr{Call}) = all(isstaticconst, arguments(expr))
+isstaticconst(expr::SExpr{SFun}) = all(isstaticconst, arguments(expr))
 
 constval(v::SLiteral) = v
-function constval(expr::SExpr{Call})
+function constval(expr::SExpr{SFun})
     if isstaticconst(expr)
         return constval(operation(expr), tuplemap(constval, arguments(expr))...)
     end
     return expr
 end
 constval(t::STerm) = t
-
-@generated function constval(::SRef{F}, args::Vararg{SLiteral,N}) where {F,N}
-    expr = Expr(:call, F)
-    for i in 1:N
-        argsv = value(args[i].instance)
-        push!(expr.args, :($argsv))
-    end
-    return Expr(:call, :SLiteral, expr)
-end
 
 constval(op::SFun, args::Vararg{SLiteral,N}) where {N} = SLiteral(op.f(tuplemap(value, args)...))
 
@@ -30,7 +21,7 @@ struct Monomial{S,B}
 end
 Monomial(::SLiteral{C}) where {C} = Monomial(StaticCoeff(C), Binding())
 Monomial(term::STerm) = Monomial(StaticCoeff(1), Binding(term => SLiteral(1)))
-function Monomial(expr::SExpr{Call})
+function Monomial(expr::SExpr{SFun})
     coeff, powers = collect_powers(expr)
     kv = ssort(pairstuple(powers); lt=isless_lex, by=first)
     return Monomial(coeff, Binding(kv...))
@@ -52,7 +43,7 @@ function addpower(binding, term, power)
 end
 
 collect_powers(term) = collect_powers(term, StaticCoeff(1), Binding(), SLiteral(1))
-Base.@assume_effects :foldable function collect_powers(term::SExpr{Call}, coeff, binding, npow)
+Base.@assume_effects :foldable function collect_powers(term::SExpr{SFun}, coeff, binding, npow)
     op = operation(term)
     if op === SRef(:*)
         # flatten the tree and accumulate powers
@@ -225,14 +216,14 @@ function collect_terms(expr::STerm, binding, add)
     mon = Monomial(expr)
     return addfactor(binding, mon.powers, add * mon.coeff)
 end
-Base.@assume_effects :foldable function collect_terms(expr::SExpr{Call}, binding, add)
+Base.@assume_effects :foldable function collect_terms(expr::SExpr{SFun}, binding, add)
     op = operation(expr)
-    if op === SRef(:+)
+    if op === SFun(+)
         arg = first(arguments(expr))
         binding = collect_terms(arg, binding, add)
         rest = +(Base.tail(arguments(expr))...)
         binding = collect_terms(rest, binding, add)
-    elseif op === SRef(:-)
+    elseif op === SFun(-)
         if arity(expr) == 1
             arg = only(arguments(expr))
             binding = collect_terms(arg, binding, -add)
@@ -255,7 +246,7 @@ function build_tree(expr, monomials)
     if isnegative(mon.coeff)
         new_expr = expr - abs_product_expr(mon)
     elseif iscall(expr) && operation(expr) === SRef(:+)
-        new_expr = SExpr(Call(), children(expr)..., abs_product_expr(mon))
+        new_expr = SExpr(children(expr)..., abs_product_expr(mon))
     else
         new_expr = expr + abs_product_expr(mon)
     end
@@ -263,7 +254,7 @@ function build_tree(expr, monomials)
 end
 
 canonicalize_sum(term::STerm) = term
-function canonicalize_sum(expr::SExpr{Call})
+function canonicalize_sum(expr::SExpr{SFun})
     binding = collect_terms(expr)
     monomials = map(x -> Monomial(x[2], x[1]), (pairs(binding)...,))
     nz_monomials = filter(!iszero, monomials)
@@ -276,12 +267,12 @@ function canonicalize_sum(expr::SExpr{Call})
 end
 
 struct CanonicalizeRule <: AbstractRule end
-Base.@assume_effects :foldable function (::CanonicalizeRule)(expr::SExpr{Call})
+Base.@assume_effects :foldable function (::CanonicalizeRule)(expr::SExpr{SFun})
     op = operation(expr)
     # normalize multiplicative and additive families with dedicated passes
-    if op === SRef(:*) || op === SRef(:/) || op === SRef(:inv) || op === SRef(:^)
+    if op === SFun(*) || op === SFun(/) || op === SFun(inv) || op === SFun(^)
         return canonicalize_product(expr)
-    elseif op === SRef(:+) || op === SRef(:-)
+    elseif op === SFun(+) || op === SFun(-)
         return canonicalize_sum(expr)
     else
         return constval(expr)

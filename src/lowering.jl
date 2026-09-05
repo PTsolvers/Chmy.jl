@@ -1,38 +1,38 @@
 """
     stencil_rule(op, args, inds)
-    stencil_rule(op, args, loc, inds)
+    stencil_rule(op, args, locs, inds)
 
 Distribute a stencil operation over `args`, indexing each argument with the
 provided symbolic indices (and optional staggered locations).
 """
-function stencil_rule(op::Union{SRef,SFun}, args::Tuple{Vararg{STerm}}, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where {N}
-    return SExpr(Call(), op, map(x -> x[loc...][inds...], args)...)
+function stencil_rule(op::SFun, args::Tuple{Vararg{STerm}}, locs::NTuple{N,Space}, inds::NTuple{N,STerm}) where {N}
+    return SExpr(op, map(x -> x[locs...][inds...], args)...)
 end
-function stencil_rule(op::Union{SRef,SFun}, args::Tuple{Vararg{STerm}}, inds::NTuple{N,STerm}) where {N}
-    return SExpr(Call(), op, map(x -> x[inds...], args)...)
+function stencil_rule(op::SFun, args::Tuple{Vararg{STerm}}, inds::NTuple{N,STerm}) where {N}
+    return SExpr(op, map(x -> x[inds...], args)...)
 end
 
 Base.getindex(term::STerm, I::Vararg{IntegerOrSLiteral,N}) where {N} = term[tuplemap(STerm, I)...]
 
 function Base.getindex(term::STerm, inds::Vararg{STerm,N}) where {N}
     isuniform(term) && return term
-    return SExpr(Ind(), term, inds...)
+    return SExpr(SSub(), term, inds...)
 end
 
-function Base.getindex(term::STerm, loc::Vararg{Space,N}) where {N}
+function Base.getindex(term::STerm, locs::Vararg{Space,N}) where {N}
     isuniform(term) && return term
-    return SExpr(Loc(), term, loc...)
+    return SExpr(SAt(locs), term)
 end
 
-function Base.getindex(expr::SExpr{Ind}, loc::Vararg{Space,N}) where {N}
+function Base.getindex(expr::SExpr{SSub}, locs::Vararg{Space,N}) where {N}
     inds = indices(expr)
     arg = argument(expr)
-    return arg[loc...][inds...]
+    return arg[locs...][inds...]
 end
 
 function Base.getindex(t::Chmy.AbstractSTensor{R}, I::Vararg{SLiteral,N}) where {R,N}
     N == R || throw(ArgumentError("expected $R tensor component indices, got $N"))
-    return SExpr(Comp(), t, I...)
+    return SExpr(SComp(I), t)
 end
 
 function Base.getindex(t::AbstractSTensor{R}, loc::Vararg{Space,N}) where {R,N}
@@ -53,42 +53,42 @@ function Base.getindex(::Tensor{D,R}, ::Vararg{STerm,N}) where {D,R,N}
     throw(ArgumentError("tensors can only be component-indexed by SLiterals"))
 end
 
-function Base.getindex(expr::SExpr{Call}, I::Vararg{SLiteral,N}) where {N}
+function Base.getindex(expr::SExpr{SFun}, I::Vararg{SLiteral,N}) where {N}
     R = tensorrank(expr)
     R == 0 && return lower_ind(Tensor{N}(expr), I)
     N == R || throw(ArgumentError("expected $R tensor component indices, got $N"))
     return component(expr, I)
 end
 
-function Base.getindex(expr::SExpr{Loc}, inds::Vararg{STerm,N}) where {N}
+function Base.getindex(expr::SExpr{SAt}, inds::Vararg{STerm,N}) where {N}
     return lower_loc(Tensor{N}(argument(expr)), location(expr), inds)
 end
 
-function Base.getindex(expr::SExpr{Call}, inds::Vararg{STerm,N}) where {N}
+function Base.getindex(expr::SExpr{SFun}, inds::Vararg{STerm,N}) where {N}
     tensorrank(expr) == 0 || throw(ArgumentError("grid indexing requires a scalar term; take tensor components of '$expr' first"))
     return lower_ind(Tensor{N}(expr), inds)
 end
 
-function Base.getindex(expr::SExpr{Comp}, inds::Vararg{STerm,N}) where {N}
+function Base.getindex(expr::SExpr{SComp}, inds::Vararg{STerm,N}) where {N}
     return lower_ind(Tensor{N}(expr), inds)
 end
 
-function Base.getindex(expr::SExpr{Call}, loc::Vararg{Space,N}) where {N}
+function Base.getindex(expr::SExpr{SFun}, loc::Vararg{Space,N}) where {N}
     tensorrank(expr) == 0 || throw(ArgumentError("location requires a scalar expression; take tensor components of '$expr' first"))
     return locate_scalar(Tensor{N}(expr), loc)
 end
 
-function Base.getindex(expr::SExpr{Comp}, loc::Vararg{Space,N}) where {N}
+function Base.getindex(expr::SExpr{SComp}, loc::Vararg{Space,N}) where {N}
     return locate_scalar(Tensor{N}(expr), loc)
 end
 
 component(t::STerm, I::NTuple{N,SLiteral}) where {N} = SExpr(Comp(), t, I...)
-Base.@assume_effects :foldable function component(t::SExpr{Call}, I::NTuple{N,SLiteral}) where {N}
+Base.@assume_effects :foldable function component(t::SExpr{SFun}, I::NTuple{N,SLiteral}) where {N}
     return component(operation(t), arguments(t), I, t)
 end
-component(::SRef{:+}, args::Tuple{Vararg{STerm}}, I, t) = +(map(arg -> arg[I...], args)...)
-component(::SRef{:-}, args::Tuple{STerm}, I, t) = -only(args)[I...]
-function component(::SRef{:-}, args::Tuple{STerm,STerm}, I, t)
+component(::typeof(+), args::Tuple{Vararg{STerm}}, I, t) = +(map(arg -> arg[I...], args)...)
+component(::typeof(-), args::Tuple{STerm}, I, t) = -only(args)[I...]
+function component(::typeof(-), args::Tuple{STerm,STerm}, I, t)
     a, b = args
     return a[I...] - b[I...]
 end
@@ -101,48 +101,48 @@ function tensor_component_arg(args::Tuple)
     return 1 + tail
 end
 
-function component(::SRef{:*}, args::Tuple{Vararg{STerm}}, I, t)
+function component(::typeof(*), args::Tuple{Vararg{DTerm}}, I, t)
     j = tensor_component_arg(args)
-    isnothing(j) && return SExpr(Comp(), t, I...)
+    isnothing(j) && return SExpr(SComp(I), t)
     new_args = ntuple(k -> k == j ? args[k][I...] : args[k], Val(length(args)))
     return *(new_args...)
 end
-function component(::SRef{:/}, args::Tuple{STerm,STerm}, I, t)
+function component(::typeof(/), args::Tuple{DTerm,DTerm}, I, t)
     a, b = args
     tensorrank(a) > 0 && tensorrank(b) == 0 && return a[I...] / b
-    return SExpr(Comp(), t, I...)
+    return SExpr(SComp(I), t)
 end
-function component(::SRef{://}, args::Tuple{STerm,STerm}, I, t)
+function component(::typeof(//), args::Tuple{DTerm,DTerm}, I, t)
     a, b = args
     tensorrank(a) > 0 && tensorrank(b) == 0 && return a[I...] // b
-    return SExpr(Comp(), t, I...)
+    return SExpr(SComp(I), t)
 end
-function component(::SRef{:÷}, args::Tuple{STerm,STerm}, I, t)
+function component(::typeof(÷), args::Tuple{DTerm,DTerm}, I, t)
     a, b = args
     tensorrank(a) > 0 && tensorrank(b) == 0 && return a[I...] ÷ b
-    return SExpr(Comp(), t, I...)
+    return SExpr(SComp(I), t)
 end
 
 # default rule is to take the component of the whole expression
-component(::STerm, ::Tuple{Vararg{STerm}}, I, t) = SExpr(Comp(), t, I...)
+component(::DTerm, ::Tuple{Vararg{DTerm}}, I, t) = SExpr(SComp(), t, I...)
 
-ispointwise(::STerm) = false
-ispointwise(::Union{SRef,SFun}) = true
+ispointwise(::DTerm) = false
+ispointwise(::SFun) = true
 
 # Immediate symbolic lowering must stay compile-time foldable, otherwise nested
 # indexing of scalar expressions regresses to runtime work and type instability.
-Base.@assume_effects :foldable function locate_scalar(t::STerm, loc::NTuple{N,Space}) where {N}
+Base.@assume_effects :foldable function locate_scalar(t::DTerm, locs::NTuple{N,Space}) where {N}
     isuniform(t) && return t
     if iscall(t) && ispointwise(operation(t))
-        return SExpr(Call(), operation(t), map(x -> x[loc...], arguments(t))...)
+        return SExpr(operation(t), map(x -> x[locs...], arguments(t))...)
     else
-        return SExpr(Loc(), t, loc...)
+        return SExpr(SAt(locs), t)
     end
 end
 
-Base.@assume_effects :foldable function lower_loc(t::STerm, loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where {N}
+Base.@assume_effects :foldable function lower_loc(t::DTerm, locs::NTuple{N,Space}, inds::NTuple{N,STerm}) where {N}
     isuniform(t) && return t
-    (!isexpr(t) || iscomp(t)) && return SExpr(Ind(), SExpr(Loc(), t, loc...), inds...)
+    (!isexpr(t) || iscomp(t)) && return SExpr(SSub(), SExpr(SAt(locs), t), inds...)
     if iscall(t)
         return evaluate(stencil_rule(operation(t), arguments(t), loc, inds))
     else
@@ -154,7 +154,7 @@ Base.@assume_effects :foldable function lower_ind(t::STerm, inds::NTuple{N,STerm
     # Uniform expressions can be substituted directly during compute, so
     # runtime grid indices are irrelevant and must not be threaded further.
     isuniform(t) && return t
-    (!isexpr(t) || iscomp(t)) && return SExpr(Ind(), t, inds...)
+    (!isexpr(t) || iscomp(t)) && return SExpr(SSub(), t, inds...)
     if iscall(t)
         return evaluate(stencil_rule(operation(t), arguments(t), inds))
     else

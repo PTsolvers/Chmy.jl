@@ -1,18 +1,18 @@
-abstract type AbstractDerivative <: STerm end
+abstract type AbstractDerivative <: Operator end
 
-(d::AbstractDerivative)(args::Vararg{STerm}) = SExpr(Call(), d, args...)
+(d::AbstractDerivative)(args::Vararg{STerm}) = SExpr(d, args...)
 
-abstract type AbstractPartialDerivative{I} <: STerm end
+abstract type AbstractPartialDerivative{I} <: Operator end
 
-(pd::AbstractPartialDerivative)(arg::STerm) = SExpr(Call(), pd, arg)
+(pd::AbstractPartialDerivative)(arg::STerm) = SExpr(pd, arg)
 
 struct LiftedPartialDerivative{I,Op} <: AbstractPartialDerivative{I}
     op::Op
 end
 
-LiftedPartialDerivative{I}(op::STerm) where {I} = LiftedPartialDerivative{I,typeof(op)}(op)
+LiftedPartialDerivative{I}(op::Operator) where {I} = LiftedPartialDerivative{I,typeof(op)}(op)
 
-(∂::LiftedPartialDerivative)(arg::STerm) = SExpr(Call(), ∂, arg)
+(∂::LiftedPartialDerivative)(arg::DTerm) = makecall(∂, arg)
 
 function stencil_rule(∂::LiftedPartialDerivative{I}, args, loc, inds) where {I}
     return lift(∂.op, args, loc, inds, Val(I))
