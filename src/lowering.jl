@@ -5,159 +5,143 @@
 Distribute a stencil operation over `args`, indexing each argument with the
 provided symbolic indices (and optional staggered locations).
 """
-function stencil_rule(op::SFun, args::Tuple{Vararg{STerm}}, locs::NTuple{N,Space}, inds::NTuple{N,STerm}) where {N}
-    return SExpr(op, map(x -> x[locs...][inds...], args)...)
+function stencil_rule end
+
+stencil_rule(op::Operator, args, locs, inds) = _stencil_rule(op, args, locs, inds)
+stencil_rule(op::Operator, args, inds) = _stencil_rule(op, args, inds)
+
+function _stencil_rule(op, args::Tuple{DTerm}, locs::Tuple{Location}, inds::Tuple{DTerm})
+    return stencil_rule(op, only(args), only(locs), only(inds))
 end
-function stencil_rule(op::SFun, args::Tuple{Vararg{STerm}}, inds::NTuple{N,STerm}) where {N}
-    return SExpr(op, map(x -> x[inds...], args)...)
+function _stencil_rule(op, args::Tuple{DTerm}, inds::Tuple{DTerm})
+    return stencil_rule(op, only(args), only(inds))
 end
 
-Base.getindex(term::STerm, I::Vararg{IntegerOrSLiteral,N}) where {N} = term[tuplemap(STerm, I)...]
-
-function Base.getindex(term::STerm, inds::Vararg{STerm,N}) where {N}
-    isuniform(term) && return term
-    return SExpr(SSub(), term, inds...)
+function stencil_rule(op::Fun, args::Tuple{Vararg{DTerm}}, locs::NTuple{N,Location}, inds::NTuple{N,DTerm}) where {N}
+    return makecall_unchecked(op, map(x -> x[locs...][inds...], args))
+end
+function stencil_rule(op::Fun, args::Tuple{Vararg{DTerm}}, inds::NTuple{N,DTerm}) where {N}
+    return makecall_unchecked(op, map(x -> x[inds...], args))
 end
 
-function Base.getindex(term::STerm, locs::Vararg{Space,N}) where {N}
-    isuniform(term) && return term
-    return SExpr(SAt(locs), term)
+"""
+    lower(expr)
+    lower(expr, inds)
+    lower(expr, locs)
+    lower(expr, locs, inds)
+
+Lower `expr` into a stencil form.
+"""
+function lower(expr::DTerm)::DTerm
+    check_lowerable(expr)
+    return lower_expr(expr)
 end
 
-function Base.getindex(expr::SExpr{SSub}, locs::Vararg{Space,N}) where {N}
-    inds = indices(expr)
-    arg = argument(expr)
-    return arg[locs...][inds...]
+function lower(expr::DTerm, locs::NTuple{N,Location}, inds::NTuple{N,DTerm}) where {N}
+    check_lowerable(expr)
+    return lower_at(expr, locs, inds)
 end
 
-function Base.getindex(t::Chmy.AbstractSTensor{R}, I::Vararg{SLiteral,N}) where {R,N}
-    N == R || throw(ArgumentError("expected $R tensor component indices, got $N"))
-    return SExpr(SComp(I), t)
+function lower(expr::DTerm, inds::NTuple{N,DTerm}) where {N}
+    check_lowerable(expr)
+    return lower_at(expr, nothing, inds)
 end
 
-function Base.getindex(t::AbstractSTensor{R}, loc::Vararg{Space,N}) where {R,N}
-    R == 0 || throw(ArgumentError("location indexing requires a scalar term; take tensor components first"))
-    return locate_scalar(t, loc)
+function lower(expr::DTerm, locs::NTuple{N,Location}) where {N}
+    inds = ntuple(Index, Val(N))
+    return lower(expr, locs, inds)
 end
 
-function Base.getindex(t::AbstractSTensor{R}, inds::Vararg{STerm,N}) where {R,N}
-    R == 0 && return lower_ind(t, inds)
-    throw(ArgumentError("tensor terms with rank > 0 can only be component-indexed by SLiterals"))
+@noinline lower_component_error() = throw(ArgumentError("lower requires scalar component form; call components(expr, dims) before lowering and select a scalar entry if needed"))
+
+# validate before expanding
+function check_lowerable(expr::DTerm)
+    @match expr begin
+        DExpr(Comp(I), (arg,)) => begin
+            istensor(arg) && tensorrank(arg) == length(I) || lower_component_error()
+        end
+        DExpr(Call(op), children) => begin
+            foreach(check_lowerable, children)
+            # checked scalar arguments imply scalar arithmetic
+            if !(op isa Union{Fun{typeof(+)},Fun{typeof(-)},Fun{typeof(*)},
+                              Fun{typeof(/)},Fun{typeof(//)},Fun{typeof(÷)}})
+                tensorrank(expr) == 0 || lower_component_error()
+            end
+        end
+        DExpr(_, children) => foreach(check_lowerable, children)
+        _ => tensorrank(expr) == 0 || lower_component_error()
+    end
+    return nothing
 end
 
-function Base.getindex(::Tensor{D,R}, ::Vararg{Space,N}) where {D,R,N}
-    throw(ArgumentError("location indexing requires a scalar term; take tensor components first"))
-end
+lower_expr(expr::DTerm)::DTerm = something(lower_changed(expr), expr)
 
-function Base.getindex(::Tensor{D,R}, ::Vararg{STerm,N}) where {D,R,N}
-    throw(ArgumentError("tensors can only be component-indexed by SLiterals"))
-end
-
-function Base.getindex(expr::SExpr{SFun}, I::Vararg{SLiteral,N}) where {N}
-    R = tensorrank(expr)
-    R == 0 && return lower_ind(Tensor{N}(expr), I)
-    N == R || throw(ArgumentError("expected $R tensor component indices, got $N"))
-    return component(expr, I)
-end
-
-function Base.getindex(expr::SExpr{SAt}, inds::Vararg{STerm,N}) where {N}
-    return lower_loc(Tensor{N}(argument(expr)), location(expr), inds)
-end
-
-function Base.getindex(expr::SExpr{SFun}, inds::Vararg{STerm,N}) where {N}
-    tensorrank(expr) == 0 || throw(ArgumentError("grid indexing requires a scalar term; take tensor components of '$expr' first"))
-    return lower_ind(Tensor{N}(expr), inds)
-end
-
-function Base.getindex(expr::SExpr{SComp}, inds::Vararg{STerm,N}) where {N}
-    return lower_ind(Tensor{N}(expr), inds)
-end
-
-function Base.getindex(expr::SExpr{SFun}, loc::Vararg{Space,N}) where {N}
-    tensorrank(expr) == 0 || throw(ArgumentError("location requires a scalar expression; take tensor components of '$expr' first"))
-    return locate_scalar(Tensor{N}(expr), loc)
-end
-
-function Base.getindex(expr::SExpr{SComp}, loc::Vararg{Space,N}) where {N}
-    return locate_scalar(Tensor{N}(expr), loc)
-end
-
-component(t::STerm, I::NTuple{N,SLiteral}) where {N} = SExpr(Comp(), t, I...)
-Base.@assume_effects :foldable function component(t::SExpr{SFun}, I::NTuple{N,SLiteral}) where {N}
-    return component(operation(t), arguments(t), I, t)
-end
-component(::typeof(+), args::Tuple{Vararg{STerm}}, I, t) = +(map(arg -> arg[I...], args)...)
-component(::typeof(-), args::Tuple{STerm}, I, t) = -only(args)[I...]
-function component(::typeof(-), args::Tuple{STerm,STerm}, I, t)
-    a, b = args
-    return a[I...] - b[I...]
-end
-
-tensor_component_arg(::Tuple{}) = nothing
-function tensor_component_arg(args::Tuple)
-    tensorrank(first(args)) > 0 && return 1
-    tail = tensor_component_arg(Base.tail(args))
-    isnothing(tail) && return nothing
-    return 1 + tail
-end
-
-function component(::typeof(*), args::Tuple{Vararg{DTerm}}, I, t)
-    j = tensor_component_arg(args)
-    isnothing(j) && return SExpr(SComp(I), t)
-    new_args = ntuple(k -> k == j ? args[k][I...] : args[k], Val(length(args)))
-    return *(new_args...)
-end
-function component(::typeof(/), args::Tuple{DTerm,DTerm}, I, t)
-    a, b = args
-    tensorrank(a) > 0 && tensorrank(b) == 0 && return a[I...] / b
-    return SExpr(SComp(I), t)
-end
-function component(::typeof(//), args::Tuple{DTerm,DTerm}, I, t)
-    a, b = args
-    tensorrank(a) > 0 && tensorrank(b) == 0 && return a[I...] // b
-    return SExpr(SComp(I), t)
-end
-function component(::typeof(÷), args::Tuple{DTerm,DTerm}, I, t)
-    a, b = args
-    tensorrank(a) > 0 && tensorrank(b) == 0 && return a[I...] ÷ b
-    return SExpr(SComp(I), t)
-end
-
-# default rule is to take the component of the whole expression
-component(::DTerm, ::Tuple{Vararg{DTerm}}, I, t) = SExpr(SComp(), t, I...)
-
-ispointwise(::DTerm) = false
-ispointwise(::SFun) = true
-
-# Immediate symbolic lowering must stay compile-time foldable, otherwise nested
-# indexing of scalar expressions regresses to runtime work and type instability.
-Base.@assume_effects :foldable function locate_scalar(t::DTerm, locs::NTuple{N,Space}) where {N}
-    isuniform(t) && return t
-    if iscall(t) && ispointwise(operation(t))
-        return SExpr(operation(t), map(x -> x[locs...], arguments(t))...)
-    else
-        return SExpr(SAt(locs), t)
+function lower_changed(expr::DTerm)::Union{Nothing,DTerm}
+    @match expr begin
+        DExpr(Inds(), children) => begin
+            arg = first(children)
+            field = if islocs(arg)
+                if length(locations(arg)) != length(children)-1
+                    throw(ArgumentError("locations and grid indices must have the same length"))
+                end
+                argument(arg)
+            else
+                arg
+            end
+            if iscall(field) || islocs(field) || isinds(field)
+                return lower_sample(children)
+            end
+            return isuniform(field) ? field : lower_args(expr)
+        end
+        DExpr(Comp(_), _) => nothing
+        DExpr(Locs(_), (arg,)) => begin
+            if !isexpr(arg) || iscomp(arg)
+                return isuniform(arg) ? arg : nothing
+            end
+            return lower_args(expr)
+        end
+        DExpr(_, _) => lower_args(expr)
+        _ => nothing
     end
 end
 
-Base.@assume_effects :foldable function lower_loc(t::DTerm, locs::NTuple{N,Space}, inds::NTuple{N,STerm}) where {N}
-    isuniform(t) && return t
-    (!isexpr(t) || iscomp(t)) && return SExpr(SSub(), SExpr(SAt(locs), t), inds...)
-    if iscall(t)
-        return evaluate(stencil_rule(operation(t), arguments(t), loc, inds))
-    else
-        error("malformed static expression $t")
+# Specialize on arity only when a sample actually needs expansion. Base.tail
+# then extracts the grid indices without the dynamic tuple slice of a rest match.
+function lower_sample(children::NTuple{N,DTerm})::DTerm where {N}
+    arg, inds = first(children), Base.tail(children)
+    @match arg begin
+        DExpr(Locs(locs), (field,)) => lower_at(field, locs, inds)
+        _ => lower_at(arg, nothing, inds)
     end
 end
 
-Base.@assume_effects :foldable function lower_ind(t::STerm, inds::NTuple{N,STerm}) where {N}
-    # Uniform expressions can be substituted directly during compute, so
-    # runtime grid indices are irrelevant and must not be threaded further.
-    isuniform(t) && return t
-    (!isexpr(t) || iscomp(t)) && return SExpr(SSub(), t, inds...)
-    if iscall(t)
-        return evaluate(stencil_rule(operation(t), arguments(t), inds))
-    else
-        error("malformed static expression $t")
+function lower_args(expr::DTerm)::Union{Nothing,DTerm}
+    children = args(expr)
+    for k in eachindex(children)
+        child = lower_changed(children[k])
+        isnothing(child) && continue
+        return DExpr(head(expr), walkargs(lower_expr, children, child, k))
+    end
+    return nothing
+end
+
+function lower_at(expr::DTerm, locs, inds::NTuple{N,DTerm})::DTerm where {N}
+    isnothing(locs) || length(locs) == N || throw(ArgumentError("locations and grid indices must have the same length"))
+    @match expr begin
+        DExpr(Call(op), children) => begin
+            result = if isnothing(locs)
+                stencil_rule(op, children, inds)::DTerm
+            else
+                stencil_rule(op, children, locs, inds)::DTerm
+            end
+            return lower_expr(result)
+        end
+        DExpr(Locs(explicit), (arg,)) => return lower_at(arg, explicit, inds)
+        DExpr(Inds(), _) => return lower_expr(expr)
+        _ => begin
+            isuniform(expr) && return expr
+            field = isnothing(locs) ? expr : makelocs_unchecked(expr, locs)
+            return makeinds_unchecked(field, inds)
+        end
     end
 end
