@@ -1,17 +1,17 @@
-# Symbolic expression rewriters inspired by SymbolicUtils.jl
+# symbolic expression rewriters inspired by SymbolicUtils.jl
 
 """
     AbstractRule
 
 Base type for symbolic rewrite rules.
 
-Rules are callable objects that take an `STerm` and return either a replacement
-`STerm` or `nothing` to indicate "no match".
+Rules are callable objects that take a `DTerm` and return either a replacement
+`DTerm` or `nothing` to indicate "no match".
 """
 abstract type AbstractRule end
 
 # no match by default
-(::AbstractRule)(::STerm) = nothing
+(::AbstractRule)(::DTerm) = nothing
 
 """
     Passthrough(rule)
@@ -23,8 +23,8 @@ struct Passthrough{R} <: AbstractRule
 end
 Passthrough(rule::Passthrough) = rule
 
-function (p::Passthrough)(term::STerm)
-    new_term = p.rule(term)
+function (p::Passthrough)(term::DTerm)
+    new_term = p.rule(term)::Union{Nothing,DTerm}
     isnothing(new_term) && return term
     return new_term
 end
@@ -42,68 +42,74 @@ end
 Chain(chain::Chain) = chain
 Chain(rules...) = Chain(rules)
 
-_chainfirst(::Tuple{}, ::STerm) = nothing
-function _chainfirst(rules::Tuple, term::STerm)
-    new_term = first(rules)(term)
+chainfirst(::Tuple{}, ::DTerm) = nothing
+function chainfirst(rules::Tuple, term::DTerm)
+    new_term = first(rules)(term)::Union{Nothing,DTerm}
     isnothing(new_term) || return new_term
-    return _chainfirst(Base.tail(rules), term)
+    return chainfirst(Base.tail(rules), term)
 end
 
-Base.@assume_effects :foldable function (c::Chain)(term::STerm)
-    return _chainfirst(c.rules, term)
-end
+(c::Chain)(term::DTerm) = chainfirst(c.rules, term)
 
 """
     Prewalk(rule)
 
-Apply `rule` in a top-down traversal (parent before children).
+Apply `rule` in a top-down traversal (parent before children), visiting the
+replacement's arguments from left to right. Leaves and expression heads are atomic.
 """
 struct Prewalk{R} <: AbstractRule
     rule::R
 end
 
-Base.@assume_effects :foldable function (p::Prewalk)(term::STerm)
-    # Treat "no match" as identity so traversal only needs to handle `STerm`s.
-    rule = Passthrough(p.rule)
-    new_term = rule(term)
-    if isexpr(new_term)
-        return SExpr(head(new_term), map(p, children(new_term)))
-    else
-        return new_term
-    end
-end
+(p::Prewalk)(term::DTerm) = walkargs(p, Passthrough(p.rule)(term))
 
 """
     Postwalk(rule)
 
-Apply `rule` in a bottom-up traversal (children before parent).
+Apply `rule` in a bottom-up traversal (children before parent), visiting arguments
+from left to right. Children introduced by the final rewrite are not visited.
 """
 struct Postwalk{R} <: AbstractRule
     rule::R
 end
 
-Base.@assume_effects :foldable function (p::Postwalk)(term::STerm)
-    # Postwalk rewrites descendants first, then gives the rebuilt node to `rule`.
-    rule = Passthrough(p.rule)
-    if isexpr(term)
-        new_term = SExpr(head(term), map(p, children(term)))
-        return rule(new_term)
-    else
-        return rule(term)
+(p::Postwalk)(term::DTerm) = Passthrough(p.rule)(walkargs(p, term))
+
+function walkargs(walk, term::DTerm)
+    isexpr(term) || return term
+    children = args(term)
+    for k in eachindex(children)
+        child = walk(children[k])
+        child==ₛchildren[k] && continue
+        return DExpr(head(term), walkargs(walk, children, child, k))
+    end
+    return term
+end
+
+# specialize on tuple length only when walk changes one of the children
+function walkargs(walk, children::NTuple{N,DTerm}, child::DTerm, k::Int) where {N}
+    return ntuple(Val(N)) do j
+        j < k ? children[j] : j == k ? child : walk(children[j])
     end
 end
 
 """
     Fixpoint(rule)
 
-Repeatedly apply `rule` until it returns `nothing`.
+Repeatedly apply `rule` until it returns `nothing` or a structurally equal term
 """
 struct Fixpoint{R} <: AbstractRule
     rule::R
 end
 
-Base.@assume_effects :foldable function (f::Fixpoint)(term::STerm)
-    new_term = f.rule(term)
-    isnothing(new_term) && return term
-    return f(new_term)
+function (f::Fixpoint)(term::DTerm)
+    while true
+        new_term = f.rule(term)::Union{Nothing,DTerm}
+        (isnothing(new_term) || new_term==ₛterm) && return term
+        term = new_term
+    end
 end
+
+@inline postwalk(rule, term) = Postwalk(rule)(term)
+@inline prewalk(rule, term) = Prewalk(rule)(term)
+@inline fixpoint(rule, term) = Fixpoint(rule)(term)
