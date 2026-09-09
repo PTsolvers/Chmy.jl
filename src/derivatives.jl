@@ -1,60 +1,13 @@
 abstract type AbstractDerivative <: Operator end
 
-(d::AbstractDerivative)(args::Vararg{STerm}) = SExpr(d, args...)
-
-abstract type AbstractPartialDerivative{I} <: Operator end
-
-(pd::AbstractPartialDerivative)(arg::STerm) = SExpr(pd, arg)
-
-struct LiftedPartialDerivative{I,Op} <: AbstractPartialDerivative{I}
-    op::Op
-end
-
-LiftedPartialDerivative{I}(op::Operator) where {I} = LiftedPartialDerivative{I,typeof(op)}(op)
-
-(∂::LiftedPartialDerivative)(arg::DTerm) = makecall(∂, arg)
-
-function stencil_rule(∂::LiftedPartialDerivative{I}, args, loc, inds) where {I}
-    return lift(∂.op, args, loc, inds, Val(I))
-end
-
-function stencil_rule(∂::LiftedPartialDerivative{I}, args, inds) where {I}
-    return lift(∂.op, args, inds, Val(I))
-end
-
-struct PartialDerivative{Op}
-    op::Op
-end
-
-Base.getindex(∂::PartialDerivative, i::Integer) = LiftedPartialDerivative{i}(∂.op)
-
-(∂::PartialDerivative)(arg::STerm, i::Integer) = ∂[i](arg)
+Base.getindex(d::AbstractDerivative, i::Integer) = Lifted(d, i)
 
 struct CentralDifference <: AbstractDerivative end
 
-function stencil_rule(::CentralDifference, args::Tuple{STerm}, loc::Tuple{Space}, inds::Tuple{STerm})
-    f, l, i = only(args), only(loc), only(inds)
-    return 1 // 2 * (f[l][i+1] - f[l][i-1])
-end
-
-function stencil_rule(::CentralDifference, args::Tuple{STerm}, inds::Tuple{STerm})
-    f, i = only(args), only(inds)
-    return 1 // 2 * (f[i+1] - f[i-1])
-end
+stencil_rule(::CentralDifference, f::DTerm, l::Location, i::DTerm) = 1 // 2 * (f[l][i+1] - f[l][i-1])
+stencil_rule(::CentralDifference, f::DTerm, i::DTerm) = 1 // 2 * (f[i+1] - f[i-1])
 
 struct StaggeredCentralDifference <: AbstractDerivative end
 
-function stencil_rule(::StaggeredCentralDifference, args::Tuple{STerm}, loc::Tuple{Point}, inds::Tuple{STerm})
-    f, i = only(args), only(inds)
-    l = Segment()
-    return f[l][i] - f[l][i-1]
-end
-
-function stencil_rule(::StaggeredCentralDifference, args::Tuple{STerm}, loc::Tuple{Segment}, inds::Tuple{STerm})
-    f, i = only(args), only(inds)
-    l = Point()
-    return f[l][i+1] - f[l][i]
-end
-
-tensorrank(::AbstractDerivative, t) = 0
-tensorrank(::AbstractPartialDerivative, t) = 0
+stencil_rule(::StaggeredCentralDifference, f::DTerm, ::typeof(𝓅), i::DTerm) = f[𝓈][i] - f[𝓈][i-1]
+stencil_rule(::StaggeredCentralDifference, f::DTerm, ::typeof(𝓈), i::DTerm) = f[𝓅][i+1] - f[𝓅][i]
