@@ -1,6 +1,6 @@
 function Base.show(io::IO, ::MIME"text/plain", v::DTerm)
     @match v begin
-        DExpr(_, _) => print(io, "Dynamic expression:\n ", v)
+        DExpr(_, _) => print(io, "Expression:\n ", v)
         _ => print(io, v)
     end
 end
@@ -12,19 +12,31 @@ function Base.show(io::IO, v::DTerm)
         Tensor(rank, name, _, _)      => print_tensor(io, rank, name)
         ZeroTensor(_)                 => print(io, '𝒪')
         IdTensor(_)                   => print(io, 'ℐ')
-        DExpr(Call(op), args)         => print_call(io, op.f, args)
-        DExpr(Comp(comp), (arg,))     => (print(io, arg); print_list(io, '[', comp, ']'))
-        DExpr(Locs(locs), (arg,))     => (print(io, arg); print_list(io, '[', locs, ']'))
-        DExpr(Inds(), (arg, inds...)) => (print(io, arg); print_list(io, '[', inds, ']'))
+        DExpr(Call(op), args)         => print_call(io, op, args)
+        DExpr(Comp(comp), (arg,))     => print_indexed(io, arg, comp)
+        DExpr(Locs(locs), (arg,))     => print_indexed(io, arg, locs)
+        DExpr(Inds(), (arg, inds...)) => print_indexed(io, arg, inds)
     end
 end
 
-function to_subscript(i)
-    if i <= 9
-        return string('₀' + i)
-    else
-        return string(to_subscript(div(i, 10)), to_subscript(mod(i, 10)))
-    end
+function print_indexed(io, arg, inds)
+    parens = !isnothing(printed_operator(arg))
+    parens && print(io, '(')
+    print(io, arg)
+    parens && print(io, ')')
+    return print_list(io, '[', inds, ']')
+end
+
+"""
+    Chmy.print_subscript(io, i::Integer)
+
+Print a nonnegative integer as decimal subscript digits directly to `io`.
+"""
+function print_subscript(io, i::Integer)
+    i < 0 && throw(ArgumentError("subscript must be nonnegative"))
+    i >= 10 && print_subscript(io, div(i, 10))
+    print(io, '₀' + Int(mod(i, 10)))
+    return
 end
 
 function print_index(io, i)
@@ -48,16 +60,39 @@ function print_tensor(io, rank, name)
     return
 end
 
-function print_call(io, f, args)
-    op = nameof(f)
+"""
+    Chmy.print_opname(io, op::Operator)
 
-    if !Base.isoperator(op)
-        print(io, op)
+Print the name used for `op` in expression calls to `io`. Specialize this method
+for custom operators to control their call names. The default uses `show(io, op)`.
+"""
+print_opname(io, op::Operator) = show(io, op)
+print_opname(io, op::Fun) = print(io, nameof(op.f))
+print_opname(io, ::AbstractDerivative) = print(io, '∂')
+print_opname(io, ::Gradient) = print(io, "grad")
+print_opname(io, ::Divergence) = print(io, "divg")
+print_opname(io, ::Curl) = print(io, "curl")
+function print_opname(io, op::Lifted)
+    print_opname(io, op.op)
+    print_subscript(io, op.axis)
+    return
+end
+
+function print_call(io, op::Operator, args)
+    print_opname(io, op)
+    return print_list(io, '(', args, ')')
+end
+
+function print_call(io, op::Fun, args)
+    opname = nameof(op.f)
+
+    if !Base.isoperator(opname)
+        print_opname(io, op)
         return print_list(io, '(', args, ')')
     end
 
-    if length(args) == 1 && Base.isunaryoperator(op)
-        print(io, op)
+    if length(args) == 1 && Base.isunaryoperator(opname)
+        print_opname(io, op)
         arg = only(args)
         parens = need_parens(arg)
         parens && print(io, '(')
@@ -66,18 +101,24 @@ function print_call(io, f, args)
         return
     end
 
-    if length(args) < 2 || !Base.isbinaryoperator(op)
-        print(io, '(', op, ')')
+    if length(args) < 2 || !Base.isbinaryoperator(opname)
+        print(io, '(')
+        print_opname(io, op)
+        print(io, ')')
         return print_list(io, '(', args, ')')
     end
 
     for (i, arg) in enumerate(args)
-        omit_operator = i > 1 && omit_mul(args[i - 1], arg, op)
-        i > 1 && !omit_operator && print(io, ' ', op, ' ')
+        omit_operator = i > 1 && omit_mul(args[i - 1], arg, opname)
+        if i > 1 && !omit_operator
+            print(io, ' ')
+            print_opname(io, op)
+            print(io, ' ')
+        end
 
-        parens = need_parens(arg, op, i)
+        parens = need_parens(arg, opname, i)
         if i < length(args) &&
-           omit_mul(arg, args[i + 1], op) &&
+           omit_mul(arg, args[i + 1], opname) &&
            coef_needs_parens(arg)
             parens = true
         end
@@ -109,6 +150,7 @@ end
 function printed_operator(term)
     @match term begin
         DExpr(Call(op), args) => begin
+            op isa Fun || return nothing
             opname = nameof(op.f)
             if !Base.isoperator(opname)
                 nothing
@@ -181,9 +223,11 @@ function Base.show(io::IO, ::MIME"text/plain", t::TensorComponents)
     elseif t.kind == Kind.Diag()
         print(io, "diagonal ")
     end
-    println("Tensor components:")
+    println(io, "Tensor components:")
     foreach_component(t.kind, t.dims, t.rank) do I
-        println(io, " ", I, " => ", t[Tuple(I)...])
+        print(io, ' ')
+        print_list(io, '[', I, ']')
+        println(io, " => ", t[Tuple(I)...])
     end
     return
 end
