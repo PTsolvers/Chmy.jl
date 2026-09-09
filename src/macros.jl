@@ -1,10 +1,13 @@
 """
     @scalars x y ...
 
-Declare symbolic scalar fields.
+Declare named, rank-zero [`DTerm`](@ref) fields in the caller's scope and return
+them as a tuple in declaration order. A single name returns a one-element tuple.
+Fields are spatially varying unless marked with [`@uniform`](@ref).
 
 ```julia
-@scalars a b
+fields = @scalars a b # returns (a, b)
+@scalars c           # returns (c,)
 @scalars a @uniform(b, c)
 ```
 """
@@ -15,10 +18,12 @@ end
 """
     @vectors u v ...
 
-Declare symbolic vector fields.
+Declare named, rank-one [`DTerm`](@ref) fields in the caller's scope and return
+them as a tuple in declaration order, including for a single name.
+Fields are spatially varying unless marked with [`@uniform`](@ref).
 
 ```julia
-@vectors u v
+fields = @vectors u v # returns (u, v)
 @uniform @vectors u v
 ```
 """
@@ -29,14 +34,16 @@ end
 """
     @tensors R x y ...
 
-Declare symbolic tensors of rank `R`.
+Declare named [`DTerm`](@ref) tensors of rank `R` in the caller's scope and return
+them as a tuple in declaration order, including for a single name.
+The rank must be a nonnegative integer literal.
 
 Plain names create generic tensors. Qualifiers such as [`@sym`](@ref),
-[`@diag`](@ref), [`@alt`](@ref), [`@id`](@ref), and [`@zero`](@ref)
-select specialized tensor kinds.
+[`@diag`](@ref), and [`@alt`](@ref) select specialized tensor kinds.
+Tensors are spatially varying unless marked with [`@uniform`](@ref).
 
 ```julia
-@tensors 2 A @sym(B, C) @diag(D)
+tensors = @tensors 2 A @sym(B, C) @diag(D) # returns (A, B, C, D)
 @uniform @tensors 2 @sym(U)
 ```
 """
@@ -51,17 +58,17 @@ end
 Mark declarations as spatially uniform.
 
 `@uniform` can wrap a declaration macro, appear inline inside another declaration,
-or wrap a `begin ... end` block containing declaration macros. Identity and zero
-tensors are always uniform, so `@uniform` has no effect on [`@id`](@ref) and
-[`@zero`](@ref) declarations.
+or wrap a `begin ... end` block containing declaration macros. The result is a
+tuple of all declared tensors in source order. Blocks, including nested
+`begin ... end` blocks, return one flat tuple; an empty block returns `()`.
 
 ```julia
 @uniform @scalars a b
 @scalars a @uniform(b, c)
-@uniform begin
+fields = @uniform begin
     @scalars a b
     @vectors u v
-end
+end # returns (a, b, u, v)
 ```
 """
 macro uniform(args...)
@@ -126,40 +133,6 @@ macro alt(args...)
     declaration_error("`@alt` can only be used inside `@tensors`.")
 end
 
-"""
-    @id x
-    @id(x, y, ...)
-
-Declare identity tensors.
-
-This qualifier is only valid inside [`@tensors`](@ref). Identity tensors are
-always uniform, so wrapping them in [`@uniform`](@ref) has no effect.
-
-```julia
-@tensors 2 @id(I)
-```
-"""
-macro id(args...)
-    declaration_error("`@id` can only be used inside `@tensors`.")
-end
-
-"""
-    @zero x
-    @zero(x, y, ...)
-
-Declare zero tensors.
-
-This qualifier is only valid inside [`@tensors`](@ref). Zero tensors are always
-uniform, so wrapping them in [`@uniform`](@ref) has no effect.
-
-```julia
-@tensors 2 @zero(Z)
-```
-"""
-macro zero(args...)
-    declaration_error("`@zero` can only be used inside `@tensors`.")
-end
-
 struct Declaration
     name::Symbol
     rank::Int
@@ -168,15 +141,11 @@ struct Declaration
 end
 
 const DECLARATION_MACROS = (Symbol("@scalars"), Symbol("@vectors"), Symbol("@tensors"))
-const KIND_MACROS = Dict(Symbol("@sym") => :SymKind,
-                         Symbol("@diag") => :DiagKind,
-                         Symbol("@alt") => :AltKind,
-                         Symbol("@id") => :IdKind,
-                         Symbol("@zero") => :ZeroKind)
+const KIND_MACROS = Dict(Symbol("@sym") => :Sym,
+                         Symbol("@diag") => :Diag,
+                         Symbol("@alt") => :Alt)
 
-const STENSOR_REF = GlobalRef(@__MODULE__, :STensor)
-const S_ID_TENSOR_REF = GlobalRef(@__MODULE__, :SIdTensor)
-const S_ZERO_TENSOR_REF = GlobalRef(@__MODULE__, :SZeroTensor)
+const TENSOR_REF = GlobalRef(@__MODULE__, :Tensor)
 
 is_macrocall(expr, name::Symbol) = expr isa Expr && expr.head === :macrocall && expr.args[1] === name
 macro_args(expr::Expr) = expr.args[3:end]
@@ -202,7 +171,7 @@ end
 
 function parse_declaration_item!(decls, arg, rank, allow_kinds, uniform)
     if arg isa Symbol
-        push!(decls, Declaration(arg, rank, :NoKind, uniform))
+        push!(decls, Declaration(arg, rank, :None, uniform))
         return
     end
 
@@ -234,59 +203,69 @@ function parse_declarations(args, rank, allow_kinds, uniform)
     return decls
 end
 
-kind_ref(kind::Symbol) = GlobalRef(@__MODULE__, kind)
+kind_ref(kind::Symbol) = GlobalRef(Kind, kind)
 
 function constructor_expr(decl::Declaration)
-    if decl.kind === :IdKind
-        return Expr(:call, Expr(:curly, S_ID_TENSOR_REF, decl.rank))
-    elseif decl.kind === :ZeroKind
-        return Expr(:call, Expr(:curly, S_ZERO_TENSOR_REF, decl.rank))
-    end
-    return Expr(:call, Expr(:curly, STENSOR_REF, decl.rank, kind_ref(decl.kind), decl.uniform, QuoteNode(decl.name)))
+    kind = Expr(:call, kind_ref(decl.kind))
+    return Expr(:call, TENSOR_REF, decl.rank, QuoteNode(decl.name), kind, decl.uniform)
 end
 
-function emit_declarations(decls::Vector{Declaration})
+function emit_declarations(decls)
+    body = Expr(:block)
+    result = Expr(:tuple)
     # Emit plain assignments so the declared names bind in caller scope.
-    assignments = map(decls) do decl
-        Expr(:(=), esc(decl.name), constructor_expr(decl))
+    for decl in decls
+        if decl isa LineNumberNode
+            push!(body.args, decl)
+        else
+            push!(body.args, Expr(:(=), esc(decl.name), constructor_expr(decl)))
+            push!(result.args, esc(decl.name))
+        end
     end
-    return Expr(:block, assignments...)
+    push!(body.args, result)
+    return body
 end
 
 function expand_declaration(macro_name, args; uniform=false)
+    return emit_declarations(parse_declaration(macro_name, args; uniform))
+end
+
+function parse_declaration(macro_name, args; uniform=false)
     if macro_name === Symbol("@scalars")
         isempty(args) && declaration_error("`@scalars` requires at least one name.")
-        decls = parse_declarations(args, 0, false, uniform)
-        return emit_declarations(decls)
+        return parse_declarations(args, 0, false, uniform)
     elseif macro_name === Symbol("@vectors")
         isempty(args) && declaration_error("`@vectors` requires at least one name.")
-        decls = parse_declarations(args, 1, false, uniform)
-        return emit_declarations(decls)
+        return parse_declarations(args, 1, false, uniform)
     elseif macro_name === Symbol("@tensors")
         isempty(args) && declaration_error("`@tensors` requires a rank followed by at least one name.")
         length(args) == 1 && declaration_error("`@tensors` requires at least one name after the tensor rank.")
         rank = parse_rank(first(args))
-        decls = parse_declarations(args[2:end], rank, true, uniform)
-        return emit_declarations(decls)
+        return parse_declarations(args[2:end], rank, true, uniform)
     end
 
     declaration_error("Unsupported declaration macro `$macro_name`.")
 end
 
 function expand_uniform_block(expr)
+    decls = Union{Declaration,LineNumberNode}[]
+    parse_uniform_block!(decls, expr)
+    return emit_declarations(decls)
+end
+
+function parse_uniform_block!(decls, expr)
     expr isa Expr && expr.head === :block || declaration_error("`@uniform` blocks must contain only declaration macros.")
-    items = Any[]
     # Preserve line nodes so error locations still point back to user code.
     for item in expr.args
         if item isa LineNumberNode
-            push!(items, item)
+            push!(decls, item)
         elseif item isa Expr && item.head === :macrocall && item.args[1] in DECLARATION_MACROS
-            push!(items, expand_declaration(item.args[1], macro_args(item); uniform=true))
+            append!(decls, parse_declaration(item.args[1], macro_args(item); uniform=true))
         elseif item isa Expr && item.head === :block
-            push!(items, expand_uniform_block(item))
+            parse_uniform_block!(decls, item)
         else
             declaration_error("`@uniform begin ... end` may only contain declaration macros.")
         end
     end
-    return Expr(:block, items...)
+    return decls
 end
