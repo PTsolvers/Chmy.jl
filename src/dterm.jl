@@ -32,7 +32,7 @@ const DTerm = DTermImpl.Type
 
 function (==ₛ)(a::DTerm, b::DTerm)
     @match (a, b) begin
-        (Literal(x), Literal(y)) => (x == y)::Bool
+        (Literal(x), Literal(y)) => isequal(x, y)::Bool
         (Tensor(ar, an, ak, au), Tensor(br, bn, bk, bu)) => ar == br &&
                                                             an == bn &&
                                                             ak == bk &&
@@ -44,11 +44,59 @@ function (==ₛ)(a::DTerm, b::DTerm)
             ah == bh || return false
             length(ac) == length(bc) || return false
             for k in eachindex(ac)
-                ac[k] ==ₛ bc[k] || return false
+                ac[k]==ₛbc[k] || return false
             end
             true
         end
         _ => false
+    end
+end
+
+"""
+    isnegof(x::DTerm, y::DTerm)
+
+Check whether canonical scalar expressions have equal bodies and opposite outer
+signs, without constructing or simplifying expressions. Numeric literals use
+`isequal(x, -y)` on their values; this is not a general algebraic equality test.
+"""
+function isnegof(x::DTerm, y::DTerm)::Bool
+    if isliteral(x) && isliteral(y)
+        vx, vy = value(x), value(y)
+        return vx isa Number && vy isa Number && isnegof(vx, vy)
+    elseif iscall(x) && operation(x) isa Fun{typeof(-)} && length(arguments(x)) == 1
+        return only(arguments(x)) ==ₛ y
+    elseif iscall(y) && operation(y) isa Fun{typeof(-)} && length(arguments(y)) == 1
+        return x ==ₛ only(arguments(y))
+    end
+    return false
+end
+
+# Specialize numeric arithmetic so negating a Literal's payload avoids boxing.
+isnegof(x::T, y::S) where {T<:Number,S<:Number} = isequal(x, -y)::Bool
+
+Base.isequal(a::DTerm, b::DTerm) = a==ₛb
+
+function Base.hash(term::DTerm, h::UInt)::UInt
+    @match term begin
+        Literal(x) => begin
+            h = hash(:Literal, h)
+            # Avoid boxing the hash seed/result for common numeric payloads.
+            if x isa Union{Int,Rational{Int},Float64}
+                return hash(x, h)
+            end
+            return hash(x, h)::UInt
+        end
+        Index(i) => hash(i, hash(:Index, h))
+        Tensor(rank, name, kind, uniform) => hash(uniform, hash(kind, hash(name, hash(rank, hash(:Tensor, h)))))
+        ZeroTensor(rank) => hash(rank, hash(:ZeroTensor, h))
+        IdTensor(rank) => hash(rank, hash(:IdTensor, h))
+        DExpr(head, args) => begin
+            h = hash(head, hash(length(args), hash(:DExpr, h)))
+            for k in eachindex(args)
+                h = hash(args[k], h)
+            end
+            h
+        end
     end
 end
 
@@ -109,8 +157,21 @@ function value(term::DTerm)
     end
 end
 
-isstaticzero(term::DTerm)::Bool = isa_variant(term, ZeroTensor)
-isstaticone(term::DTerm)::Bool = isa_variant(term, IdTensor)
+function isstaticzero(term::DTerm)::Bool
+    @match term begin
+        Literal(_) => term ==ₛ Literal(0)
+        ZeroTensor(_) => true
+        _ => false
+    end
+end
+
+function isstaticone(term::DTerm)::Bool
+    @match term begin
+        Literal(_) => term ==ₛ Literal(1)
+        IdTensor(_) => true
+        _ => false
+    end
+end
 
 function Base.isinteger(term::DTerm)
     @match term begin
@@ -149,8 +210,8 @@ end
 
 function argument(term::DTerm)
     @match term begin
-        DExpr(Comp(_), (arg, )) => arg
-        DExpr(Locs(_), (arg, )) => arg
+        DExpr(Comp(_), (arg,)) => arg
+        DExpr(Locs(_), (arg,)) => arg
         DExpr(Inds(), (arg, _...)) => arg
         _ => throw(ArgumentError("only indexing expressions can have a single argument"))
     end
@@ -165,7 +226,7 @@ end
 
 function locations(term::DTerm)
     @match term begin
-        DExpr(Comp(comps), _) => comps
+        DExpr(Locs(locs), _) => locs
         _ => throw(ArgumentError("only location expression can have locations"))
     end
 end
@@ -197,5 +258,36 @@ function tensorkind(term::DTerm)
     @match term begin
         Tensor(_, _, kind, _) => kind
         _ => throw(ArgumentError("only named tensors have a kind"))
+    end
+end
+
+function Base.getindex(term::DTerm, I::Vararg{Integer,N}) where {N}
+    @match term begin
+        Literal(_) => return term
+        Index(_) => return term
+        Tensor(_, _, kind, _) => begin
+            if kind == Kind.Sym()
+                return makecomp(term, sort(I))
+            elseif kind == Kind.Alt()
+                allunique(I) || return Literal(0)
+                expr = makecomp(term, sort(I))
+                return iseven(inversion_count(I)) ? expr : -expr
+            elseif kind == Kind.Diag()
+                return allequal(I) ? makecomp(term, I) : Literal(0)
+            elseif kind == Kind.None()
+                return makecomp(term, I)
+            else
+                error("unreachable")
+            end
+        end
+        ZeroTensor(rank) => begin
+            rank == N || throw(ArgumentError("number of subscripts not matching tensor rank"))
+            return Literal(0)
+        end
+        IdTensor(rank) => begin
+            rank == N || throw(ArgumentError("number of subscripts not matching tensor rank"))
+            return allequal(I) ? Literal(1) : Literal(0)
+        end
+        _ => return makecomp(term, I)
     end
 end
