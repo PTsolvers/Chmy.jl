@@ -56,7 +56,9 @@ Simplify each stored scalar entry, then detect and extract the most structured s
 function simplify(t::TensorComponents)
     data = map(simplify, t.data)
     kind = detect_kind(t.kind, t.dims, t.rank, data)
-    kind == t.kind && return TensorComponents(t.dims, t.rank, kind, data)
+    if t.kind == kind
+        return TensorComponents(t.dims, t.rank, kind, data)
+    end
     if t.kind == Kind.Alt() && kind == Kind.Diag()
         return literal_components(ZERO, t.dims, t.rank)
     end
