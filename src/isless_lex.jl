@@ -1,121 +1,82 @@
-# leaf terms
-termrank(::SIndex)      = 0x0
-termrank(::STensor)     = 0x1
-termrank(::SZeroTensor) = 0x2
-termrank(::SIdTensor)   = 0x3
-termrank(::SLiteral)    = 0x4
-termrank(::SExpr)       = 0x5
-termrank(t::STerm)      = 0x6 + objectid(t)
-
-# operator terms
-oprank(::Fun)                    = 0x0
-oprank(::AbstractDerivative)      = 0x1
-oprank(::LiftedPartialDerivative) = 0x2
-oprank(::Gradient)                = 0x3
-oprank(::Divergence)              = 0x4
-oprank(::Curl)                    = 0x5
-oprank(t::STerm)                  = 0x6 + objectid(t)
-
-# comparing heads of expressions
-headrank(::SComp)     = 0x0
-headrank(::SAt)       = 0x1
-headrank(::SSub)      = 0x2
-headrank(::SFun)      = 0x3
-headrank(h::SHead)    = 0x4 + objectid(h)
-headrank(expr::SExpr) = headrank(head(expr))
-
-# comparing STerms lexicographically
-isless_lex(::SIndex{I}, ::SIndex{J}) where {I,J} = isless(I, J)
-isless_lex(x::SFun, y::SFun) = isless(nameof(x.f), nameof(y.f))
-isless_lex(::Point, ::Segment) = true
-isless_lex(::Segment, ::Point) = false
-
-function isless_lex(x::AbstractPartialDerivative{I}, y::AbstractPartialDerivative{J}) where {I,J}
-    x === y && return false
-    x.op === y.op || return isless_lex(x.op, y.op)
-    return isless(I, J)
-end
-
-isless_lex(x::AbstractDerivative, y::AbstractDerivative) = isless(objectid(x), objectid(y))
-
-function isless_lex(x::STensor, y::STensor)
-    # higher-rank tensors are larger
-    rx = tensorrank(x)
-    ry = tensorrank(y)
-    rx == ry || return isless(rx, ry)
-    # compare names lexicographically
-    nx = name(x)
-    ny = name(y)
-    nx == ny || return isless(nx, ny)
-    # Chmy requires tensors of the same name and rank to agree in all static metadata.
-    if x !== y
-        throw(ArgumentError("tensors with the same name must have the same rank, kind, and uniformity"))
+# Ranks preserve the ordering of the static symbolic core.
+function termrank(term)
+    @match term begin
+        Index(_) => 0
+        Tensor(_, _, _, _) => 1
+        ZeroTensor(_) => 2
+        IdTensor(_) => 3
+        Literal(_) => 4
+        DExpr(_, _) => 5
     end
-    return false
 end
 
-isless_lex(x::SLiteral, y::SLiteral) = isless(value(x), value(y))
+function headrank(head)
+    @match head begin
+        Comp(_) => 0
+        Locs(_) => 1
+        Inds() => 2
+        Call(_) => 3
+    end
+end
 
-function isless_lex(x::STerm, y::STerm)
-    x === y && return false
-    # compare tensor ranks
-    tx = tensorrank(x)
-    ty = tensorrank(y)
-    tx == ty || return isless(tx, ty)
-    # different kinds of terms are compared by their term rank
-    rx = termrank(x)
-    ry = termrank(y)
+(<ₛ)(x, y) = x < y
+
+# Operator values are not DTerms. User-defined operators retain identity ordering.
+(<ₛ)(x::Fun, y::Fun) = isless(nameof(x.f), nameof(y.f))
+(<ₛ)(::Fun, ::Operator) = true
+(<ₛ)(::Operator, ::Fun) = false
+(<ₛ)(x::Operator, y::Operator) = isless(objectid(x), objectid(y))
+
+(<ₛ)(x::Location, y::Location) = x isa Point && y isa Segment
+
+"""
+    x <ₛ y
+
+Compare dynamic symbolic terms lexicographically for canonical factor ordering.
+"""
+function (<ₛ)(x::DTerm, y::DTerm)
+    tx, ty = tensorrank(x), tensorrank(y)
+    tx == ty || return tx < ty
+
+    rx, ry = termrank(x), termrank(y)
     rx == ry || return rx < ry
-    # special logic for comparing expressions
-    if isexpr(x) && isexpr(y)
-        return isless_expr(x, y)
+
+    @match (x, y) begin
+        (Index(i), Index(j)) => i < j
+        (Literal(a), Literal(b)) => isless(a, b)::Bool
+        (Tensor(_, nx, _, _), Tensor(_, ny, _, _)) => begin
+                                                      nx == ny || return isless(nx, ny)
+                                                      x==ₛy || throw(ArgumentError("tensors with the same name must have the same rank, kind, and uniformity"))
+                                                      false
+                                                      end
+        (DExpr(_, _), DExpr(_, _)) => isless_expr(x, y)
+        _ => false # Equal-rank zero and identity tensors.
     end
-    # catchall for user-defined objects
-    return isless(objectid(x), objectid(y))
 end
 
-function isless_expr(x::SExpr, y::SExpr)
-    # compare different kinds of expressions by rank of the head
-    hx = headrank(x)
-    hy = headrank(y)
-    hx == hy || return hx < hy
-    # compare children lexicographically
-    return isless_tuple(children(x), children(y))
-end
+function isless_expr(x, y)::Bool
+    hx, hy = head(x), head(y)
+    ax, ay = args(x), args(y)
+    rx, ry = headrank(hx), headrank(hy)
+    rx == ry || return rx < ry
 
-# special logic for comparing call expressions
-function isless_expr(x::SExpr{SFun}, y::SExpr{SFun})
-    # compare operations
-    opx = operation(x)
-    opy = operation(y)
-    if opx !== opy
-        # first different kind of operations compare differently
-        orx = oprank(opx)
-        ory = oprank(opy)
-        orx == ory || return isless(orx, ory)
-        # otherwise they should be comparable
-        return isless_lex(opx, opy)
+    @match (hx, hy) begin
+        (Call(opx), Call(opy)) => begin
+            opx == opy || return (opx<ₛopy)::Bool
+            isless_args(ax, ay)
+        end
+        (Comp(ix), Comp(iy)) || (Locs(ix), Locs(iy)) => begin
+            ax[1]==ₛay[1] || return ax[1]<ₛay[1]
+            isless_args(ix, iy)
+        end
+        _ => isless_args(ax, ay) # Grid indexing stores argument and indices together.
     end
-    # finally lexicographically compare argument list
-    return isless_tuple(arguments(x), arguments(y))
 end
 
-# compare static tuples by comparing first arguments and if those are equal comparing tails
-isless_tuple(::Tuple{}, ::Tuple{}) = false
-isless_tuple(::Tuple{}, ::Tuple{Any,Vararg}) = true
-isless_tuple(::Tuple{Any,Vararg}, ::Tuple{}) = false
-
-function isless_tuple(xs::Tuple{X,Vararg}, ys::Tuple{Y,Vararg}) where {X,Y}
-    xh = first(xs)
-    yh = first(ys)
-    xh === yh && return isless_tuple(Base.tail(xs), Base.tail(ys))
-    return isless_lex(xh, yh)
-end
-
-# static sorting of tuples of singleton types
-ssort_impl(args::Tuple, lt, by, order) = (sort!(collect(args); lt, by, order)...,)
-
-@generated function ssort(args::Tuple; lt=Base.isless, by=Base.identity, order=Base.Order.Forward)
-    sorted = ssort_impl(args.instance, lt.instance, by.instance, order.instance)
-    return :($sorted)
+function isless_args(xs, ys)
+    for i in 1:min(length(xs), length(ys))
+        x, y = xs[i], ys[i]
+        isequal(x, y) || return x<ₛy
+    end
+    return length(xs) < length(ys)
 end
