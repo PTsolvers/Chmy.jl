@@ -1,85 +1,77 @@
-"""
-    lift(op, args, inds, Val(I))
-    lift(op, args, loc, inds, Val(I))
+struct Lifted{O<:Operator} <: Operator
+    op::O
+    axis::Int
 
-Build an `N`-dimensional stencil expression by lifting a one-axis stencil along
-dimension `I` and reinserting the fixed indices (and locations) in other axes.
-"""
-Base.@assume_effects :foldable function lift(op::STerm, args, inds::NTuple{N,STerm}, ::Val{I}) where {I,N}
-    expr = stencil_rule(op, tuplemap(Stub, args), (inds[I],))
-    rule = InsertRule{I}(inds)
-    return evaluate(unstub(Prewalk(rule)(expr)))
-end
-Base.@assume_effects :foldable function lift(op::STerm, args, loc::NTuple{N,Space}, inds::NTuple{N,STerm}, ::Val{I}) where {I,N}
-    expr = stencil_rule(op, tuplemap(Stub, args), (loc[I],), (inds[I],))
-    rule = InsertRuleLoc{I}(loc, inds)
-    return evaluate(unstub(Prewalk(rule)(expr)))
-end
+    """
+    Lifted(op::Operator, axis::Integer)
 
-# Lifting embeds a 1D stencil rule into an N-dimensional indexing/location
-# context. The rule itself is still written using ordinary Chmy indexing syntax,
-# so it uses a local `Stub` placeholder to postpone lowering until the full
-# N-dimensional indices and locations have been reconstructed.
-
-# `Stub` is a wrapper for scalar arguments while a 1D rule is being built.
-# If lifting used the original arguments directly, indexing inside a 1D stencil
-# rule would immediately trigger the normal expression indexing logic. That would
-# lower or propagate the partially lifted expression before we had a chance to
-# reinsert the untouched axes.
-struct Stub{T<:STerm} <: STerm
-    arg::T
-    function Stub(arg::T) where {T<:STerm}
-        tensorrank(arg) == 0 || throw(ArgumentError("Stub can only wrap scalar terms"))
-        return new{T}(arg)
+    Wraps 1D operator `op` in a way that when lowered with nD list
+    of locations and/or indices, the operator is applied along `axis`.
+    """
+    function Lifted(op::O, axis::Integer) where {O<:Operator}
+        axis > 0 || throw(ArgumentError("the lifted axis must be positive"))
+        return new{O}(op, Int(axis))
     end
 end
 
-tensorrank(stub::Stub) = tensorrank(stub.arg)
+tensorrank(lf::Lifted, args) = tensorrank(lf.op, args)
+checkranks(lf::Lifted, args::NTuple{N,DTerm}) where {N} = checkranks(lf.op, args)
 
-# Recursively remove lift-local placeholders before the expression re-enters the
-# ordinary evaluation/indexing machinery.
-unstub(term::STerm) = term
-unstub(stub::Stub) = stub.arg
-unstub(expr::SExpr) = SExpr(head(expr), tuplemap(unstub, children(expr))...)
-
-Base.getindex(stub::Stub, inds::Vararg{STerm}) = SExpr(Ind(), stub, inds...)
-Base.getindex(stub::Stub, loc::Vararg{Space}) = SExpr(Loc(), stub, loc...)
-function Base.getindex(expr::SExpr{SAt,<:Tuple{Stub,Vararg}}, inds::Vararg{STerm,N}) where {N}
-    return SExpr(Ind(), expr, inds...)
+struct Insert{L,N}
+    locs::L
+    inds::NTuple{N,DTerm}
 end
 
-# Reinsert the lifted index into the full N-dimensional index tuple, keeping the
-# non-lifted axes fixed to the values originally passed to `lift`.
-struct InsertRule{I,N,Inds} <: AbstractRule
-    inds::Inds
+function stencil_rule(lf::Lifted, args::Tuple{Vararg{DTerm}}, inds::NTuple{N,DTerm}) where {N}
+    lf.axis <= N || throw(ArgumentError("the lifted axis exceeds the number of grid indices"))
+    term = stencil_rule(lf.op, args, (inds[lf.axis],))::DTerm
+    N == 1 && return term
+    return insert_stencil(term, Insert(nothing, inds), lf.axis)
 end
-function InsertRule{I}(inds::NTuple{N,STerm}) where {I,N}
-    return InsertRule{I,N,typeof(inds)}(inds)
-end
-
-function (rule::InsertRule{I,N})(term::SExpr{SSub}) where {I,N}
-    ind = only(indices(term))
-    new_inds = replace_index(rule.inds, ind, Val(I))
-    return SExpr(Ind(), argument(term), new_inds...)
+function stencil_rule(lf::Lifted, args::Tuple{Vararg{DTerm}}, locs::NTuple{N,Location}, inds::NTuple{N,DTerm}) where {N}
+    lf.axis <= N || throw(ArgumentError("the lifted axis exceeds the number of grid indices"))
+    term = stencil_rule(lf.op, args, (locs[lf.axis],), (inds[lf.axis],))::DTerm
+    N == 1 && return term
+    return insert_stencil(term, Insert(locs, inds), lf.axis)
 end
 
-# Variant of `InsertRule` for staggered operators that also rebuilds the full
-# location tuple around the lifted axis.
-struct InsertRuleLoc{I,N,Loc,Inds} <: AbstractRule
-    loc::Loc
-    inds::Inds
+@inline function insert_stencil(term, ctx::Insert{Nothing}, axis)
+    @match term begin
+        DExpr(Inds(), (arg, ind)) => begin
+            ninds = @inbounds Base.setindex(ctx.inds, ind, axis)
+            return makeinds_unchecked(arg, ninds)
+        end
+        DExpr(head, args) => something(insert_args(head, args, ctx, axis), term)
+        _ => return term
+    end
 end
-function InsertRuleLoc{I}(loc::NTuple{N,Space}, inds::NTuple{N,STerm}) where {I,N}
-    return InsertRuleLoc{I,N,typeof(loc),typeof(inds)}(loc, inds)
+@inline function insert_stencil(term, ctx, axis)
+    @match term begin
+        DExpr(Inds(), (arg, ind)) => begin
+            @match arg begin
+                DExpr(Locs((loc,)), (arg2,)) => begin
+                    ninds = @inbounds Base.setindex(ctx.inds, ind, axis)
+                    nlocs = @inbounds Base.setindex(ctx.locs, loc, axis)
+                    return makeinds_unchecked(makelocs_unchecked(arg2, nlocs), ninds)
+                end
+                _ => throw(ArgumentError("location-aware stencil rules must define locations on fields"))
+            end
+        end
+        DExpr(head, args) => something(insert_args(head, args, ctx, axis), term)
+        _ => return term
+    end
 end
 
-function (rule::InsertRuleLoc{I,N})(term::SExpr{SAt}) where {I,N}
-    loc = only(location(term))
-    new_loc = replace_index(rule.loc, loc, Val(I))
-    return SExpr(Loc(), argument(term), new_loc...)
+@inline function insert_args(head, args, ctx, axis)
+    for k in eachindex(args)
+        arg = insert_stencil(args[k], ctx, axis)
+        arg==ₛargs[k] && continue
+        return DExpr(head, insert_args(args, arg, ctx, axis, k))
+    end
+    return nothing
 end
-function (rule::InsertRuleLoc{I,N})(term::SExpr{SSub}) where {I,N}
-    ind = only(indices(term))
-    new_inds = replace_index(rule.inds, ind, Val(I))
-    return SExpr(Ind(), argument(term), new_inds...)
+@inline function insert_args(args::NTuple{N,DTerm}, arg, ctx, axis, k) where {N}
+    return ntuple(Val(N)) do j
+        j < k ? args[j] : j == k ? arg : insert_stencil(args[j], ctx, axis)
+    end
 end
