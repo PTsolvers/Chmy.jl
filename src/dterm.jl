@@ -12,7 +12,7 @@ const Head = HeadImpl.Type
 @data DTermImpl begin
     export Literal, Index, Tensor, IdTensor, ZeroTensor, DExpr
 
-    Literal(Any)
+    Literal(Number)
     Index(Int)
     struct Tensor
         rank::Int
@@ -25,12 +25,28 @@ const Head = HeadImpl.Type
     struct DExpr
         head::Head
         args::Tuple{Vararg{DTermImpl}}
+        rank::Int
+        hash::UInt
     end
 end
 using .DTermImpl
 const DTerm = DTermImpl.Type
 
+# all construction and rebuilding paths compute metadata from immutable children
+function DTermImpl.DExpr(head::Head, args::NTuple{N,DTerm}) where {N}
+    rank = @match head begin
+        Call(op) => tensorrank(op, args)::Int
+        _ => 0
+    end
+    h = hash(head, hash(length(args), hash(:DExpr, UInt(0))))
+    for k in eachindex(args)
+        h = hash(args[k], h)
+    end
+    return DExpr(head, args, rank, h)
+end
+
 function (==ₛ)(a::DTerm, b::DTerm)
+    hash(a) == hash(b) || return false
     @match (a, b) begin
         (Literal(x), Literal(y)) => isequal(x, y)::Bool
         (Tensor(ar, an, ak, au), Tensor(br, bn, bk, bu)) => ar == br &&
@@ -61,8 +77,7 @@ signs, without constructing or simplifying expressions. Numeric literals use
 """
 function isnegof(x::DTerm, y::DTerm)::Bool
     if isliteral(x) && isliteral(y)
-        vx, vy = value(x), value(y)
-        return vx isa Number && vy isa Number && isnegof(vx, vy)
+        return isnegof(value(x), value(y))
     elseif iscall(x) && operation(x) isa Fun{typeof(-)} && length(arguments(x)) == 1
         return only(arguments(x)) ==ₛ y
     elseif iscall(y) && operation(y) isa Fun{typeof(-)} && length(arguments(y)) == 1
@@ -90,13 +105,7 @@ function Base.hash(term::DTerm, h::UInt)::UInt
         Tensor(rank, name, kind, uniform) => hash(uniform, hash(kind, hash(name, hash(rank, hash(:Tensor, h)))))
         ZeroTensor(rank) => hash(rank, hash(:ZeroTensor, h))
         IdTensor(rank) => hash(rank, hash(:IdTensor, h))
-        DExpr(head, args) => begin
-            h = hash(head, hash(length(args), hash(:DExpr, h)))
-            for k in eachindex(args)
-                h = hash(args[k], h)
-            end
-            h
-        end
+        DExpr(_, _, _, cached) => iszero(h) ? cached : hash(cached, h)
     end
 end
 
@@ -159,7 +168,7 @@ end
 
 function isstaticzero(term::DTerm)::Bool
     @match term begin
-        Literal(_) => term ==ₛ Literal(0)
+        Literal(val) => isequal(val, 0)::Bool
         ZeroTensor(_) => true
         _ => false
     end
@@ -167,7 +176,7 @@ end
 
 function isstaticone(term::DTerm)::Bool
     @match term begin
-        Literal(_) => term ==ₛ Literal(1)
+        Literal(val) => isequal(val, 1)::Bool
         IdTensor(_) => true
         _ => false
     end
@@ -242,7 +251,7 @@ function tensorrank(term::DTerm)::Int
     @match term begin
         Tensor(rank, _, _, _) => rank
         ZeroTensor(rank) || IdTensor(rank) => rank
-        DExpr(Call(op), args) => tensorrank(op, args)::Int
+        DExpr(_, _, rank, _) => rank
         _ => 0
     end
 end

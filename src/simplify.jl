@@ -31,7 +31,7 @@ function canonicalize(term::DTerm)
                 a, b = args
                 # zero annihilation takes precedence over inverse cancellation
                 if isstaticzero(a) || isstaticzero(b)
-                    rank = tensorrank(op, args)
+                    rank = tensorrank(term)
                     isstaticzero(a) && tensorrank(a) == rank && return a
                     isstaticzero(b) && tensorrank(b) == rank && return b
                     return zero_expr(rank)
@@ -90,8 +90,9 @@ function canonicalize(term::DTerm)
                         ismatrixop(inner) || return term
                         base = inner_args[1]
                         tensorrank(base) == 2 || return term
-                        # Involutions: inv(inv(A)) = A and A'' = A.
-                        if (op isa Fun{typeof(inv)} && inner isa Fun{typeof(inv)}) || (op isa Fun{typeof(adjoint)} && inner isa Fun{typeof(adjoint)})
+                        # involutions: inv(inv(A)) = A and A'' = A
+                        if (op isa Fun{typeof(inv)} && inner isa Fun{typeof(inv)}) ||
+                           (op isa Fun{typeof(adjoint)} && inner isa Fun{typeof(adjoint)})
                             return base
                         end
                         # explicit projections carry symmetry just like named tensor kinds
@@ -114,7 +115,7 @@ function canonicalize(term::DTerm)
                 end
             end
             if op isa Fun && all(isliteral, args)
-                return Literal(evaluate_literals(op, args))
+                return Literal(evaluate_literals(op, args)::Number)
             end
         end
         _ => nothing
@@ -165,7 +166,7 @@ function negate_power(power)
     p = integer_power(power)
     !isnothing(p) && return Literal(Base.checked_neg(p))
     @match power begin
-        Literal(x::Number) => return Literal(-x)
+        Literal(x) => return Literal(-x)
         _ => nothing
     end
     return canonicalize_sum((power,), 0, -1 // 1)
@@ -361,7 +362,8 @@ function abs_product_expr(coef, factors, num, den)
     c = abs(coef)
     for (base, power) in factors
         @match power begin
-            Literal(p::Real) && if p < 0 end => begin
+            Literal(p::Real) && if p < 0
+            end => begin
                 positive = negate_power(power)
                 push!(den, positive==ₛONE ? base : base^positive)
             end
