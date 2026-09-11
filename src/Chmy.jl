@@ -90,6 +90,10 @@ include("lift.jl")
 export subs
 include("subs.jl")
 
+export Binding
+export findkey, push, pairstuple
+include("binding.jl")
+
 include("show.jl")
 
 end # module Chmy
