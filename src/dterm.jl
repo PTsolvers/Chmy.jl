@@ -37,7 +37,7 @@ function DTermImpl.DExpr(head::Head, args::NTuple{N,DTerm}) where {N}
         Call(op) => tensorrank(op, args)::Int
         _ => 0
     end
-    h = hash(head, hash(length(args), hash(:DExpr, UInt(0))))
+    h = hash(head, hash(length(args), hash(:DExpr)))
     for k in eachindex(args)
         h = hash(args[k], h)
     end
@@ -148,10 +148,13 @@ function isuniform(term::DTerm)
         Literal(_) || Index(_) => true
         Tensor(_, _, _, uniform) => uniform
         ZeroTensor(_) || IdTensor(_) => true
-        DExpr(_, args) => all(isuniform, args)
+        DExpr(_, args) => all_isuniform(args)
         _ => false
     end
 end
+
+# specialize on tuple length to avoid boxing in isuniform recursive call (Julia 1.13)
+all_isuniform(args::NTuple{N,DTerm}) where {N} = all(isuniform, args)
 
 function value(term::DTerm)
     @match term begin
