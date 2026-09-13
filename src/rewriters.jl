@@ -77,19 +77,19 @@ end
 
 function walkargs(walk, term::DTerm)
     isexpr(term) || return term
-    children = args(term)
-    for k in eachindex(children)
-        child = walk(children[k])
-        child==ₛchildren[k] && continue
-        return DExpr(head(term), walkargs(walk, children, child, k))
+    args = children(term)
+    for k in eachindex(args)
+        arg = walk(args[k])
+        arg==ₛargs[k] && continue
+        return DExpr(head(term), walkargs(walk, args, arg, k))
     end
     return term
 end
 
 # specialize on tuple length only when walk changes one of the children
-function walkargs(walk, children::NTuple{N,DTerm}, child::DTerm, k::Int) where {N}
+function walkargs(walk, args::NTuple{N,DTerm}, arg::DTerm, k::Int) where {N}
     return ntuple(Val(N)) do j
-        j < k ? children[j] : j == k ? child : walk(children[j])
+        j < k ? args[j] : j == k ? arg : walk(args[j])
     end
 end
 

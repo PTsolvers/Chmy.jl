@@ -41,7 +41,7 @@ ncomponents(::Kind.Diag, dims, rank) = iszero(rank) ? 1 : dims
 
 export isexpr, iscall
 export isliteral, isindex, istensor, iscomp, islocs, isinds, isuniform
-export head, args, operation, arguments
+export head, children, operation, arguments
 export value, argument, arity, isunary, isbinary
 export components, locations, indices
 export tensorrank, tensorname, tensorkind

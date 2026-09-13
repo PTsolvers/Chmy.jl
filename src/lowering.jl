@@ -60,15 +60,15 @@ function check_lowerable(expr::DTerm)
         DExpr(Comp(I), (arg,)) => begin
             istensor(arg) && tensorrank(arg) == length(I) || lower_component_error()
         end
-        DExpr(Call(op), children) => begin
-            foreach(check_lowerable, children)
+        DExpr(Call(op), args) => begin
+            foreach(check_lowerable, args)
             # checked scalar arguments imply scalar arithmetic
             if !(op isa Union{Fun{typeof(+)},Fun{typeof(-)},Fun{typeof(*)},
                               Fun{typeof(/)},Fun{typeof(//)},Fun{typeof(÷)}})
                 tensorrank(expr) == 0 || lower_component_error()
             end
         end
-        DExpr(_, children) => foreach(check_lowerable, children)
+        DExpr(_, args) => foreach(check_lowerable, args)
         _ => tensorrank(expr) == 0 || lower_component_error()
     end
     return nothing
@@ -78,10 +78,10 @@ lower_expr(expr::DTerm)::DTerm = something(lower_changed(expr), expr)
 
 function lower_changed(expr::DTerm)::Union{Nothing,DTerm}
     @match expr begin
-        DExpr(Inds(), children) => begin
-            arg = first(children)
+        DExpr(Inds(), args) => begin
+            arg = first(args)
             field = if islocs(arg)
-                if length(locations(arg)) != length(children)-1
+                if length(locations(arg)) != length(args)-1
                     throw(ArgumentError("locations and grid indices must have the same length"))
                 end
                 argument(arg)
@@ -89,7 +89,7 @@ function lower_changed(expr::DTerm)::Union{Nothing,DTerm}
                 arg
             end
             if iscall(field) || islocs(field) || isinds(field)
-                return lower_sample(children)
+                return lower_sample(args)
             end
             return isuniform(field) ? field : lower_args(expr)
         end
@@ -107,8 +107,8 @@ end
 
 # Specialize on arity only when a sample actually needs expansion. Base.tail
 # then extracts the grid indices without the dynamic tuple slice of a rest match.
-function lower_sample(children::NTuple{N,DTerm})::DTerm where {N}
-    arg, inds = first(children), Base.tail(children)
+function lower_sample(args::NTuple{N,DTerm})::DTerm where {N}
+    arg, inds = first(args), Base.tail(args)
     @match arg begin
         DExpr(Locs(locs), (field,)) => lower_at(field, locs, inds)
         _ => lower_at(arg, nothing, inds)
@@ -116,11 +116,11 @@ function lower_sample(children::NTuple{N,DTerm})::DTerm where {N}
 end
 
 function lower_args(expr::DTerm)::Union{Nothing,DTerm}
-    children = args(expr)
-    for k in eachindex(children)
-        child = lower_changed(children[k])
-        isnothing(child) && continue
-        return DExpr(head(expr), walkargs(lower_expr, children, child, k))
+    args = children(expr)
+    for k in eachindex(args)
+        arg = lower_changed(args[k])
+        isnothing(arg) && continue
+        return DExpr(head(expr), walkargs(lower_expr, args, arg, k))
     end
     return nothing
 end
@@ -128,11 +128,11 @@ end
 function lower_at(expr::DTerm, locs, inds::NTuple{N,DTerm})::DTerm where {N}
     isnothing(locs) || length(locs) == N || throw(ArgumentError("locations and grid indices must have the same length"))
     @match expr begin
-        DExpr(Call(op), children) => begin
+        DExpr(Call(op), args) => begin
             result = if isnothing(locs)
-                stencil_rule(op, children, inds)::DTerm
+                stencil_rule(op, args, inds)::DTerm
             else
-                stencil_rule(op, children, locs, inds)::DTerm
+                stencil_rule(op, args, locs, inds)::DTerm
             end
             return lower_expr(result)
         end

@@ -122,7 +122,7 @@ function head(term::DTerm)
     end
 end
 
-function args(term::DTerm)
+function children(term::DTerm)
     @match term begin
         DExpr(_, args) => args
         _ => throw(ArgumentError("only expressions have children"))

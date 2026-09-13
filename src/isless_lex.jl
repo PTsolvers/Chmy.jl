@@ -56,7 +56,7 @@ end
 
 function isless_expr(x, y)::Bool
     hx, hy = head(x), head(y)
-    ax, ay = args(x), args(y)
+    ax, ay = children(x), children(y)
     rx, ry = headrank(hx), headrank(hy)
     rx == ry || return rx < ry
 
