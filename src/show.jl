@@ -63,6 +63,10 @@ for custom operators to control their call names. The default uses `show(io, op)
 """
 print_opname(io, op::Operator) = show(io, op)
 print_opname(io, op::Fun) = print(io, nameof(op.f))
+function print_opname(io, op::BroadcastedFun)
+    name = nameof(op.f)
+    return Base.isoperator(name) ? print(io, '.', name) : print(io, name, '.')
+end
 print_opname(io, ::AbstractDerivative) = print(io, '∂')
 print_opname(io, ::Gradient) = print(io, "grad")
 print_opname(io, ::Divergence) = print(io, "divg")
@@ -78,8 +82,14 @@ function print_call(io, op::Operator, args)
     return print_list(io, '(', args, ')')
 end
 
-function print_call(io, op::Fun, args)
-    opname = nameof(op.f)
+printed_opname(op::Fun) = nameof(op.f)
+function printed_opname(op::BroadcastedFun)
+    name = nameof(op.f)
+    return Base.isoperator(name) ? Symbol('.', name) : name
+end
+
+function print_call(io, op::Union{Fun,BroadcastedFun}, args)
+    opname = printed_opname(op)
 
     if !Base.isoperator(opname)
         print_opname(io, op)
@@ -145,8 +155,8 @@ end
 function printed_operator(term)
     @match term begin
         DExpr(Call(op), args) => begin
-            op isa Fun || return nothing
-            opname = nameof(op.f)
+            op isa Union{Fun,BroadcastedFun} || return nothing
+            opname = printed_opname(op)
             if !Base.isoperator(opname)
                 nothing
             elseif length(args) == 1 && Base.isunaryoperator(opname)
@@ -189,7 +199,7 @@ function need_parens(arg, op, position)
     child_precedence < precedence && return true
     child_precedence > precedence && return false
 
-    if child_op === op && op in (:+, :++, :*)
+    if child_op === op && op in (:+, :++, :*, :.+, :.++, :.*)
         return false
     elseif precedence == Base.operator_precedence(:>)
         return true

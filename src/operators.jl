@@ -40,6 +40,16 @@ struct Fun{F} <: Operator
     end
 end
 
+struct BroadcastedFun{F} <: Operator
+    f::F
+    function BroadcastedFun(f)
+        Base.issingletontype(typeof(f)) || throw(ArgumentError("function must be a singleton type"))
+        return new{typeof(f)}(f)
+    end
+end
+BroadcastedFun(op::Fun) = BroadcastedFun(op.f)
+Fun(op::BroadcastedFun) = Fun(op.f)
+
 function ⊡ end
 function ⊗ end
 
@@ -55,29 +65,30 @@ function cogram end
 tensorrank(op::Operator, args) = 0
 
 tensorrank(op::Fun, args) = tensorrank(op.f, args)
+tensorrank(::BroadcastedFun, args) = maximum(tensorrank, args)
 
 # fallback tensorrank definition, assuming scalar function by default
 tensorrank(::Function, args) = 0
 
-tensorrank(::typeof(+), args)  = tensorrank(args[1])
-tensorrank(::typeof(-), args)  = tensorrank(args[1])
-tensorrank(::typeof(*), args)  = maximum(tensorrank, args)
-tensorrank(::typeof(/), args)  = tensorrank(args[1])
+tensorrank(::typeof(+), args) = tensorrank(args[1])
+tensorrank(::typeof(-), args) = tensorrank(args[1])
+tensorrank(::typeof(*), args) = maximum(tensorrank, args)
+tensorrank(::typeof(/), args) = tensorrank(args[1])
 tensorrank(::typeof(//), args) = tensorrank(args[1])
-tensorrank(::typeof(÷), args)  = tensorrank(args[1])
-tensorrank(::typeof(⋅), args)  = tensorrank(args[1]) + tensorrank(args[2]) - 2
-tensorrank(::typeof(×), args)  = 1
-tensorrank(::typeof(⊡), args)  = tensorrank(args[1]) + tensorrank(args[2]) - 4
-tensorrank(::typeof(⊗), args)  = tensorrank(args[1]) + tensorrank(args[2])
+tensorrank(::typeof(÷), args) = tensorrank(args[1])
+tensorrank(::typeof(⋅), args) = tensorrank(args[1]) + tensorrank(args[2]) - 2
+tensorrank(::typeof(×), args) = 1
+tensorrank(::typeof(⊡), args) = tensorrank(args[1]) + tensorrank(args[2]) - 4
+tensorrank(::typeof(⊗), args) = tensorrank(args[1]) + tensorrank(args[2])
 
-tensorrank(::typeof(sym), args)     = tensorrank(args[1])
-tensorrank(::typeof(asym), args)    = tensorrank(args[1])
-tensorrank(::typeof(adj), args)     = tensorrank(args[1])
-tensorrank(::typeof(inv), args)     = tensorrank(args[1])
+tensorrank(::typeof(sym), args) = tensorrank(args[1])
+tensorrank(::typeof(asym), args) = tensorrank(args[1])
+tensorrank(::typeof(adj), args) = tensorrank(args[1])
+tensorrank(::typeof(inv), args) = tensorrank(args[1])
 tensorrank(::typeof(adjoint), args) = tensorrank(args[1])
-tensorrank(::typeof(gram), args)    = 2
-tensorrank(::typeof(cogram), args)  = 2
-tensorrank(::typeof(diag), args)    = 1
+tensorrank(::typeof(gram), args) = 2
+tensorrank(::typeof(cogram), args) = 2
+tensorrank(::typeof(diag), args) = 1
 
 @inline function checkscalar(op, args)
     if any(x -> tensorrank(x) > 0, args)
@@ -86,6 +97,17 @@ tensorrank(::typeof(diag), args)    = 1
 end
 
 checkranks(op::Fun, args::NTuple{N,DTerm}) where {N} = checkranks(op.f, args)
+
+# this function can check not only DTerm args, but also mix of DTerm and TensorComponents,
+# which is needed for validating broadcasted expressions involving TensorComponents
+function check_broadcast_ranks(op::BroadcastedFun, args::Tuple)
+    rank = tensorrank(op, args)
+    if any(x -> tensorrank(x) > 0 && tensorrank(x) != rank, args)
+        throw(ArgumentError("all non-scalar broadcast arguments must have the same tensor rank"))
+    end
+    return rank
+end
+checkranks(op::BroadcastedFun, args::NTuple{N,DTerm}) where {N} = check_broadcast_ranks(op, args)
 
 # fallback implementation for all functions and operators, accepting only scalar arguments
 checkranks(op::Operator, args::NTuple{N,DTerm}) where {N} = checkscalar(op, args)
@@ -139,7 +161,6 @@ function checkranks(::typeof(⊗), args::NTuple{N,DTerm}) where {N}
         throw(ArgumentError("outer product '⊗' cannot be applied to scalar terms"))
     end
 end
-# TODO: broadcasting
 
 # shortcut for unary plus
 Base.:+(x::DTerm) = x
@@ -240,7 +261,7 @@ for op in (:gram, :cogram)
 end
 
 # scalar unary operations
-isunaryminus(expr::DTerm) = isunary(expr) && operation(expr) === (-)
+isunaryminus(expr::DTerm) = isunary(expr) && operation(expr) === Fun(-)
 
 Base.:-(arg::DTerm) = makecall_unchecked(Fun(-), (arg,))
 
@@ -258,15 +279,12 @@ for op in (:sqrt, :abs,
     @eval Base.$op(arg::DTerm) = makecall(Fun($op), arg)
 end
 
-# # overloading broadcasting
-# function Base.Broadcast.broadcasted(f, args::Vararg{STerm})
-#     return @makeop(:broadcasted, SFun(f), args...)
-# end
-# function Base.Broadcast.broadcasted(::typeof(Base.literal_pow), f, t::STerm, n::Val{N}) where {N}
-#     return @makeop(:broadcasted, SRef(:^), t, SLiteral(N))
-# end
-# Base.Broadcast.broadcasted(f, a::STerm, b::Number) = Base.Broadcast.broadcasted(f, a, SLiteral(b))
-# Base.Broadcast.broadcasted(f, a::Number, b::STerm) = Base.Broadcast.broadcasted(f, SLiteral(a), b)
+broadcasted(f, arg::DTerm, args::DTerm...) = makecall(BroadcastedFun(f), (arg, args...))
+broadcasted(f, a::DTerm, b::Number) = broadcasted(f, a, Literal(b))
+broadcasted(f, a::Number, b::DTerm) = broadcasted(f, Literal(a), b)
+function broadcasted(::typeof(Base.literal_pow), f, t::DTerm, ::Val{N}) where {N}
+    return broadcasted(f, t, Literal(N))
+end
 
 Base.ifelse(cond::DTerm, x::DTerm, y::DTerm) = makecall(Fun(ifelse), cond, x, y)
 Base.ifelse(cond::DTerm, x::Number, y::DTerm) = ifelse(cond, Literal(x), y)

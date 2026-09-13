@@ -235,7 +235,7 @@ function det(t::TensorComponents)
         return d == 2 ? t[1, 2]^2 : ZERO
     elseif d == 2
         return t.kind == Kind.Sym() ? t[1, 1] * t[2, 2] - t[1, 2]^2 :
-               t[1, 1] * t[2, 2] - t[1, 2] * t[2, 1]
+                                      t[1, 1] * t[2, 2] - t[1, 2] * t[2, 1]
     end
     return t[1, 1] * (t[2, 2] * t[3, 3] - t[2, 3] * t[3, 2]) +
            t[1, 2] * (t[2, 3] * t[3, 1] - t[2, 1] * t[3, 3]) +
@@ -418,10 +418,58 @@ function isdiag(kind::TensorKind, dims, rank, data)
     end
 end
 
-evaluate(op::Fun, args::Tuple, dims::Integer) = evaluate(op.f, args)::Union{DTerm,TensorComponents}
-evaluate(op::Operator, args::Tuple, dims::Integer) = evaluate(op, args)
+evaluate(op::Fun, args::Tuple, ::Integer) = evaluate(op.f, args)::Union{DTerm,TensorComponents}
+evaluate(op::Operator, args::Tuple, ::Integer) = evaluate(op, args)
 evaluate(op::Fun, args::Tuple) = evaluate(op.f, args)::Union{DTerm,TensorComponents}
 evaluate(op::Operator, args::Tuple) = makecall_unchecked(op, args::Tuple{Vararg{DTerm}})
+
+broadcast_component(t::DTerm, I) = t
+broadcast_component(t::TensorComponents, I) = t[I...]
+
+function checkdims(args::Tuple, dims::Integer)
+    if any(x -> x isa TensorComponents && x.dims != dims, args)
+        throw(DimensionMismatch("broadcast tensor dimensions must match"))
+    end
+    return
+end
+
+function broadcast_kind(args::Tuple, rank::Integer)
+    # arbitrary functions preserve permutation symmetry
+    sym_or_diag = rank >= 2 && all(args) do x
+        !(x isa TensorComponents) || x.kind isa Union{Kind.Sym,Kind.Diag}
+    end
+    return sym_or_diag ? Kind.Sym() : Kind.None()
+end
+
+function evaluate(op::BroadcastedFun, args::Tuple)::Union{DTerm,TensorComponents}
+    f = Fun(op)
+    k = findfirst(x -> x isa TensorComponents, args)
+    isnothing(k) && return makecall_unchecked(f, args::Tuple{Vararg{DTerm}})
+    tensor = args[k]::TensorComponents
+    check_broadcast_ranks(op, args)
+    checkdims(args, tensor.dims)
+    kind = broadcast_kind(args, tensor.rank)
+    return TensorComponents(kind, tensor.rank, tensor.dims) do I
+        scalars = map(x -> broadcast_component(x, I), args)
+        makecall_unchecked(f, scalars::Tuple{Vararg{DTerm}})
+    end
+end
+
+function broadcasted(f, arg::Union{DTerm,TensorComponents}, args::Union{DTerm,TensorComponents}...)
+    inputs = (arg, args...)
+    # k cannot be nothing, all-DTerm calls will be dispatched to a method from operators.jl
+    k = findfirst(x -> x isa TensorComponents, inputs)::Int
+    dims = (inputs[k]::TensorComponents).dims
+    op = BroadcastedFun(f)
+    lowered = map(x -> x isa DTerm ? components(x, dims) : x, inputs)
+    return evaluate(op, lowered)
+end
+broadcasted(f, a::TensorComponents, b::Number) = broadcasted(f, a, Literal(b))
+broadcasted(f, a::Number, b::TensorComponents) = broadcasted(f, Literal(a), b)
+function broadcasted(::typeof(Base.literal_pow), f, t::TensorComponents, ::Val{N}) where {N}
+    return broadcasted(f, t, Literal(N))
+end
+
 evaluate(f, args::Tuple) = makecall_unchecked(Fun(f), args::Tuple{Vararg{DTerm}})
 for op in (:+, :-)
     @eval function evaluate(::typeof($op), args::Tuple)
@@ -468,10 +516,10 @@ promote_kind(::T, ::T) where {T<:TensorKind} = T()
 promote_kind(::Kind.None, ::Kind.None) = Kind.None()
 
 promote_kind(::TensorKind, ::Kind.None) = Kind.None()
-promote_kind(::Kind.Sym, ::Kind.Diag)   = Kind.Sym()
-promote_kind(::Kind.Alt, ::Kind.Diag)   = Kind.None()
-promote_kind(::Kind.Alt, ::Kind.Sym)    = Kind.None()
-promote_kind(::Kind.Diag, ::Kind.Sym)   = Kind.Sym()
+promote_kind(::Kind.Sym, ::Kind.Diag) = Kind.Sym()
+promote_kind(::Kind.Alt, ::Kind.Diag) = Kind.None()
+promote_kind(::Kind.Alt, ::Kind.Sym) = Kind.None()
+promote_kind(::Kind.Diag, ::Kind.Sym) = Kind.Sym()
 
 promote_kind(a, b) = promote_kind(b, a)
 
