@@ -10,6 +10,9 @@ import Adapt
 import LinearAlgebra: ⋅, ×, tr, det, diag, transpose
 import Base: broadcasted
 
+using RuntimeGeneratedFunctions
+RuntimeGeneratedFunctions.init(@__MODULE__)
+
 # re-export from LinearAlgebra
 export ⋅, ×, tr, det, diag, transpose
 
@@ -93,6 +96,9 @@ include("subs.jl")
 export Binding
 export findkey, push, pairstuple
 include("binding.jl")
+
+export compile
+include("compile.jl")
 
 include("show.jl")
 
