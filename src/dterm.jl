@@ -32,7 +32,6 @@ end
 using .DTermImpl
 const DTerm = DTermImpl.Type
 
-# all construction and rebuilding paths compute metadata from immutable children
 function DTermImpl.DExpr(head::Head, args::NTuple{N,DTerm}) where {N}
     rank = @match head begin
         Call(op) => tensorrank(op, args)::Int
@@ -71,22 +70,18 @@ end
 """
     isnegof(x::DTerm, y::DTerm)
 
-Check whether canonical scalar expressions have equal bodies and opposite outer
-signs, without constructing or simplifying expressions. Numeric literals use
-`isequal(x, -y)` on their values; this is not a general algebraic equality test.
+Check whether canonical scalar expressions have equal bodies and opposite outer signs.
 """
 function isnegof(x::DTerm, y::DTerm)::Bool
     if isliteral(x) && isliteral(y)
         return isnegof(value(x), value(y))
-    elseif iscall(x) && operation(x) isa Fun{typeof(-)} && length(arguments(x)) == 1
+    elseif iscall(x) && isunaryminus(x)
         return only(arguments(x)) ==ₛ y
-    elseif iscall(y) && operation(y) isa Fun{typeof(-)} && length(arguments(y)) == 1
+    elseif iscall(y) && isunaryminus(y)
         return x ==ₛ only(arguments(y))
     end
     return false
 end
-
-# Specialize numeric arithmetic so negating a Literal's payload avoids boxing.
 isnegof(x::T, y::S) where {T<:Number,S<:Number} = isequal(x, -y)::Bool
 
 Base.isequal(a::DTerm, b::DTerm) = a==ₛb
@@ -95,7 +90,6 @@ function Base.hash(term::DTerm, h::UInt)::UInt
     @match term begin
         Literal(x) => begin
             h = hash(:Literal, h)
-            # Avoid boxing the hash seed/result for common numeric payloads.
             if x isa Union{Int,Rational{Int},Float64}
                 return hash(x, h)
             end
