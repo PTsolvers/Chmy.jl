@@ -39,17 +39,17 @@ ncomponents(::Kind.Sym, dims, rank) = binomial(dims + rank - 1, rank)
 ncomponents(::Kind.Alt, dims, rank) = binomial(dims, rank)
 ncomponents(::Kind.Diag, dims, rank) = iszero(rank) ? 1 : dims
 
+export DTerm, Literal, Index
+include("types.jl")
+
 export isexpr, iscall
 export isliteral, isindex, istensor, iscomp, islocs, isinds, isuniform
 export head, children, operation, arguments
 export value, argument, arity, isunary, isbinary
 export components, locations, indices
 export tensorrank, tensorname, tensorkind
-
-export DTerm, Literal, Index
-include("types.jl")
-
-export ==ₛ, isnegof, isstaticzero, isstaticone
+export ==ₛ, isnegof, isstaticzero, isstaticone, isunaryminus
+export 𝒪, ℐ
 include("dterm.jl")
 
 const ZERO = Literal(0)

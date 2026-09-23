@@ -52,6 +52,20 @@ function isnegof(x::DTerm, y::DTerm)::Bool
 end
 isnegof(x::T, y::S) where {T<:Number,S<:Number} = isequal(x, -y)::Bool
 
+"""
+    𝒪(rank)
+
+Construct symbolic zero tensor of rank `rank`.
+"""
+const 𝒪 = ZeroTensor
+
+"""
+    ℐ(rank)
+
+Construct symbolic identity tensor of rank `rank`.
+"""
+const ℐ = IdTensor
+
 function DTermImpl.DExpr(head::Head, args::NTuple{N,DTerm}) where {N}
     rank = @match head begin
         Call(op) => tensorrank(op, args)::Int
