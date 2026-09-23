@@ -46,7 +46,10 @@ export value, argument, arity, isunary, isbinary
 export components, locations, indices
 export tensorrank, tensorname, tensorkind
 
-export DTerm, ==ₛ
+export DTerm, Literal, Index
+include("types.jl")
+
+export ==ₛ, isnegof, isstaticzero, isstaticone
 include("dterm.jl")
 
 const ZERO = Literal(0)
@@ -58,6 +61,7 @@ const 𝑖 = Index(1)
 const 𝑗 = Index(2)
 const 𝑘 = Index(3)
 
+export Fun
 export ⊡, ⊗, sym, asym, adj, gram, cogram
 include("operators.jl")
 

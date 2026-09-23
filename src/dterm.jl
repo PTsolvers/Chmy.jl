@@ -1,49 +1,10 @@
-@data HeadImpl begin
-    export Call, Comp, Locs, Inds
+"""
+    ==ₛ(a, b)
 
-    Call(Operator)
-    Comp(Tuple{Vararg{Int}})
-    Locs(Tuple{Vararg{Location}})
-    Inds()
-end
-using .HeadImpl
-const Head = HeadImpl.Type
-
-@data DTermImpl begin
-    export Literal, Index, Tensor, IdTensor, ZeroTensor, DExpr
-
-    Literal(Number)
-    Index(Int)
-    struct Tensor
-        rank::Int
-        name::Symbol
-        kind::TensorKind
-        uniform::Bool
-    end
-    ZeroTensor(Int)
-    IdTensor(Int)
-    struct DExpr
-        head::Head
-        args::Tuple{Vararg{DTermImpl}}
-        rank::Int
-        hash::UInt
-    end
-end
-using .DTermImpl
-const DTerm = DTermImpl.Type
-
-function DTermImpl.DExpr(head::Head, args::NTuple{N,DTerm}) where {N}
-    rank = @match head begin
-        Call(op) => tensorrank(op, args)::Int
-        _ => 0
-    end
-    h = hash(head, hash(length(args), hash(:DExpr)))
-    for k in eachindex(args)
-        h = hash(args[k], h)
-    end
-    return DExpr(head, args, rank, h)
-end
-
+Test whether two Chmy terms are structurally equal.
+This function **does not** compare canonical forms of `a` and `b`.
+For example, `x + y ==ₛ y + x` is `false`.
+"""
 function (==ₛ)(a::DTerm, b::DTerm)
     hash(a) == hash(b) || return false
     @match (a, b) begin
@@ -68,6 +29,13 @@ function (==ₛ)(a::DTerm, b::DTerm)
 end
 
 """
+    isequal(a::DTerm, b::DTerm)
+
+Same as [`==ₛ`](@ref).
+"""
+Base.isequal(a::DTerm, b::DTerm) = a==ₛb
+
+"""
     isnegof(x::DTerm, y::DTerm)
 
 Check whether canonical scalar expressions have equal bodies and opposite outer signs.
@@ -84,23 +52,16 @@ function isnegof(x::DTerm, y::DTerm)::Bool
 end
 isnegof(x::T, y::S) where {T<:Number,S<:Number} = isequal(x, -y)::Bool
 
-Base.isequal(a::DTerm, b::DTerm) = a==ₛb
-
-function Base.hash(term::DTerm, h::UInt)::UInt
-    @match term begin
-        Literal(x) => begin
-            h = hash(:Literal, h)
-            if x isa Union{Int,Rational{Int},Float64}
-                return hash(x, h)
-            end
-            return hash(x, h)::UInt
-        end
-        Index(i) => hash(i, hash(:Index, h))
-        Tensor(rank, name, kind, uniform) => hash(uniform, hash(kind, hash(name, hash(rank, hash(:Tensor, h)))))
-        ZeroTensor(rank) => hash(rank, hash(:ZeroTensor, h))
-        IdTensor(rank) => hash(rank, hash(:IdTensor, h))
-        DExpr(_, _, _, cached) => iszero(h) ? cached : hash(cached, h)
+function DTermImpl.DExpr(head::Head, args::NTuple{N,DTerm}) where {N}
+    rank = @match head begin
+        Call(op) => tensorrank(op, args)::Int
+        _ => 0
     end
+    h = hash(head, hash(length(args), hash(:DExpr)))
+    for k in eachindex(args)
+        h = hash(args[k], h)
+    end
+    return DExpr(head, args, rank, h)
 end
 
 isliteral(term::DTerm) = isa_variant(term, Literal)
@@ -295,5 +256,25 @@ function Base.getindex(term::DTerm, I::Vararg{Integer,N}) where {N}
             return allequal(I) ? Literal(1) : Literal(0)
         end
         _ => return makecomp(term, I)
+    end
+end
+
+# hashing DTerms
+# DExpr caches the hash, other variants need to compute explicitly
+
+function Base.hash(term::DTerm, h::UInt)::UInt
+    @match term begin
+        Literal(x) => begin
+            h = hash(:Literal, h)
+            if x isa Union{Int,Rational{Int},Float64}
+                return hash(x, h)
+            end
+            return hash(x, h)::UInt
+        end
+        Index(i) => hash(i, hash(:Index, h))
+        Tensor(rank, name, kind, uniform) => hash(uniform, hash(kind, hash(name, hash(rank, hash(:Tensor, h)))))
+        ZeroTensor(rank) => hash(rank, hash(:ZeroTensor, h))
+        IdTensor(rank) => hash(rank, hash(:IdTensor, h))
+        DExpr(_, _, _, cached) => iszero(h) ? cached : hash(cached, h)
     end
 end
