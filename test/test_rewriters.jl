@@ -1,90 +1,38 @@
 using Test
 using Chmy
 
+struct NoopRule <: AbstractRule end
+
 @testset "rewriters" begin
     @scalars a b c
-    i = SIndex(1)
-    j = SIndex(2)
-    seg = Segment()
-    pt = Point()
+    replace_a = t -> t ==ₛ a ? b : nothing
 
-    @testset "AbstractRule and Passthrough" begin
-        struct NoopRule <: AbstractRule end
-        @test isnothing(NoopRule()(a))
+    @test isnothing(@inferred NoopRule()(a))
+    @test (@inferred Passthrough(replace_a)(a)) ==ₛ b
+    @test (@inferred Passthrough(replace_a)(c)) ==ₛ c
 
-        replace_a = t -> t === a ? b : nothing
-        passthrough = Passthrough(replace_a)
+    chain = Chain(replace_a, t -> t ==ₛ a ? c : nothing)
+    @test (@inferred Union{Nothing, DTerm} chain(a)) ==ₛ b
+    @test isnothing(@inferred Union{Nothing, DTerm} chain(c))
+    @test (@inferred Union{Nothing, DTerm} Chain(NoopRule(), replace_a)(a)) ==ₛ b
 
-        @test Passthrough(passthrough) === passthrough
-        @test passthrough(a) === b
-        @test passthrough(c) === c
+    rule = function (t)
+        t ==ₛ a && return b
+        isinds(t) && argument(t) ==ₛ b && return c
+        return nothing
+    end
+    @test (@inferred Prewalk(rule)(a[𝑖])) ==ₛ b[𝑖]
+    @test (@inferred Postwalk(rule)(a[𝑖])) ==ₛ c
+
+    expr = sin(a + Literal(2.0))
+    literal_rule = t -> isliteral(t) ? Literal(Int(value(t))) : nothing
+    for walk in (Prewalk, Postwalk)
+        @test (@inferred walk(NoopRule())(expr)) === expr
+        result = @inferred walk(literal_rule)(expr)
+        @test result ==ₛ expr
+        @test value(arguments(only(arguments(result)))[2]) === 2
     end
 
-    @testset "Chain" begin
-        replace_a = t -> t === a ? b : nothing
-        replace_a_again = t -> t === a ? c : nothing
-        never_reached = _ -> error("Chain should stop at the first match")
-
-        chain = Chain(replace_a, replace_a_again, never_reached)
-        safe_chain = Chain(replace_a, replace_a_again)
-
-        @test Chain(chain) === chain
-        @test chain(a) === b
-        @test Chain((replace_a, replace_a_again))(a) === b
-        @test isnothing(safe_chain(c))
-        @test isnothing(Chain()(a))
-
-        @inferred Union{Nothing,STerm} safe_chain(a)
-        @inferred Union{Nothing,STerm} safe_chain(c)
-    end
-
-    @testset "Prewalk vs Postwalk order" begin
-        expr = a[i]
-
-        rule = function (t)
-            t === a && return b
-            if isind(t) && argument(t) === b
-                return c
-            end
-            return nothing
-        end
-
-        @test Prewalk(rule)(expr) === b[i]
-        @test Postwalk(rule)(expr) === c
-    end
-
-    @testset "Fixpoint" begin
-        chain = t -> t === a ? b : (t === b ? c : nothing)
-        @test Fixpoint(chain)(a) === c
-        @test Fixpoint(chain)(c) === c
-    end
-
-    @testset "stencil_rule" begin
-        @test stencil_rule(SRef(:+), (a, b), (i, j)) === a[i, j] + b[i, j]
-        @test stencil_rule(SRef(:+), (a, b), (seg, pt), (i, j)) === a[seg, pt][i, j] + b[seg, pt][i, j]
-    end
-
-    @testset "immediate indexing" begin
-        @test (a+b)[i, j] === a[i, j] + b[i, j]
-
-        @test (a[seg, pt]+b)[i, j] === a[seg, pt][i, j] + b[i, j]
-
-        @test a[seg][i] === a[seg][i]
-        @test sin(a + b)[seg, pt] === sin(a[seg, pt] + b[seg, pt])
-    end
-
-    @testset "lift" begin
-        @test @inferred(Chmy.replace_index((i, j), c, Val(2))) === (i, c)
-        @test lift(SRef(:+), (a, b), (i, j), Val(1)) === a[i, j] + b[i, j]
-        @test lift(SRef(:+), (a, b), (i, j), Val(2)) === a[i, j] + b[i, j]
-        @test lift(SRef(:+), (a, b), (seg, pt), (i, j), Val(2)) === a[seg, pt][i, j] + b[seg, pt][i, j]
-    end
-
-    @testset "subs" begin
-        @test subs(a, a => c) === c
-        @test subs(a + b, a => c) === c + b
-        @test subs((a+b)[i], a[i] => c[i]) === c[i] + b[i]
-        @test subs(a + b, a => c, b => a) === c + a
-        @test subs(a, a => b, a => c) === b
-    end
+    successive = t -> t ==ₛ a ? b : (t ==ₛ b ? c : nothing)
+    @test (@inferred Fixpoint(successive)(a)) ==ₛ c
 end

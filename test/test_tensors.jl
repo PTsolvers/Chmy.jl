@@ -1,294 +1,125 @@
 using Test
 using Chmy
-import Chmy: ncomponents, linear_index, dimensions
-import Chmy: NoKind, SymKind, AltKind, DiagKind
+using Chmy: TensorComponents, Kind
+import LinearAlgebra
 
-@testset "tensors" begin
-    @testset "symbolic tensors" begin
-        @scalars a
-        @vectors u
-        @tensors 2 @sym(S) @diag(D) @alt(A)
+@testset "tensor components" begin
+    @scalars a b c
+    @vectors u v w
+    @tensors 2 A B @sym(S) @alt(K) @diag(D)
 
-        @test tensorrank(a) == 0
-        @test tensorrank(u) == 1
-        @test tensorrank(S) == 2
-        @test tensorkind(a) === NoKind
-        @test tensorkind(S) === SymKind
-        @test tensorkind(A) === AltKind
-        @test tensorkind(D) === DiagKind
-        @test name(u) === :u
-
-        @test a[] === a
-        @test SZeroTensor{0}() === SLiteral(0)
-        @test SIdTensor{0}() === SLiteral(1)
-
-        @test SZeroTensor{2}()[1, 2] === SLiteral(0)
-        @test SIdTensor{2}()[1, 1] === SLiteral(1)
-        @test SIdTensor{2}()[1, 2] === SLiteral(0)
-
-        @test S[2, 1] === S[1, 2]
-        @test D[1, 2] === SLiteral(0)
-        @test D[2, 2] === D[SLiteral(2), SLiteral(2)]
-        @test A[1, 1] === SLiteral(0)
-        @test A[2, 1] === -A[1, 2]
+    @testset "storage and indexing" begin
+        uc = @inferred Union{DTerm, TensorComponents} components(u, 2)
+        @test isequal(components(uc), DTerm[u[1], u[2]])
+        for (leaf, kind, entries) in (
+                (A, Kind.None(), DTerm[A[1, 1], A[2, 1], A[1, 2], A[2, 2]]),
+                (S, Kind.Sym(), DTerm[S[1, 1], S[1, 2], S[2, 2]]),
+                (K, Kind.Alt(), DTerm[K[1, 2]]),
+                (D, Kind.Diag(), DTerm[D[1, 1], D[2, 2]]),
+            )
+            tc = @inferred Union{DTerm, TensorComponents} components(leaf, 2)
+            @test tensorkind(tc) == kind
+            @test isequal(components(tc), entries)
+            @test (@inferred tc[1, 1]) ==ₛ leaf[1, 1]
+            @test (@inferred tc[2, 1]) ==ₛ leaf[2, 1]
+        end
+        identity = @inferred Union{DTerm, TensorComponents} components(ℐ(2), 2)
+        @test identity[1, 1] ==ₛ Literal(1)
+        @test identity[1, 2] ==ₛ Literal(0)
+        zero = @inferred Union{DTerm, TensorComponents} components(𝒪(1), 2)
+        @test isequal(components(zero), Literal.([0, 0]))
+        @test_throws ArgumentError components(A, 2)[1]
+        @test_throws BoundsError uc[3]
     end
 
-    @testset "uniform symbolic tensors" begin
-        @uniform @scalars a
-        @uniform @vectors u
-        @uniform @tensors 2 T @sym(S) @diag(D) @alt(A)
-        @scalars b
-        p, s = Point(), Segment()
-        i, j = SIndex(1), SIndex(2)
-
-        @test !isuniform(STensor{0,NoKind}(:a))
-        @test STensor{1,NoKind,true}(:u) === SUVec(:u)
-
-        @test isuniform(a)
-        @test isuniform(u)
-        @test isuniform(T)
-        @test isuniform(S)
-        @test isuniform(A)
-        @test isuniform(D)
-        @test isuniform(SZeroTensor{2}())
-        @test isuniform(SIdTensor{2}())
-        @test isuniform(sin(a) + 1)
-        @test isuniform(u[1])
-        @test !isuniform(b)
-        @test !isuniform(sin(b))
-        @test !isuniform(b[p][i])
-
-        @test a[p, s][i, j] === a
-        @test sin(a)[p, s][i, j] === sin(a)
-        @test u[1][p, s][i, j] === u[1]
-        @test_throws ArgumentError u[p]
-        @test_throws ArgumentError u[i]
-        @test_throws ArgumentError (u + u)[p]
-        @test_throws ArgumentError (u + u)[i]
+    @testset "kind promotion and detection" begin
+        @test tensorkind(components(S + D, 2)) == Kind.Sym()
+        @test tensorkind(components(S + K, 2)) == Kind.None()
+        z = Literal(0)
+        for (entries, kind) in (
+                (DTerm[a, b, b, c], Kind.Sym()),
+                (DTerm[z, -a, a, z], Kind.Alt()),
+                (DTerm[a, z, z, c], Kind.Diag()),
+                (DTerm[a, b, c, a], Kind.None()),
+            )
+            tc = @inferred simplify(TensorComponents(2, 2, Kind.None(), entries))
+            @test tensorkind(tc) == kind
+            @test isequal(DTerm[tc[i, j] for i in 1:2, j in 1:2], reshape(entries, 2, 2))
+        end
     end
 
-    @testset "tensor metadata and helper indices" begin
-        @test ncomponents(NoKind, Val(3), Val(2)) == 9
-        @test ncomponents(SymKind, Val(3), Val(2)) == 6
-        @test ncomponents(AltKind, Val(3), Val(2)) == 3
-        @test ncomponents(DiagKind, Val(3), Val(2)) == 3
+    @testset "arithmetic and contractions" begin
+        for (input, expected) in (
+                (-v, -v[1]),
+                (u - v, u[1] - v[1]),
+                (u + v + w, u[1] + v[1] + w[1]),
+                (a * v, a * v[1]),
+                (v / a, v[1] / a),
+                (v // a, v[1] // a),
+                (v ÷ a, v[1] ÷ a),
+                ((A + B) ⋅ v, (A[1, 1] + B[1, 1]) * v[1] + (A[1, 2] + B[1, 2]) * v[2]),
+                (u ⋅ A, u[1] * A[1, 1] + u[2] * A[2, 1]),
+            )
+            tc = @inferred Union{DTerm, TensorComponents} components(input, 2)
+            @test tc[1] ==ₛ expected
+        end
+        @test (@inferred Union{DTerm, TensorComponents} components(u ⋅ v, 2)) ==ₛ u[1] * v[1] + u[2] * v[2]
+        product = @inferred Union{DTerm, TensorComponents} components(A ⋅ B, 2)
+        @test product[1, 2] ==ₛ A[1, 1] * B[1, 2] + A[1, 2] * B[2, 2]
+        outer = @inferred Union{DTerm, TensorComponents} components(u ⊗ v, 2)
+        @test outer[1, 2] ==ₛ u[1] * v[2]
+        @test (@inferred Union{DTerm, TensorComponents} components(A ⊡ B, 2)) ==ₛ A[1, 1] * B[1, 1] + A[2, 1] * B[2, 1] + A[1, 2] * B[1, 2] + A[2, 2] * B[2, 2]
 
-        @test linear_index(NoKind, Val(2), 1, 1) == 1
-        @test linear_index(NoKind, Val(2), 2, 1) == 2
-        @test linear_index(SymKind, Val(3), 2, 1) == linear_index(SymKind, Val(3), 1, 2)
-        @test linear_index(AltKind, Val(3), 3, 1) == linear_index(AltKind, Val(3), 1, 3)
-        @test linear_index(DiagKind, Val(4), 3, 3) == 3
+        cross = @inferred Union{DTerm, TensorComponents} components(u × v, 3)
+        @test cross[1] ==ₛ u[2] * v[3] - u[3] * v[2]
+        @test cross[2] ==ₛ u[3] * v[1] - u[1] * v[3]
+        @test cross[3] ==ₛ u[1] * v[2] - u[2] * v[1]
+        @test_throws ArgumentError components(u × v, 2)
     end
 
-    @testset "concrete tensor construction and indexing" begin
-        @scalars a b c d
-
-        t = Tensor{2,2}(a, b, c, d)
-        @test t isa Tensor{2,2,NoKind}
-        @test length(t) == 4
-        @test ndims(t) == 2
-        @test dimensions(t) == 2
-        @test tensorrank(t) == 2
-        @test tensorkind(t) === NoKind
-        @test t[1, 1] === a
-        @test t[2, 1] === b
-        @test t[1, 2] === c
-        @test t[2, 2] === d
-        @test_throws ArgumentError t[]
-        @test t[SLiteral(2), SLiteral(1)] === b
-        @test t[2, 1] === t[SLiteral(2), SLiteral(1)]
-
-        sym = Tensor{2,2}(a, b, b, c)
-        @test sym isa SymTensor{2,2}
-        @test length(sym) == 3
-        @test sym[1, 2] === b
-        @test sym[2, 1] === b
-
-        diag = Tensor{2,2}(a, SLiteral(0), SLiteral(0), c)
-        @test diag isa DiagTensor{2,2}
-        @test diag[1, 1] === a
-        @test diag[1, 2] === SLiteral(0)
-        @test diag[2, 2] === c
-
-        alt = Tensor{3,2}(SLiteral(0), -a, -b, a, SLiteral(0), -c, b, c, SLiteral(0))
-        @test alt isa AltTensor{3,2}
-        @test alt[1, 2] === a
-        @test alt[2, 1] === -a
-        @test alt[1, 1] === SLiteral(0)
-
-        @test Tensor{2,2}(SLiteral(1), SLiteral(0), SLiteral(0), SLiteral(1)) isa IdTensor{2,2}
-        @test Tensor{2,2,DiagKind}(SLiteral(0), SLiteral(0)) isa ZeroTensor{2,2}
-
-        wide_zero_sym = Chmy.tensor_with_kind(Tensor{2,2,SymKind}, SZeroTensor{2}())
-        @test wide_zero_sym isa SymTensor{2,2}
-        @test !(wide_zero_sym isa ZeroTensor{2,2})
-        @test wide_zero_sym.components === (SLiteral(0), SLiteral(0), SLiteral(0))
-
-        wide_id_sym = Chmy.tensor_with_kind(Tensor{2,2,SymKind}, SIdTensor{2}())
-        @test wide_id_sym isa SymTensor{2,2}
-        @test wide_id_sym.components === (SLiteral(1), SLiteral(0), SLiteral(1))
-
-        diag_data = DiagTensor{2,2}(a, d)
-        wide_diag_sym = Chmy.tensor_with_kind(Tensor{2,2,SymKind}, diag_data)
-        @test wide_diag_sym isa SymTensor{2,2}
-        @test wide_diag_sym.components === (a, SLiteral(0), d)
-
-        wide_zero_alt = Chmy.tensor_with_kind(Tensor{3,2,AltKind}, SZeroTensor{2}())
-        @test wide_zero_alt isa AltTensor{3,2}
-        @test wide_zero_alt.components === (SLiteral(0), SLiteral(0), SLiteral(0))
-
-        @test_throws ErrorException Tensor{2,2,SymKind}(a, b)
+    @testset "idempotence" begin
+        for input in (sin.(A .+ a) .* B .^ 2, A ⋅ B, u ⊗ v)
+            tc = components(input, 2)
+            @test (@inferred Union{DTerm, TensorComponents} components(tc[1, 2], 2)) ==ₛ tc[1, 2]
+        end
+        scalar = sin(a) + b * u[1]
+        @test (@inferred Union{DTerm, TensorComponents} components(scalar, 2)) ==ₛ scalar
     end
 
-    @testset "symbolic tensor expansion" begin
-        @tensors 2 @sym(S) @diag(D) @alt(A)
+    @testset "matrix operations" begin
+        matrix = [4 1; 2 3]
+        tc = TensorComponents(2, 2, Kind.None(), Literal.(vec(matrix)))
+        @test value(simplify(@inferred tr(tc))) == LinearAlgebra.tr(matrix)
+        diagonal = @inferred diag(tc)
+        @test [value(simplify(diagonal[i])) for i in 1:2] == LinearAlgebra.diag(matrix)
+        for (op, expected) in (
+                (transpose, transpose(matrix)),
+                (sym, (matrix + transpose(matrix)) / 2),
+                (asym, (matrix - transpose(matrix)) / 2),
+                (gram, transpose(matrix) * matrix),
+                (cogram, matrix * transpose(matrix)),
+                (inv, LinearAlgebra.inv(matrix)),
+            )
+            result = @inferred op(tc)
+            @test [value(simplify(result[i, j])) for i in 1:2, j in 1:2] ≈ expected
+        end
 
-        ts = Tensor{2}(S)
-        ta = Tensor{3}(A)
-        td = Tensor{3}(D)
-
-        @test ts isa SymTensor{2,2}
-        @test ta isa AltTensor{3,2}
-        @test td isa DiagTensor{3,2}
-
-        @test ts[2, 1] === S[1, 2]
-        @test ta[1, 2] === A[1, 2]
-        @test ta[2, 1] === -A[1, 2]
-        @test ta[1, 1] === SLiteral(0)
-        @test td[1, 2] === SLiteral(0)
-        @test td[3, 3] === D[3, 3]
+        complex_matrix = [1 + im 2 - im; 3 + 2im 4 - im]
+        complex_tc = TensorComponents(2, 2, Kind.None(), Literal.(vec(complex_matrix)))
+        transposed = @inferred adjoint(complex_tc)
+        @test value(simplify(transposed[1, 2])) == complex_matrix[2, 1]
     end
 
-    @testset "tensor expression expansion" begin
-        @scalars a
-        @vectors u v
-        @tensors 2 @sym(S)
-
-        expr = S ⋅ u + 2 * v
-        tex = Tensor{2}(expr)
-
-        @test tex isa Vec{2}
-        @test tex[1] === (S[1, 1] * u[1] + S[1, 2] * u[2]) + 2 * v[1]
-        @test tex[2] === (S[1, 2] * u[1] + S[2, 2] * u[2]) + 2 * v[2]
-
-        @test Tensor{3}(S[1, 1]) === S[1, 1]
-        @test Tensor{3}(S[1, 1] + S[2, 2]) === S[1, 1] + S[2, 2]
-
-        @test Tensor{4}(SLiteral(3)) === SLiteral(3)
-        @test Tensor{4}(a) === a
-
-        I = SIdTensor{2}()
-        negI = @inferred Tensor{2}(-a * I)
-        @test negI isa SymTensor{2,2}
-        @test negI[1, 1] === (-a) * SLiteral(1)
-        @test negI[1, 2] === (-a) * SLiteral(0)
-        @test negI[2, 2] === (-a) * SLiteral(1)
-
-        stress = -a * I + S
-        @test canonicalize(stress[1, 1]) === -a + S[1, 1]
-        @test canonicalize(stress[1, 2]) === S[1, 2]
-        @test (v / a)[1] === v[1] / a
-        tstress = Tensor{2}(stress)
-        @test tstress isa SymTensor{2,2}
-        @test tstress[1, 1] === (-a) * SLiteral(1) + S[1, 1]
-        @test tstress[1, 2] === (-a) * SLiteral(0) + S[1, 2]
-        @test tstress[2, 2] === (-a) * SLiteral(1) + S[2, 2]
-
-        rawI = IdTensor{2,2}()
-        left_scaled = @inferred(a * rawI)
-        right_scaled = @inferred(rawI * a)
-        @test left_scaled isa SymTensor{2,2}
-        @test left_scaled[1, 1] === a * SLiteral(1)
-        @test left_scaled[1, 2] === a * SLiteral(0)
-        @test left_scaled[2, 2] === a * SLiteral(1)
-        @test right_scaled isa SymTensor{2,2}
-        @test right_scaled[1, 1] === SLiteral(1) * a
-        @test right_scaled[1, 2] === SLiteral(0) * a
-        @test right_scaled[2, 2] === SLiteral(1) * a
-
-        zero_broadcast = @inferred Base.Broadcast.broadcasted(sin, ZeroTensor{2,2}())
-        @test zero_broadcast isa SymTensor{2,2}
-        @test zero_broadcast[1, 1] === sin(SLiteral(0))
-        @test zero_broadcast[1, 2] === sin(SLiteral(0))
-
-        id_broadcast = @inferred Base.Broadcast.broadcasted(sin, rawI)
-        @test id_broadcast isa SymTensor{2,2}
-        @test !(id_broadcast isa IdTensor{2,2})
-        @test id_broadcast[1, 1] === sin(SLiteral(1))
-        @test id_broadcast[1, 2] === sin(SLiteral(0))
-
-        widened = @inferred Base.Broadcast.broadcasted(exp, ZeroTensor{2,2}())
-        @test widened isa SymTensor{2,2}
-        @test !(widened isa ZeroTensor{2,2})
-        @test widened[1, 1] === exp(SLiteral(0))
-        @test widened[1, 2] === exp(SLiteral(0))
-
-        st = sin.(2S)
-        tst = Tensor{2}(st)
-        @test tst[1, 1] === sin(2S[1, 1])
-        @test tst[1, 2] === sin(2S[1, 2])
-        @test tst[2, 2] === sin(2S[2, 2])
-    end
-
-    @testset "tensor canonicalization and simplification" begin
-        @scalars a
-
-        rawI = IdTensor{2,2}()
-
-        left_scaled = a * rawI
-        @test left_scaled isa SymTensor{2,2}
-        @test length(left_scaled) == 3
-
-        canonical_left_scaled = canonicalize(left_scaled)
-        @test canonical_left_scaled isa DiagTensor{2,2}
-        @test length(canonical_left_scaled) == 2
-        @test canonical_left_scaled[1, 1] === a
-        @test canonical_left_scaled[1, 2] === SLiteral(0)
-        @test canonical_left_scaled[2, 2] === a
-
-        zero_broadcast = Base.Broadcast.broadcasted(sin, ZeroTensor{2,2}())
-        @test zero_broadcast isa SymTensor{2,2}
-        @test length(zero_broadcast) == 3
-
-        canonical_zero_broadcast = canonicalize(zero_broadcast)
-        @test canonical_zero_broadcast isa ZeroTensor{2,2}
-        @test length(canonical_zero_broadcast) == 0
-
-        deep_zero = Tensor{2,2}(sin(a - a), SLiteral(0), SLiteral(0), sin(a - a))
-        @test deep_zero isa DiagTensor{2,2}
-        @test length(deep_zero) == 2
-        @test canonicalize(deep_zero) isa DiagTensor{2,2}
-
-        simplified_deep_zero = simplify(deep_zero)
-        @test simplified_deep_zero isa ZeroTensor{2,2}
-        @test length(simplified_deep_zero) == 0
-    end
-
-    @testset "uniform compute bindings" begin
-        @uniform @scalars a
-        @uniform @vectors u
-        p, s = Point(), Segment()
-        i, j = SIndex(1), SIndex(2)
-
-        expr = (a + 1)[p, s][i, j]
-        component = u[1][p][i]
-
-        @test expr === a + 1
-        @test component === u[1]
-        @test compute(a[p, s][i, j], Binding(a => 2.0), 3, 4) == 2.0
-        @test compute(component, Binding(component => 5.0), 3) == 5.0
-    end
-
-    @testset "expression tensor rank inference" begin
-        @scalars a
-        @vectors u v
-        @tensors 2 @sym(S)
-
-        @test tensorrank(u ⊗ v) == 2
-        @test tensorrank(u ⋅ v) == 0
-        @test tensorrank(S ⋅ u) == 1
-        @test tensorrank(diag(S)) == 1
-        @test tensorrank(gram(S)) == 2
-        @test tensorrank(a * u) == 1
+    @testset "dimension-specific determinant, cofactor, and adjugate" begin
+        matrix = [4 1 2; 0 3 1; 2 0 5]
+        for dims in 1:3
+            m = matrix[1:dims, 1:dims]
+            tc = TensorComponents(dims, 2, Kind.None(), Literal.(vec(m)))
+            @test value(simplify(@inferred det(tc))) ≈ LinearAlgebra.det(m)
+            cofactor = @inferred cof(tc)
+            @test [value(simplify(cofactor[i, j])) for i in 1:dims, j in 1:dims] ≈ LinearAlgebra.det(m) * transpose(LinearAlgebra.inv(m))
+            adjugate = @inferred adj(tc)
+            @test [value(simplify(adjugate[i, j])) for i in 1:dims, j in 1:dims] ≈ LinearAlgebra.det(m) * LinearAlgebra.inv(m)
+        end
     end
 end
