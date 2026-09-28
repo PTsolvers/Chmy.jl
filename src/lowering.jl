@@ -107,7 +107,7 @@ function lower_changed(expr::DTerm)::Union{Nothing, DTerm}
 end
 
 # specialize on arity only when a sample actually needs expansion. Base.tail
-# then extracts the grid indices without the dynamic tuple slice of a rest match.
+# then extracts the grid indices without the dynamic tuple slice of a rest match
 function lower_sample(args::NTuple{N, DTerm})::DTerm where {N}
     arg, inds = first(args), Base.tail(args)
     return @match arg begin
