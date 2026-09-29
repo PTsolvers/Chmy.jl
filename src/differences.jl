@@ -122,6 +122,12 @@ function difference_nodes(n, offset)
 end
 
 # Fornberg recurrence for the zeroth and first derivative weights at zero
+#
+# the weights are derivatives at zero of the Lagrange basis polynomials over the nodes `x`;
+# the recurrence builds them incrementally, adding one node per outer iteration
+# `c[j, m + 1]` holds the weight of node `j` for the `m`-th derivative using nodes `1:i`
+# `c1` and `c2` are the products of distances from the previous and the new node to all
+# preceding nodes, `c4` and `c5` are the new and the previous node positions
 function difference_weights(x)
     n = length(x)
     c = zeros(eltype(x), n, 2)
@@ -168,6 +174,13 @@ Return the full tuple of exact first-derivative coefficients aligned with
     return QuoteNode(map(stencil_constant, difference_weights(difference_nodes(N, O))))
 end
 
+# build the expression that reads the field `f` at the stencil node `x` relative to index `i`
+#
+# for collocated differences `x` is an integer offset, and the field is sampled at the same
+# location as the output, either unlocated (`f`) or at the location argument (`f[l]`)
+# for staggered differences `x` is a half-integer offset, and the field is sampled at the
+# opposite location of the output `loc`; segment `i` lies between points `i` and `i + 1`, so
+# a point output reads segments at `i + x - 1/2` and a segment output reads points at `i + x + 1/2`
 function field_sample(x, staggered, loc)
     offset = Int(staggered ? x + (loc === Point ? -1 // 2 : 1 // 2) : x)
     index = iszero(offset) ? :i : offset > 0 ? :(i + $offset) : :(i - $(-offset))
@@ -175,6 +188,15 @@ function field_sample(x, staggered, loc)
     return :($field[$index])
 end
 
+# build the weighted sum of field samples for the stencil with nodes `x` and `weights`
+#
+# if the stencil is antisymmetric, i.e. every nonzero weight at `x[k]` has an opposite weight
+# at `-x[k]`, the terms are grouped in pairs `c * (f[i + x] - f[i - x])` for positive `x`,
+# which halves the number of multiplications, e.g. `f[i + 1] - f[i - 1]` for the central difference
+# otherwise each nonzero weight gives a separate term, with positive weights placed first,
+# so that the expression starts without a leading minus when possible
+# the sign of each weight is absorbed into `+` or `-` between terms, unit coefficients are omitted,
+# and an all-zero stencil yields `ZERO`
 function difference_expr(x, weights, staggered, loc)
     nonzero = findall(!iszero, weights)
     paired = all(nonzero) do k
