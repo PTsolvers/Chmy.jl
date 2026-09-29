@@ -292,7 +292,7 @@ end
 Base.ifelse(cond::DTerm, x::DTerm, y::DTerm) = makecall(Fun(ifelse), cond, x, y)
 Base.ifelse(cond::DTerm, x::Number, y::DTerm) = ifelse(cond, Literal(x), y)
 Base.ifelse(cond::DTerm, x::DTerm, y::Number) = ifelse(cond, x, Literal(y))
-Base.ifelse(cond::DTerm, x::Number, y::Number) = ifelse(cond, Literal(x), Literal(y))å
+Base.ifelse(cond::DTerm, x::Number, y::Number) = ifelse(cond, Literal(x), Literal(y))
 
 # location
 Base.getindex(arg::DTerm, locs::Vararg{Location, N}) where {N} = makelocs(arg, locs...)
