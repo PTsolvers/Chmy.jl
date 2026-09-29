@@ -5,18 +5,6 @@ abstract type AbstractDifference <: Operator end
 
 Base.getindex(d::AbstractDifference, i::Integer) = Lifted(d, i)
 
-function check_difference(n, offset, staggered)
-    n isa Integer && n >= 2 || throw(ArgumentError("a difference requires an integer number of points of at least two"))
-    offset isa Union{Integer, Rational} || throw(ArgumentError("the stencil midpoint must be integer or rational"))
-    first_offset = offset - (n - 1) // 2
-    if staggered
-        denominator(first_offset) == 2 || throw(ArgumentError("staggered differences require half-integer offsets: the midpoint must be integer for even N and half-integer for odd N"))
-    else
-        isinteger(first_offset) || throw(ArgumentError("standard differences require integer offsets: the midpoint must be integer for odd N and half-integer for even N"))
-    end
-    return
-end
-
 """
     Difference{N,O}()
     Difference{N}()
@@ -115,6 +103,18 @@ struct StaggeredBackwardDifference{N}
     StaggeredBackwardDifference{N}() where {N} = StaggeredDifference{N, -N // 2}()
 end
 StaggeredBackwardDifference() = StaggeredBackwardDifference{2}()
+
+function check_difference(n, offset, staggered)
+    n isa Integer && n >= 2 || throw(ArgumentError("a difference requires an integer number of points of at least two"))
+    offset isa Union{Integer, Rational} || throw(ArgumentError("the stencil midpoint must be integer or rational"))
+    first_offset = offset - (n - 1) // 2
+    if staggered
+        denominator(first_offset) == 2 || throw(ArgumentError("staggered differences require half-integer offsets: the midpoint must be integer for even N and half-integer for odd N"))
+    else
+        isinteger(first_offset) || throw(ArgumentError("standard differences require integer offsets: the midpoint must be integer for odd N and half-integer for even N"))
+    end
+    return
+end
 
 function difference_nodes(n, offset)
     first = Rational(offset) - (n - 1) // 2
