@@ -83,6 +83,11 @@ include("binding.jl")
 export compile
 include("compile.jl")
 
+export matches, dim, codim
+export Lower, Upper, Span
+export FacePattern, WallPattern, Face, Wall, AlongAxis, AnyWall, Left, Right, Bottom, Top, Back, Front
+include("topology.jl")
+
 include("show.jl")
 
 end # module Chmy
