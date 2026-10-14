@@ -1,6 +1,8 @@
+using Test
 using Chmy
+using Chmy: fold, shift, GridRegion, candidates
 
-@testset verbose = true "topology" begin
+@testset verbose = true "FacePattern" begin
     @testset "Face" begin
         @test ndims(Face(Span())) == 1
         @test ndims(Face(Lower(), Span())) == 2
@@ -43,6 +45,16 @@ using Chmy
         @test matches(AnyWall(), Face(Span(), Span(), Lower()))
         @test !matches(AnyWall(), Face(Span(), Span()))
         @test !matches(AnyWall(), Face(Lower(), Upper()))
+    end
+    @testset "AnyCorner" begin
+        @test codim(AnyCorner(), 1) == 1
+        @test codim(AnyCorner(), 2) == 2
+        @test codim(AnyCorner(), 3) == 3
+        @test matches(AnyCorner(), Face(Lower()))
+        @test matches(AnyCorner(), Face(Lower(), Upper()))
+        @test matches(AnyCorner(), Face(Upper(), Lower(), Upper()))
+        @test !matches(AnyCorner(), Face(Lower(), Span()))
+        @test !matches(AnyCorner(), Face(Lower(), Lower(), Span()))
     end
     @testset "Left" begin
         @test codim(Left(), 1) == 1
@@ -146,5 +158,97 @@ using Chmy
         @test !matches(AnyWall() & !Top(), Face(Span(), Upper()))
         @test matches((Left() | Right()) & !Wall(1, Upper()), Face(Lower(), Span()))
         @test !matches((Left() | Right()) & !Wall(1, Upper()), Face(Upper(), Span()))
+        # De Morgan
+        for f in [Face(Lower(), Span()), Face(Upper(), Span()), Face(Span(), Lower()), Face(Span(), Upper())]
+            @test matches(!(Left() | Top()), f) == matches(!Left() & !Top(), f)
+        end
+        @test matches(!!Left(), Face(Lower(), Span()))
+        @test !matches(!!Left(), Face(Upper(), Span()))
     end
+    @testset "edge cases" begin
+        # corners are walls in 1D
+        @test codim(Left() | AnyCorner(), 1) == 1
+        @test_throws ArgumentError codim(Left() | AnyCorner(), 2)
+        # a face pattern is bound to its number of dimensions
+        @test_throws ArgumentError codim(Face(Lower(), Lower()), 3)
+        @test_throws ArgumentError codim(!Face(Lower(), Lower()), 3)
+        # Front() holds on nothing in 2D, so its complement is every wall
+        @test matches(!Front(), Face(Lower(), Span()))
+        @test matches(!Front(), Face(Span(), Upper()))
+    end
+end
+
+@testset "regions" begin
+    @test -1 // 2 ∈ Ghost()
+    @test 0 // 1 ∉ Ghost()
+    @test 0 // 1 ∈ OnBoundary()
+    @test -1 // 2 ∉ OnBoundary()
+    @test 1 // 2 ∉ OnBoundary()
+    @test 0 // 1 ∉ NearBoundary(2)
+    @test 1 // 2 ∈ NearBoundary(2)
+    @test 2 // 1 ∈ NearBoundary(2)
+    @test 5 // 2 ∉ NearBoundary(2)
+end
+
+@testset "index folding" begin
+    @test fold(𝑖 + 1, 1) == (1, 1)
+    @test fold(𝑖 - 1, 1) == (1, -1)
+    @test fold(𝑖 + 1 - 1, 1) == (1, 0)
+    @test fold(𝑖 + 𝑖, 1) == (2, 0)
+    @test fold(𝑖 - 𝑖 + 1, 1) == (0, 1)
+    @test_throws ArgumentError fold(𝑖, 2)
+    @test_throws ArgumentError fold(𝑗 + 1, 1)
+    @test fold(-𝑖, 1) == (-1, 0)
+    @test_throws ArgumentError fold(𝑖 + 1 // 2, 1)
+    @test_throws ArgumentError fold(2 * 𝑖, 1)
+end
+
+@testset "index shift" begin
+    @test shift(𝑖 + 1, 1) == 1
+    @test shift(𝑖 - 1, 1) == -1
+    @test shift(𝑖, 1) == 0
+    @test shift(𝑖 - 1 + 1, 1) == 0
+    @test shift(𝑖 + 1 + 1, 1) == 2
+    @test_throws ArgumentError shift(𝑖 - 𝑖 + 1, 1)
+    @test_throws ArgumentError shift(𝑖 + 1, 2)
+    @test_throws ArgumentError shift(𝑗 + 1, 1)
+end
+
+@testset "position" begin
+    @test Chmy.position(0, 𝓅, At(Lower(), 2)) == Near(Lower(), 2)
+    @test Chmy.position(1, 𝓈, At(Lower(), 0)) == Near(Lower(), 3 // 2)
+    @test Chmy.position(1, 𝓅, At(Upper(), 2)) == Near(Upper(), 1)
+    @test Chmy.position(0, 𝓈, At(Upper(), 0)) == Near(Upper(), -1 // 2)
+    @test Chmy.position(-1, 𝓈, At(Upper(), 0)) == Near(Upper(), 1 // 2)
+    @test Chmy.position(3, 𝓈, Far()) == Far()
+end
+
+@testset "candidates" begin
+    L, U = Lower(), Upper()
+    Rules = Pair{FacePattern, GridRegion}
+    # no near axes, or near axes outside the region
+    @test isempty(candidates((Far(), Far()), Rules[Left() => Ghost()]))
+    @test isempty(candidates((Near(L, 3), Far()), Rules[Left() => NearBoundary(2)]))
+    # higher codimension first, then the lower axis on a tie
+    on = (Near(L, 0), Near(L, 0))
+    @test candidates(on, Rules[AnyWall() => OnBoundary(), AnyCorner() => OnBoundary()]) == [[1, 2] => [2], [1] => [1], [2] => [1]]
+    # ghost axes before boundary axes, whatever the declaration order
+    ghost_on = (Near(L, 0), Near(L, -1 // 2))
+    @test candidates(ghost_on, Rules[Left() => OnBoundary(), Bottom() => Ghost()]) == [[2] => [2], [1] => [1]]
+    # a corner key needs every axis of the corner in its region
+    @test candidates(ghost_on, Rules[Left() => OnBoundary(), Bottom() => Ghost(), AnyCorner() => Ghost()]) == [[2] => [2], [1] => [1]]
+    # several pairs per face, in declaration order; groups ordered by their first pair
+    ghosts = (Near(L, -1 // 2), Near(L, -1 // 2))
+    @test candidates(ghosts, Rules[Left() => Ghost(), AnyWall() => Ghost()]) == [[1] => [1, 2], [2] => [2]]
+    # upper sides
+    near = (Near(U, 1 // 2), Near(L, 1 // 2))
+    @test candidates(near, Rules[AnyCorner() => NearBoundary(1), Right() => NearBoundary(1)]) == [[1, 2] => [1], [1] => [2]]
+    # 3D: corner, then the one named edge, then the wall
+    on3 = (Near(L, 0), Near(L, 0), Near(L, 0))
+    rules3 = Rules[Left() => OnBoundary(), Face(L, L, Span()) => OnBoundary(), AnyCorner() => OnBoundary()]
+    @test candidates(on3, rules3) == [[1, 2, 3] => [3], [1, 2] => [2], [1] => [1]]
+    # malformed rules throw even without near axes
+    @test_throws ArgumentError candidates((Far(), Far()), Rules[(Left() | AnyCorner()) => Ghost()])
+    @test_throws ArgumentError candidates(on, Rules[Face(L, L, Span()) => OnBoundary()])
+    @test (@inferred candidates(on3, rules3)) == [[1, 2, 3] => [3], [1, 2] => [2], [1] => [1]]
 end

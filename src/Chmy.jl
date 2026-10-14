@@ -85,7 +85,9 @@ include("compile.jl")
 
 export matches, dim, codim
 export Lower, Upper, Span
-export FacePattern, WallPattern, Face, Wall, AlongAxis, AnyWall, Left, Right, Bottom, Top, Back, Front
+export FacePattern, WallPattern, Face, Wall, AlongAxis, AnyWall, AnyCorner, Left, Right, Bottom, Top, Back, Front
+export Ghost, OnBoundary, NearBoundary
+export Far, Near, At
 include("topology.jl")
 
 include("show.jl")
