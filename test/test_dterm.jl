@@ -61,7 +61,7 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred tensorrank(ind)) == 0
 
         @test (@inferred isindex(ind)) == true
-        @test (@inferred isuniform(ind)) == true
+        @test (@inferred isuniform(ind)) == false
 
         @test (@inferred isliteral(ind)) == false
         @test (@inferred istensor(ind)) == false
@@ -278,7 +278,6 @@ Random.seed!(1234) # deterministic tests
 
             @test (@inferred tensorrank(expr)) == 0
             @test (@inferred isuniform(expr)) == false
-            @test (@inferred isuniform(DExpr(Inds(), (b, 𝑖, 𝑗 + Literal(1))))) == true
 
             @test (@inferred isuniform(DExpr(Inds(), (b, a, 𝑗)))) == false
 

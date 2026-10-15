@@ -17,6 +17,7 @@ function (==ₛ)(a::DTerm, b::DTerm)
         (ZeroTensor(x), ZeroTensor(y)) => x == y
         (IdTensor(x), IdTensor(y)) => x == y
         (Index(i), Index(j)) => i == j
+        (Coordinate(i), Coordinate(j)) => i == j
         (DExpr(ah, ac), DExpr(bh, bc)) => begin
             ah == bh || return false
             length(ac) == length(bc) || return false
@@ -57,6 +58,7 @@ function (<ₛ)(x::DTerm, y::DTerm)
 
     return @match (x, y) begin
         (Index(i), Index(j)) => i < j
+        (Coordinate(i), Coordinate(j)) => i < j
         (Literal(a), Literal(b)) => isless(a, b)::Bool
         (Tensor(_, nx, _, _), Tensor(_, ny, _, _)) => begin
             nx == ny || return isless(nx, ny)
@@ -130,6 +132,13 @@ isliteral(term::DTerm) = isa_variant(term, Literal)
 Return `true` if `term` is a symbolic grid index.
 """
 isindex(term::DTerm) = isa_variant(term, Index)
+
+"""
+    iscoordinate(term)
+
+Return `true` if `term` is a symbolic coordinate.
+"""
+iscoordinate(term::DTerm) = isa_variant(term, Coordinate)
 
 """
     istensor(term)
@@ -229,7 +238,7 @@ identity tensors. An expression is uniform if all its children are uniform.
 """
 function isuniform(term::DTerm)
     return @match term begin
-        Literal(_) || Index(_) => true
+        Literal(_) => true
         Tensor(_, _, _, uniform) => uniform
         ZeroTensor(_) || IdTensor(_) => true
         DExpr(_, args) => all_isuniform(args)
@@ -247,7 +256,7 @@ Return the value of a literal or the dimension of a symbolic grid index.
 """
 function value(term::DTerm)
     return @match term begin
-        Literal(val) || Index(val) => val
+        Literal(val) || Index(val) || Coordinate(val) => val
         _ => throw(ArgumentError("only literals and grid indices can have a value"))
     end
 end
@@ -435,8 +444,7 @@ tensors return literal component values.
 """
 function Base.getindex(term::DTerm, I::Vararg{Integer, N}) where {N}
     return @match term begin
-        Literal(_) => term
-        Index(_) => term
+        Literal(_) || Index(_) || Coordinate(_) => term
         Tensor(_, _, kind, _) => begin
             if kind == Kind.Sym()
                 makecomp(term, sort(I))
@@ -485,6 +493,7 @@ function Base.hash(term::DTerm, h::UInt)::UInt
             return hash(x, h)::UInt
         end
         Index(i) => hash(i, hash(:Index, h))
+        Coordinate(i) => hash(i, hash(:Coordinate, h))
         Tensor(rank, name, kind, uniform) => hash(uniform, hash(kind, hash(name, hash(rank, hash(:Tensor, h)))))
         ZeroTensor(rank) => hash(rank, hash(:ZeroTensor, h))
         IdTensor(rank) => hash(rank, hash(:IdTensor, h))
@@ -498,11 +507,12 @@ end
 function termrank(term)
     return @match term begin
         Index(_) => 0
-        Tensor(_, _, _, _) => 1
-        ZeroTensor(_) => 2
-        IdTensor(_) => 3
-        Literal(_) => 4
-        DExpr(_, _) => 5
+        Coordinate(_) => 1
+        Tensor(_, _, _, _) => 2
+        ZeroTensor(_) => 3
+        IdTensor(_) => 4
+        Literal(_) => 5
+        DExpr(_, _) => 6
     end
 end
 

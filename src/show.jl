@@ -8,7 +8,8 @@ end
 function Base.show(io::IO, v::DTerm)
     return @match v begin
         Literal(val) => print(io, val)
-        Index(idx) => print_index(io, idx)
+        Index(i) => print_index(io, i)
+        Coordinate(i) => print_coordinate(io, i)
         Tensor(rank, name, _, _) => print_tensor(io, rank, name)
         ZeroTensor(_) => print(io, '𝒪')
         IdTensor(_) => print(io, 'ℐ')
@@ -34,6 +35,35 @@ function print_subscript(io, i::Integer)
     return
 end
 
+# in Unicode, superscript numbers have non-consecutive code points
+function print_superscript(io, i::Integer)
+    i < 0 && throw(ArgumentError("subscript must be nonnegative"))
+    i >= 10 && print_superscript(io, div(i, 10))
+    i = mod(i, 10)
+    if i == 0
+        print(io, '⁰')
+    elseif i == 1
+        print(io, '¹')
+    elseif i == 2
+        print(io, '²')
+    elseif i == 3
+        print(io, '³')
+    elseif i == 4
+        print(io, '⁴')
+    elseif i == 5
+        print(io, '⁵')
+    elseif i == 6
+        print(io, '⁶')
+    elseif i == 7
+        print(io, '⁷')
+    elseif i == 8
+        print(io, '⁸')
+    elseif i == 9
+        print(io, '⁹')
+    end
+    return
+end
+
 function print_index(io, i)
     return if i == 1
         print(io, '𝑖')
@@ -44,6 +74,11 @@ function print_index(io, i)
     else
         print(io, "Index(", i, ')')
     end
+end
+
+function print_coordinate(io, i)
+    printstyled(io, 'ξ'; italic=true)
+    print_superscript(io, i)
 end
 
 function print_tensor(io, rank, name)

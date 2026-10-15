@@ -42,10 +42,11 @@ const Head = HeadImpl.Type
 
 # DTerm definition
 @data DTermImpl begin
-    export Literal, Index, Tensor, IdTensor, ZeroTensor, DExpr
+    export Literal, Index, Coordinate, Tensor, IdTensor, ZeroTensor, DExpr
 
     Literal(Number)
     Index(Int)
+    Coordinate(Int)
     struct Tensor
         rank::Int
         name::Symbol

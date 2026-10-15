@@ -16,7 +16,7 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 # re-export from LinearAlgebra
 export ⋅, ×, tr, det, diag, transpose
 
-export DTerm, Literal, Index, Operator, Fun
+export DTerm, Literal, Index, Coordinate, Operator, Fun
 include("types.jl")
 
 export isexpr, iscall
