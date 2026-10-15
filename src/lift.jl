@@ -4,12 +4,11 @@ struct Lifted{O <: Operator, K} <: Operator
 
     """
         Lifted(op, axes)
-        Lifted(op, axis)
+        Lifted(op, axes...)
 
     Wraps kD operator `op` so that, when lowered with an nD list of coordinates, the k-th coordinate
-    of `op` is taken along `axes[k]`. The axes may be in any order, e.g. `Lifted(op, (3, 1))` applies
-    the first dimension of `op` along the third axis and the second along the first.
-    A single `axis` is equivalent to `(axis,)`.
+    of `op` is taken along `axes[k]`. The axes may be in any order, e.g. `Lifted(op, 3, 1)` applies
+    the first dimension of `op` along the third axis and the second along the first.`.
     """
     function Lifted(op::O, axes::NTuple{K, Integer}) where {O <: Operator, K}
         K > 0 || throw(ArgumentError("at least one lifted axis is required"))
@@ -18,7 +17,6 @@ struct Lifted{O <: Operator, K} <: Operator
         return new{O, K}(op, map(Int, axes))
     end
 end
-
 Lifted(op::Operator, axes::Vararg{Integer, N}) where {N} = Lifted(op, axes)
 
 tensorrank(lf::Lifted, args) = tensorrank(lf.op, args)
