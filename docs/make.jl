@@ -10,6 +10,8 @@ makedocs(
         repo = "github.com/PTsolvers/Chmy.jl",
         devbranch = "main",
         devurl = "dev",
+        # `dev` is the only deployed version (no `stable` yet), so keep it indexable
+        noindex_non_stable = false,
     ),
     modules = [Chmy],
     warnonly = [:missing_docs],
@@ -37,7 +39,7 @@ makedocs(
     ]
 )
 
-deploydocs(
+DocumenterVitepress.deploydocs(
     repo = "github.com/PTsolvers/Chmy.jl",
     devbranch = "main",
     push_preview = true
