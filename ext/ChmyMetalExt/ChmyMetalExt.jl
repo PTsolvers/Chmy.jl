@@ -8,7 +8,7 @@ Base.unsafe_wrap(::MetalBackend, ptr::Metal.MtlPtr, dims) = unsafe_wrap(MtlArray
 
 pointertype(::MetalBackend, T::DataType) = Metal.MtlPtr{T}
 
-set_device!(dev::Metal.MTL.MTLDeviceInstance) = Metal.device!(dev)
+set_device!(dev::Metal.MTL.MTLDevice) = Metal.device!(dev)
 
 get_device(::MetalBackend, id::Integer) = Metal.MTL.MTLDevice(id)
 
