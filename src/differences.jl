@@ -29,8 +29,8 @@ Difference{N}() where {N} = Difference{N, 0}()
     StaggeredDifference{N}()
     StaggeredDifference()
 
-First derivative on a unit-spaced grid using `N` consecutive points on the
-opposite grid location, with midpoint `O`. Default parameters are `N = 2` and `O = 0`.
+First derivative on a unit-spaced grid using `N` consecutive points at half-integer
+offsets, with midpoint `O`. Default parameters are `N = 2` and `O = 0`.
 """
 struct StaggeredDifference{N, O} <: AbstractDifference
     function StaggeredDifference{N, O}() where {N, O}
@@ -174,30 +174,24 @@ Return the full tuple of exact first-derivative coefficients aligned with
     return QuoteNode(map(stencil_constant, difference_weights(difference_nodes(N, O))))
 end
 
-# build the expression that reads the field `f` at the stencil node `x` relative to index `i`
+# build the expression that reads the field `f` at the stencil node `x` relative to the coordinate `ξ`
 #
-# for collocated differences `x` is an integer offset, and the field is sampled at the same
-# location as the output, either unlocated (`f`) or at the location argument (`f[l]`)
-# for staggered differences `x` is a half-integer offset, and the field is sampled at the
-# opposite location of the output `loc`; segment `i` lies between points `i` and `i + 1`, so
-# a point output reads segments at `i + x - 1/2` and a segment output reads points at `i + x + 1/2`
-function field_sample(x, staggered, loc)
-    offset = Int(staggered ? x + (loc === Point ? -1 // 2 : 1 // 2) : x)
-    index = iszero(offset) ? :i : offset > 0 ? :(i + $offset) : :(i - $(-offset))
-    field = staggered ? (loc === Point ? :(f[𝓈]) : :(f[𝓅])) : isnothing(loc) ? :f : :(f[l])
-    return :($field[$index])
+# for collocated differences `x` is an integer offset, and for staggered differences `x` is
+# a half-integer offset; the grid locations and indices of the samples are inferred during lowering
+function field_sample(x)
+    return iszero(x) ? :(f[ξ]) : x > 0 ? :(f[ξ + $x]) : :(f[ξ - $(-x)])
 end
 
 # build the weighted sum of field samples for the stencil with nodes `x` and `weights`
 #
 # if the stencil is antisymmetric, i.e. every nonzero weight at `x[k]` has an opposite weight
-# at `-x[k]`, the terms are grouped in pairs `c * (f[i + x] - f[i - x])` for positive `x`,
-# which halves the number of multiplications, e.g. `f[i + 1] - f[i - 1]` for the central difference
+# at `-x[k]`, the terms are grouped in pairs `c * (f[ξ + x] - f[ξ - x])` for positive `x`,
+# which halves the number of multiplications, e.g. `f[ξ + 1] - f[ξ - 1]` for the central difference
 # otherwise each nonzero weight gives a separate term, with positive weights placed first,
 # so that the expression starts without a leading minus when possible
 # the sign of each weight is absorbed into `+` or `-` between terms, unit coefficients are omitted,
 # and an all-zero stencil yields `ZERO`
-function difference_expr(x, weights, staggered, loc)
+function difference_expr(x, weights)
     nonzero = findall(!iszero, weights)
     paired = all(nonzero) do k
         opposite = findfirst(==(-x[k]), x)
@@ -209,9 +203,9 @@ function difference_expr(x, weights, staggered, loc)
     for k in points
         c = weights[k]
         iszero(c) && continue
-        term = field_sample(x[k], staggered, loc)
+        term = field_sample(x[k])
         if paired
-            opposite = field_sample(-x[k], staggered, loc)
+            opposite = field_sample(-x[k])
             term = :($term - $opposite)
         end
         coefficient = abs(c)
@@ -225,14 +219,6 @@ function difference_expr(x, weights, staggered, loc)
     return something(result, :ZERO)
 end
 
-@generated function stencil_rule(d::Difference, f::DTerm, i::DTerm)
-    return difference_expr(stencil_nodes(d()), stencil_weights(d()), false, nothing)
-end
-
-@generated function stencil_rule(d::Difference, f::DTerm, l::L, i::DTerm) where {L <: Location}
-    return difference_expr(stencil_nodes(d()), stencil_weights(d()), false, L)
-end
-
-@generated function stencil_rule(d::StaggeredDifference, f::DTerm, ::L, i::DTerm) where {L <: Location}
-    return difference_expr(stencil_nodes(d()), stencil_weights(d()), true, L)
+@generated function stencil_rule(d::Union{Difference, StaggeredDifference}, f::DTerm, ξ::DTerm)
+    return difference_expr(stencil_nodes(d()), stencil_weights(d()))
 end
