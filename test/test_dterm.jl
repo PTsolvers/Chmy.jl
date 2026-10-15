@@ -85,6 +85,22 @@ Random.seed!(1234) # deterministic tests
         @test_throws InexactError Index(1.1)
     end
 
+    @testset "Coordinate" begin
+        ξ = @inferred Coordinate(1)
+
+        @test value(ξ) == 1
+        @test ξ === ξ¹
+        @test ξ ==ₛ Coordinate(1)
+        @test ξ !=ₛ Index(1)
+
+        @test (@inferred tensorrank(ξ)) == 0
+
+        @test (@inferred iscoordinate(ξ)) == true
+        @test (@inferred isindex(ξ)) == false
+        @test (@inferred isuniform(ξ)) == false
+        @test (@inferred isexpr(ξ)) == false
+    end
+
     KINDS = TensorKind[Kind.None(), Kind.Diag(), Kind.Sym(), Kind.Alt()]
 
     @testset "Tensor" begin
