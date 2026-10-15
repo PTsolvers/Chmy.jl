@@ -6,7 +6,7 @@ struct Lifted{O <: Operator} <: Operator
     Lifted(op::Operator, axis::Integer)
 
     Wraps 1D operator `op` in a way that when lowered with nD list
-    of locations and/or indices, the operator is applied along `axis`.
+    of coordinates, the operator is applied along `axis`.
     """
     function Lifted(op::O, axis::Integer) where {O <: Operator}
         axis > 0 || throw(ArgumentError("the lifted axis must be positive"))
@@ -17,61 +17,35 @@ end
 tensorrank(lf::Lifted, args) = tensorrank(lf.op, args)
 checkranks(lf::Lifted, args::NTuple{N, DTerm}) where {N} = checkranks(lf.op, args)
 
-struct Insert{L, N}
-    locs::L
-    inds::NTuple{N, DTerm}
+function stencil_rule(lf::Lifted, args::Tuple{Vararg{DTerm}}, coords::NTuple{N, DTerm}) where {N}
+    lf.axis <= N || throw(ArgumentError("the lifted axis exceeds the number of coordinates"))
+    term = stencil_rule(lf.op, args, (coords[lf.axis],))::DTerm
+    N == 1 && return term
+    return insert_stencil(term, coords, lf.axis)
 end
 
-function stencil_rule(lf::Lifted, args::Tuple{Vararg{DTerm}}, inds::NTuple{N, DTerm}) where {N}
-    lf.axis <= N || throw(ArgumentError("the lifted axis exceeds the number of grid indices"))
-    term = stencil_rule(lf.op, args, (inds[lf.axis],))::DTerm
-    N == 1 && return term
-    return insert_stencil(term, Insert(nothing, inds), lf.axis)
-end
-function stencil_rule(lf::Lifted, args::Tuple{Vararg{DTerm}}, locs::NTuple{N, Location}, inds::NTuple{N, DTerm}) where {N}
-    lf.axis <= N || throw(ArgumentError("the lifted axis exceeds the number of grid indices"))
-    term = stencil_rule(lf.op, args, (locs[lf.axis],), (inds[lf.axis],))::DTerm
-    N == 1 && return term
-    return insert_stencil(term, Insert(locs, inds), lf.axis)
-end
-
-@inline function insert_stencil(term, ctx::Insert{Nothing}, axis)
+# replace 1D samples `f[c]` with nD samples `f[coords...]` where the coordinate along `axis` is `c`
+@inline function insert_stencil(term, coords, axis)
     return @match term begin
-        DExpr(Inds(), (arg, ind)) => begin
-            ninds = @inbounds Base.setindex(ctx.inds, ind, axis)
-            return makeinds_unchecked(arg, ninds)
+        DExpr(Inds(), (arg, coord)) => begin
+            ncoords = @inbounds Base.setindex(coords, coord, axis)
+            return makeinds_unchecked(arg, ncoords)
         end
-        DExpr(head, args) => something(insert_args(head, args, ctx, axis), term)
-        _ => return term
-    end
-end
-@inline function insert_stencil(term, ctx, axis)
-    return @match term begin
-        DExpr(Inds(), (arg, ind)) => begin
-            @match arg begin
-                DExpr(Locs((loc,)), (arg2,)) => begin
-                    ninds = @inbounds Base.setindex(ctx.inds, ind, axis)
-                    nlocs = @inbounds Base.setindex(ctx.locs, loc, axis)
-                    return makeinds_unchecked(makelocs_unchecked(arg2, nlocs), ninds)
-                end
-                _ => throw(ArgumentError("location-aware stencil rules must define locations on fields"))
-            end
-        end
-        DExpr(head, args) => something(insert_args(head, args, ctx, axis), term)
+        DExpr(head, args) => something(insert_args(head, args, coords, axis), term)
         _ => return term
     end
 end
 
-@inline function insert_args(head, args, ctx, axis)
+@inline function insert_args(head, args, coords, axis)
     for k in eachindex(args)
-        arg = insert_stencil(args[k], ctx, axis)
+        arg = insert_stencil(args[k], coords, axis)
         arg ==ₛ args[k] && continue
-        return DExpr(head, insert_args(args, arg, ctx, axis, k))
+        return DExpr(head, insert_args(args, arg, coords, axis, k))
     end
     return nothing
 end
-@inline function insert_args(args::NTuple{N, DTerm}, arg, ctx, axis, k) where {N}
+@inline function insert_args(args::NTuple{N, DTerm}, arg, coords, axis, k) where {N}
     return ntuple(Val(N)) do j
-        j < k ? args[j] : j == k ? arg : insert_stencil(args[j], ctx, axis)
+        j < k ? args[j] : j == k ? arg : insert_stencil(args[j], coords, axis)
     end
 end
