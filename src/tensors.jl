@@ -37,12 +37,11 @@ function components_changed(t::DTerm, dims::Integer)::Union{Nothing, TensorCompo
         end
         DExpr(Call(op), args) => begin
             lowered = components_args(args, dims)
-            if isnothing(lowered)
-                # evaluating a scalar call on scalar component arguments rebuilds the same expression
-                iszero(tensorrank(t)) && !(op isa BroadcastedFun) && return nothing
-                return evaluate(op, args, dims)
-            end
-            return evaluate(op, lowered, dims)
+            result = evaluate(op, something(lowered, args), dims)
+            isnothing(result) || return result
+            # the call is already in component form, rebuild it only if the arguments changed
+            isnothing(lowered) && return nothing
+            return makecall_unchecked(op, lowered)
         end
         DExpr(_, args) => begin
             lowered = components_args(args, dims)
@@ -451,9 +450,12 @@ function isdiag(kind::TensorKind, dims, rank, data)
     end
 end
 
-evaluate(op::Fun, args::Tuple, ::Integer) = evaluate(op.f, args)::Union{DTerm, TensorComponents}
+# `evaluate(op, args, dims)` rewrites a call once the number of dimensions is known,
+# returning `nothing` keeps the call `op(args...)` as is
 evaluate(op::Operator, args::Tuple, ::Integer) = evaluate(op, args)
-evaluate(op::Fun, args::Tuple) = evaluate(op.f, args)::Union{DTerm, TensorComponents}
+evaluate(::Operator, ::Tuple{Vararg{DTerm}}, ::Integer) = nothing
+evaluate(op::BroadcastedFun, args::Tuple{Vararg{DTerm}}, ::Integer) = makecall_unchecked(Fun(op), args)
+evaluate(op::Fun, args::Tuple)= evaluate(op.f, args)::Union{DTerm, TensorComponents}
 evaluate(op::Operator, args::Tuple) = makecall_unchecked(op, args::Tuple{Vararg{DTerm}})
 
 broadcast_component(t::DTerm, I) = t
@@ -476,8 +478,8 @@ end
 
 function evaluate(op::BroadcastedFun, args::Tuple)::Union{DTerm, TensorComponents}
     f = Fun(op)
-    k = findfirst(x -> x isa TensorComponents, args)
-    isnothing(k) && return makecall_unchecked(f, args::Tuple{Vararg{DTerm}})
+    # k cannot be nothing, all-DTerm broadcasts are evaluated as scalar calls
+    k = findfirst(x -> x isa TensorComponents, args)::Int
     tensor = args[k]::TensorComponents
     check_broadcast_ranks(op, args)
     checkdims(args, tensor.dims)

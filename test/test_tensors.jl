@@ -3,6 +3,10 @@ using Chmy
 using Chmy: TensorComponents, Kind
 import LinearAlgebra
 
+# a scalar operator rewritten depending on the number of dimensions
+struct Scaled <: Operator end
+Chmy.evaluate(::Scaled, args::Tuple{DTerm}, dims::Integer) = only(args) / dims
+
 @testset "tensor components" begin
     @scalars a b c
     @vectors u v w
@@ -84,6 +88,12 @@ import LinearAlgebra
         end
         scalar = sin(a) + b * u[1]
         @test (@inferred Union{DTerm, TensorComponents} components(scalar, 2)) ==ₛ scalar
+        @test components(scalar, 2) === scalar
+    end
+
+    @testset "dimension-dependent scalar operators" begin
+        @test (@inferred Union{DTerm, TensorComponents} components(Scaled()(a), 2)) ==ₛ a / 2
+        @test components(sin(Scaled()(a)), 3) ==ₛ sin(a / 3)
     end
 
     @testset "matrix operations" begin
