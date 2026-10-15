@@ -20,7 +20,7 @@ export DTerm, Literal, Index, Coordinate, Operator, Fun
 include("types.jl")
 
 export isexpr, iscall
-export isliteral, isindex, istensor, iscomp, islocs, isinds, isuniform
+export isliteral, isindex, iscoordinate, istensor, iscomp, islocs, isinds, isuniform
 export head, children, operation, arguments
 export value, argument, arity, isunary, isbinary
 export components, locations, indices
@@ -36,6 +36,11 @@ export 𝑖, 𝑗, 𝑘
 const 𝑖 = Index(1)
 const 𝑗 = Index(2)
 const 𝑘 = Index(3)
+
+export ξ¹, ξ², ξ³
+const ξ¹ = Coordinate(1)
+const ξ² = Coordinate(2)
+const ξ³ = Coordinate(3)
 
 export 𝓅, 𝓈
 const 𝓅 = Point()
