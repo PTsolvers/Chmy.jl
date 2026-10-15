@@ -77,8 +77,8 @@ function print_index(io, i)
 end
 
 function print_coordinate(io, i)
-    printstyled(io, 'ξ'; italic=true)
-    print_superscript(io, i)
+    printstyled(io, 'ξ'; italic = true)
+    return print_superscript(io, i)
 end
 
 function print_tensor(io, rank, name)
