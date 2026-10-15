@@ -108,7 +108,10 @@ print_opname(io, ::Divergence) = print(io, "divg")
 print_opname(io, ::Curl) = print(io, "curl")
 function print_opname(io, op::Lifted)
     print_opname(io, op.op)
-    foreach(a -> print_subscript(io, a), op.axes)
+    foreach(op.axes) do a
+        a < 0 && print(io, '₋')
+        print_subscript(io, abs(a))
+    end
     return
 end
 
