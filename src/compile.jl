@@ -27,7 +27,7 @@ function toexpr(expr::DTerm, bnd)
             isuniform(arg) || throw(ArgumentError("only uniform tensors can be non-indexed during compilation"))
             lookup_uniform(bnd, expr)
         end
-        DExpr(Inds(), (arg, inds...)) => toexpr_inds(arg, inds, bnd)
+        DExpr(Inds(offsets), (arg,)) => toexpr_inds(arg, offsets, bnd)
         DExpr(Call(op), args) => toexpr_call(op, args, bnd)
         DExpr(Locs(_), _) => throw(ArgumentError("only uniform tensors can be non-indexed during compilation"))
         ZeroTensor(_) => throw(ArgumentError("zero tensors should be lowered before compilation"))
@@ -59,14 +59,20 @@ function toexpr_call(op::Fun, args, b)
     return Expr(:call, f, args_expr...)
 end
 
-function toexpr_inds(arg, inds, b)
+function toexpr_inds(arg, offsets, b)
     haskey(b, arg) || throw(ArgumentError(LazyString("binding does not contain key '", arg, "'")))
     idx = findkey(b, arg)::Int
     typ = b.data[idx]
     data_expr = Expr(:ref, :data, idx)
     if typ <: AbstractArray
-        return Expr(:ref, data_expr, map(x -> toexpr(x, b), inds)...)
+        return Expr(:ref, data_expr, ntuple(a -> index_expr(a, offsets[a]), length(offsets))...)
     else
         return data_expr
     end
+end
+
+function index_expr(a, offset)
+    isinteger(offset) || throw(ArgumentError("only lowered samples with integer offsets can be compiled"))
+    k = Int(offset)
+    return iszero(k) ? :(I[$a]) : k > 0 ? :(I[$a] + $k) : :(I[$a] - $(-k))
 end

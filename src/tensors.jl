@@ -455,7 +455,7 @@ end
 evaluate(op::Operator, args::Tuple, ::Integer) = evaluate(op, args)
 evaluate(::Operator, ::Tuple{Vararg{DTerm}}, ::Integer) = nothing
 evaluate(op::BroadcastedFun, args::Tuple{Vararg{DTerm}}, ::Integer) = makecall_unchecked(Fun(op), args)
-evaluate(op::Fun, args::Tuple)= evaluate(op.f, args)::Union{DTerm, TensorComponents}
+evaluate(op::Fun, args::Tuple) = evaluate(op.f, args)::Union{DTerm, TensorComponents}
 evaluate(op::Operator, args::Tuple) = makecall_unchecked(op, args::Tuple{Vararg{DTerm}})
 
 broadcast_component(t::DTerm, I) = t

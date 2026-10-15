@@ -21,8 +21,8 @@ struct NoopRule <: AbstractRule end
         isinds(t) && argument(t) ==ₛ b && return c
         return nothing
     end
-    @test (@inferred Prewalk(rule)(a[𝑖])) ==ₛ b[𝑖]
-    @test (@inferred Postwalk(rule)(a[𝑖])) ==ₛ c
+    @test (@inferred Prewalk(rule)(a[1])) ==ₛ b[1]
+    @test (@inferred Postwalk(rule)(a[1])) ==ₛ c
 
     expr = sin(a + Literal(2.0))
     literal_rule = t -> isliteral(t) ? Literal(Int(value(t))) : nothing

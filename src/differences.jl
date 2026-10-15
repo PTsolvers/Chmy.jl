@@ -174,19 +174,17 @@ Return the full tuple of exact first-derivative coefficients aligned with
     return QuoteNode(map(stencil_constant, difference_weights(difference_nodes(N, O))))
 end
 
-# build the expression that reads the field `f` at the stencil node `x` relative to the coordinate `ξ`
+# build the expression that reads the field `f` at the stencil node `x` relative to the evaluation point
 #
 # for collocated differences `x` is an integer offset, and for staggered differences `x` is
 # a half-integer offset; the grid locations and indices of the samples are inferred during lowering
-function field_sample(x)
-    return iszero(x) ? :(f[ξ]) : x > 0 ? :(f[ξ + $x]) : :(f[ξ - $(-x)])
-end
+field_sample(x) = :(f[$x])
 
 # build the weighted sum of field samples for the stencil with nodes `x` and `weights`
 #
 # if the stencil is antisymmetric, i.e. every nonzero weight at `x[k]` has an opposite weight
-# at `-x[k]`, the terms are grouped in pairs `c * (f[ξ + x] - f[ξ - x])` for positive `x`,
-# which halves the number of multiplications, e.g. `f[ξ + 1] - f[ξ - 1]` for the central difference
+# at `-x[k]`, the terms are grouped in pairs `c * (f[x] - f[-x])` for positive `x`,
+# which halves the number of multiplications, e.g. `f[1] - f[-1]` for the central difference
 # otherwise each nonzero weight gives a separate term, with positive weights placed first,
 # so that the expression starts without a leading minus when possible
 # the sign of each weight is absorbed into `+` or `-` between terms, unit coefficients are omitted,
@@ -219,6 +217,6 @@ function difference_expr(x, weights)
     return something(result, :ZERO)
 end
 
-@generated function stencil_rule(d::Union{Difference, StaggeredDifference}, f::DTerm, ξ::DTerm)
+@generated function stencil_rule(d::Union{Difference, StaggeredDifference}, f::DTerm)
     return difference_expr(stencil_nodes(d()), stencil_weights(d()))
 end

@@ -3,7 +3,6 @@ using Chmy
 
 @testset "differences" begin
     @scalars f
-    ξ = ξ¹
 
     @testset "constructors" begin
         @test (@inferred Difference()) === CentralDifference{3}()
@@ -46,30 +45,30 @@ using Chmy
     end
 
     @testset "standard stencils" begin
-        @test (@inferred stencil_rule(CentralDifference(), f, ξ)) ==ₛ (1 // 2) * (f[ξ + 1] - f[ξ - 1])
-        @test (@inferred stencil_rule(CentralDifference{5}(), f, ξ)) ==ₛ (2 // 3) * (f[ξ + 1] - f[ξ - 1]) - (1 // 12) * (f[ξ + 2] - f[ξ - 2])
-        @test (@inferred stencil_rule(CentralDifference{7}(), f, ξ)) ==ₛ (3 // 4) * (f[ξ + 1] - f[ξ - 1]) - (3 // 20) * (f[ξ + 2] - f[ξ - 2]) + (1 // 60) * (f[ξ + 3] - f[ξ - 3])
-        @test (@inferred stencil_rule(ForwardDifference(), f, ξ)) ==ₛ f[ξ + 1] - f[ξ]
-        @test (@inferred stencil_rule(BackwardDifference(), f, ξ)) ==ₛ f[ξ] - f[ξ - 1]
-        forward = @inferred stencil_rule(ForwardDifference{3}(), f, ξ)
-        @test forward ==ₛ 2 * f[ξ + 1] - (3 // 2) * f[ξ] - (1 // 2) * f[ξ + 2]
+        @test (@inferred stencil_rule(CentralDifference(), f)) ==ₛ (1 // 2) * (f[1] - f[-1])
+        @test (@inferred stencil_rule(CentralDifference{5}(), f)) ==ₛ (2 // 3) * (f[1] - f[-1]) - (1 // 12) * (f[2] - f[-2])
+        @test (@inferred stencil_rule(CentralDifference{7}(), f)) ==ₛ (3 // 4) * (f[1] - f[-1]) - (3 // 20) * (f[2] - f[-2]) + (1 // 60) * (f[3] - f[-3])
+        @test (@inferred stencil_rule(ForwardDifference(), f)) ==ₛ f[1] - f[0]
+        @test (@inferred stencil_rule(BackwardDifference(), f)) ==ₛ f[0] - f[-1]
+        forward = @inferred stencil_rule(ForwardDifference{3}(), f)
+        @test forward ==ₛ 2 * f[1] - (3 // 2) * f[0] - (1 // 2) * f[2]
         leading_product = first(arguments(first(arguments(forward))))
         @test value(first(arguments(leading_product))) isa Int
         @test value(first(arguments(last(arguments(forward))))) isa Rational{Int}
-        @test (@inferred stencil_rule(BackwardDifference{3}(), f, ξ)) ==ₛ (1 // 2) * f[ξ - 2] + (3 // 2) * f[ξ] - 2 * f[ξ - 1]
-        @test (@inferred stencil_rule(Difference{3, 2}(), f, ξ)) ==ₛ 4 * f[ξ + 2] - (5 // 2) * f[ξ + 1] - (3 // 2) * f[ξ + 3]
-        @test (@inferred stencil_rule(Difference{4, 1 // 2}(), f, ξ)) ==ₛ f[ξ + 1] - (1 // 3) * f[ξ - 1] - (1 // 2) * f[ξ] - (1 // 6) * f[ξ + 2]
+        @test (@inferred stencil_rule(BackwardDifference{3}(), f)) ==ₛ (1 // 2) * f[-2] + (3 // 2) * f[0] - 2 * f[-1]
+        @test (@inferred stencil_rule(Difference{3, 2}(), f)) ==ₛ 4 * f[2] - (5 // 2) * f[1] - (3 // 2) * f[3]
+        @test (@inferred stencil_rule(Difference{4, 1 // 2}(), f)) ==ₛ f[1] - (1 // 3) * f[-1] - (1 // 2) * f[0] - (1 // 6) * f[2]
     end
 
     @testset "staggered stencils" begin
-        @test (@inferred stencil_rule(StaggeredCentralDifference(), f, ξ)) ==ₛ f[ξ + 1 // 2] - f[ξ - 1 // 2]
-        @test (@inferred stencil_rule(StaggeredCentralDifference{4}(), f, ξ)) ==ₛ (9 // 8) * (f[ξ + 1 // 2] - f[ξ - 1 // 2]) - (1 // 24) * (f[ξ + 3 // 2] - f[ξ - 3 // 2])
-        @test (@inferred stencil_rule(StaggeredForwardDifference(), f, ξ)) ==ₛ f[ξ + 3 // 2] - f[ξ + 1 // 2]
-        @test (@inferred stencil_rule(StaggeredBackwardDifference(), f, ξ)) ==ₛ f[ξ - 1 // 2] - f[ξ - 3 // 2]
-        @test (@inferred stencil_rule(StaggeredForwardDifference{3}(), f, ξ)) ==ₛ 3 * f[ξ + 3 // 2] - 2 * f[ξ + 1 // 2] - f[ξ + 5 // 2]
-        @test (@inferred stencil_rule(StaggeredBackwardDifference{3}(), f, ξ)) ==ₛ f[ξ - 5 // 2] + 2 * f[ξ - 1 // 2] - 3 * f[ξ - 3 // 2]
-        @test (@inferred stencil_rule(StaggeredDifference{3, 1 // 2}(), f, ξ)) ==ₛ f[ξ + 1 // 2] - f[ξ - 1 // 2]
-        @test (@inferred stencil_rule(StaggeredDifference{3, -1 // 2}(), f, ξ)) ==ₛ f[ξ + 1 // 2] - f[ξ - 1 // 2]
+        @test (@inferred stencil_rule(StaggeredCentralDifference(), f)) ==ₛ f[1 // 2] - f[-1 // 2]
+        @test (@inferred stencil_rule(StaggeredCentralDifference{4}(), f)) ==ₛ (9 // 8) * (f[1 // 2] - f[-1 // 2]) - (1 // 24) * (f[3 // 2] - f[-3 // 2])
+        @test (@inferred stencil_rule(StaggeredForwardDifference(), f)) ==ₛ f[3 // 2] - f[1 // 2]
+        @test (@inferred stencil_rule(StaggeredBackwardDifference(), f)) ==ₛ f[-1 // 2] - f[-3 // 2]
+        @test (@inferred stencil_rule(StaggeredForwardDifference{3}(), f)) ==ₛ 3 * f[3 // 2] - 2 * f[1 // 2] - f[5 // 2]
+        @test (@inferred stencil_rule(StaggeredBackwardDifference{3}(), f)) ==ₛ f[-5 // 2] + 2 * f[-1 // 2] - 3 * f[-3 // 2]
+        @test (@inferred stencil_rule(StaggeredDifference{3, 1 // 2}(), f)) ==ₛ f[1 // 2] - f[-1 // 2]
+        @test (@inferred stencil_rule(StaggeredDifference{3, -1 // 2}(), f)) ==ₛ f[1 // 2] - f[-1 // 2]
     end
 
     @testset "invalid parameters" begin

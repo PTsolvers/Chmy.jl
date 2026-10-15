@@ -1,6 +1,6 @@
 using Test
 using Chmy
-using Chmy: fold, shift, GridRegion, candidates
+using Chmy: GridRegion, candidates
 
 @testset verbose = true "FacePattern" begin
     @testset "Face" begin
@@ -188,30 +188,6 @@ end
     @test 1 // 2 ∈ NearBoundary(2)
     @test 2 // 1 ∈ NearBoundary(2)
     @test 5 // 2 ∉ NearBoundary(2)
-end
-
-@testset "index folding" begin
-    @test fold(𝑖 + 1, 1) == (1, 1)
-    @test fold(𝑖 - 1, 1) == (1, -1)
-    @test fold(𝑖 + 1 - 1, 1) == (1, 0)
-    @test fold(𝑖 + 𝑖, 1) == (2, 0)
-    @test fold(𝑖 - 𝑖 + 1, 1) == (0, 1)
-    @test_throws ArgumentError fold(𝑖, 2)
-    @test_throws ArgumentError fold(𝑗 + 1, 1)
-    @test fold(-𝑖, 1) == (-1, 0)
-    @test_throws ArgumentError fold(𝑖 + 1 // 2, 1)
-    @test_throws ArgumentError fold(2 * 𝑖, 1)
-end
-
-@testset "index shift" begin
-    @test shift(𝑖 + 1, 1) == 1
-    @test shift(𝑖 - 1, 1) == -1
-    @test shift(𝑖, 1) == 0
-    @test shift(𝑖 - 1 + 1, 1) == 0
-    @test shift(𝑖 + 1 + 1, 1) == 2
-    @test_throws ArgumentError shift(𝑖 - 𝑖 + 1, 1)
-    @test_throws ArgumentError shift(𝑖 + 1, 2)
-    @test_throws ArgumentError shift(𝑗 + 1, 1)
 end
 
 @testset "position" begin

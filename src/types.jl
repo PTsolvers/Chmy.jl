@@ -35,7 +35,7 @@ const Location = Union{Point, Segment}
     Call(Operator)
     Comp(Tuple{Vararg{Int}})
     Locs(Tuple{Vararg{Location}})
-    Inds()
+    Inds(Tuple{Vararg{Rational{Int}}})
 end
 using .HeadImpl
 const Head = HeadImpl.Type

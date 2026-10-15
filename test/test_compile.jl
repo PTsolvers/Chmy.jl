@@ -9,4 +9,9 @@ using Chmy
     binding = Binding(A[1, 2][𝓅, 𝓅] => fill(0.2, 2, 2), a[𝓅, 𝓅] => fill(0.3, 2, 2), B[1, 2][𝓅, 𝓅] => fill(2.0, 2, 2))
     f = compile(sampled, binding)
     @test (@inferred f(binding.data, (1, 2))) ≈ sin(0.5) * 4
+
+    staggered = lower(StaggeredCentralDifference()[1](a), 𝓅)
+    binding = Binding(a[𝓈] => [1.0, 3.0, 7.0])
+    f = compile(staggered, binding)
+    @test (@inferred f(binding.data, (2,))) == 2.0
 end

@@ -16,7 +16,7 @@ function Base.show(io::IO, v::DTerm)
         DExpr(Call(op), args) => print_call(io, op, args)
         DExpr(Comp(comp), (arg,)) => print_indexed(io, arg, comp)
         DExpr(Locs(locs), (arg,)) => print_indexed(io, arg, locs)
-        DExpr(Inds(), (arg, inds...)) => print_indexed(io, arg, inds)
+        DExpr(Inds(offsets), (arg,)) => print_indexed(io, arg, map(stencil_constant, offsets))
     end
 end
 

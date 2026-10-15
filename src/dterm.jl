@@ -356,7 +356,7 @@ function argument(term::DTerm)
     return @match term begin
         DExpr(Comp(_), (arg,)) => arg
         DExpr(Locs(_), (arg,)) => arg
-        DExpr(Inds(), (arg, _...)) => arg
+        DExpr(Inds(_), (arg,)) => arg
         _ => throw(ArgumentError("only indexing expressions can have a single argument"))
     end
 end
@@ -388,11 +388,11 @@ end
 """
     indices(term)
 
-Return the grid index tuple of a grid indexing expression.
+Return the offset tuple of a grid indexing expression.
 """
 function indices(term::DTerm)
     return @match term begin
-        DExpr(Inds(), (_, inds...)) => inds
+        DExpr(Inds(offsets), _) => offsets
         _ => throw(ArgumentError("only indexing expression can have indices"))
     end
 end
@@ -437,14 +437,16 @@ end
 
 """
     getindex(term::DTerm, I::Integer...)
+    getindex(term::DTerm, offsets::Union{Integer, Rational}...)
 
-Construct a symbolic tensor component, respecting symmetric, alternating, and diagonal
-tensor structure. Literals and grid indices are returned unchanged. Zero and identity
-tensors return literal component values.
+Construct a symbolic tensor component if `term` is not a scalar, respecting symmetric, alternating,
+and diagonal tensor structure. Zero and identity tensors return literal component values.
+If `term` is a scalar, construct a sample of `term` at `offsets` from the evaluation point,
+which must be multiples of `1//2`.
 """
 function Base.getindex(term::DTerm, I::Vararg{Integer, N}) where {N}
+    tensorrank(term) == 0 && return makeinds(term, I)
     return @match term begin
-        Literal(_) || Index(_) || Coordinate(_) => term
         Tensor(_, _, kind, _) => begin
             if kind == Kind.Sym()
                 makecomp(term, sort(I))
@@ -474,6 +476,7 @@ function Base.getindex(term::DTerm, I::Vararg{Integer, N}) where {N}
         _ => makecomp(term, I)
     end
 end
+Base.getindex(term::DTerm, offsets::Vararg{Union{Integer, Rational}, N}) where {N} = makeinds(term, offsets)
 
 # hashing DTerms
 # DExpr caches the hash, other variants need to compute explicitly
@@ -520,7 +523,7 @@ function headrank(head)
     return @match head begin
         Comp(_) => 0
         Locs(_) => 1
-        Inds() => 2
+        Inds(_) => 2
         Call(_) => 3
     end
 end
@@ -536,11 +539,11 @@ function isless_expr(x, y)::Bool
             opx == opy || return (opx <ₛ opy)::Bool
             isless_args(ax, ay)
         end
-        (Comp(ix), Comp(iy)) || (Locs(ix), Locs(iy)) => begin
+        (Comp(ix), Comp(iy)) || (Locs(ix), Locs(iy)) || (Inds(ix), Inds(iy)) => begin
             ax[1] ==ₛ ay[1] || return ax[1] <ₛ ay[1]
             isless_args(ix, iy)
         end
-        _ => isless_args(ax, ay) # Grid indexing stores argument and indices together.
+        _ => error("unreachable")
     end
 end
 

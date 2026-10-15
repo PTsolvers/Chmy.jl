@@ -19,12 +19,12 @@ end
 makelocs(arg::DTerm, locs::Vararg{Location, N}) where {N} = makelocs(arg, locs)
 makelocs_unchecked(arg::DTerm, locs::NTuple{N, Location}) where {N} = DExpr(Locs(locs), (arg,))
 
-function makeinds(arg::DTerm, inds::NTuple{N, DTerm}) where {N}
+function makeinds(arg::DTerm, offsets::NTuple{N, Union{Integer, Rational}}) where {N}
     tensorrank(arg) == 0 || throw(ArgumentError("only scalars can be arguments to indexing expression"))
-    return makeinds_unchecked(arg, inds)
+    all(x -> denominator(x) <= 2, offsets) || throw(ArgumentError("offsets must be multiples of 1//2"))
+    return makeinds_unchecked(arg, map(Rational{Int}, offsets))
 end
-makeinds(arg::DTerm, inds::Vararg{DTerm, N}) where {N} = makeinds(arg, inds)
-makeinds_unchecked(arg::DTerm, inds::NTuple{N, DTerm}) where {N} = DExpr(Inds(), (arg, inds...))
+makeinds_unchecked(arg::DTerm, offsets::NTuple{N, Rational{Int}}) where {N} = DExpr(Inds(offsets), (arg,))
 
 # make operators callable
 (op::Operator)(args::DTerm...) = makecall(op, args)
@@ -296,6 +296,3 @@ Base.ifelse(cond::DTerm, x::Number, y::Number) = ifelse(cond, Literal(x), Litera
 
 # location
 Base.getindex(arg::DTerm, locs::Vararg{Location, N}) where {N} = makelocs(arg, locs...)
-
-# indexing
-Base.getindex(arg::DTerm, inds::Vararg{DTerm, N}) where {N} = makeinds(arg, inds...)

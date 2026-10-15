@@ -24,40 +24,40 @@ Lifted(op::Operator, axes::Vararg{Integer, N}) where {N} = Lifted(op, axes)
 tensorrank(lf::Lifted, args) = tensorrank(lf.op, args)
 checkranks(lf::Lifted, args::NTuple{N, DTerm}) where {N} = checkranks(lf.op, args)
 
-function stencil_rule(lf::Lifted, args::Tuple{Vararg{DTerm}}, coords::NTuple{N, DTerm}) where {N}
-    maximum(lf.axes) <= N || throw(ArgumentError("the lifted axes exceed the number of coordinates"))
-    term = stencil_rule(lf.op, args, map(a -> coords[a], lf.axes))::DTerm
+function stencil_rule(lf::Lifted{O, K}, args::Tuple{Vararg{DTerm}}, dims::Val{N}) where {O, K, N}
+    maximum(lf.axes) <= N || throw(ArgumentError("the lifted axes exceed the number of dimensions"))
+    term = stencil_rule(lf.op, args, Val(K))::DTerm
     lf.axes == ntuple(identity, Val(N)) && return term
-    return insert_stencil(term, coords, lf.axes)
+    return insert_stencil(term, dims, lf.axes)
 end
 
-# replace kD samples `f[c₁, …, cₖ]` with nD samples `f[coords...]` where the coordinate along `axes[j]` is `cⱼ`
-@inline function insert_stencil(term, coords, axes)
+# replace kD samples `f[o₁, …, oₖ]` with nD samples where the offset along `axes[j]` is `oⱼ` and zero otherwise
+@inline function insert_stencil(term, dims, axes)
     return @match term begin
-        DExpr(Inds(), args) && if length(args) == length(axes) + 1 end => makeinds_unchecked(args[1], insert_coords(coords, axes, args))
-        DExpr(head, args) => something(insert_args(head, args, coords, axes), term)
+        DExpr(Inds(offsets), (arg,)) && if length(offsets) == length(axes) end => makeinds_unchecked(arg, insert_offsets(dims, axes, offsets))
+        DExpr(head, args) => something(insert_args(head, args, dims, axes), term)
         _ => return term
     end
 end
 
-# set the coordinates along `axes` to the sample indices `args[2:end]`
-@inline function insert_coords(coords, axes, args)
+@inline function insert_offsets(dims, axes, offsets)
+    result = zero_offsets(dims)
     for j in eachindex(axes)
-        coords = @inbounds Base.setindex(coords, args[j + 1], axes[j])
+        result = @inbounds Base.setindex(result, offsets[j], axes[j])
     end
-    return coords
+    return result
 end
 
-@inline function insert_args(head, args, coords, axes)
+@inline function insert_args(head, args, dims, axes)
     for k in eachindex(args)
-        arg = insert_stencil(args[k], coords, axes)
+        arg = insert_stencil(args[k], dims, axes)
         arg ==ₛ args[k] && continue
-        return DExpr(head, insert_args(args, arg, coords, axes, k))
+        return DExpr(head, insert_args(args, arg, dims, axes, k))
     end
     return nothing
 end
-@inline function insert_args(args::NTuple{N, DTerm}, arg, coords, axes, k) where {N}
+@inline function insert_args(args::NTuple{N, DTerm}, arg, dims, axes, k) where {N}
     return ntuple(Val(N)) do j
-        j < k ? args[j] : j == k ? arg : insert_stencil(args[j], coords, axes)
+        j < k ? args[j] : j == k ? arg : insert_stencil(args[j], dims, axes)
     end
 end

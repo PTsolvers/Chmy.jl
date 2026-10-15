@@ -272,7 +272,8 @@ Random.seed!(1234) # deterministic tests
 
         @testset "Inds" begin
             @scalars a @uniform(b)
-            expr = @inferred DExpr(Inds(), (a, 𝑖, 𝑗 + Literal(1)))
+            @vectors v
+            expr = @inferred DExpr(Inds((0 // 1, 1 // 1)), (a,))
 
             @test expr isa DTerm
             @test (@inferred isa_variant(expr, DExpr))
@@ -280,10 +281,10 @@ Random.seed!(1234) # deterministic tests
             @test (@inferred isexpr(expr)) == true
             @test (@inferred isinds(expr)) == true
 
-            @test (@inferred head(expr)) == Inds()
-            @test isequal(children(expr), (a, 𝑖, 𝑗 + Literal(1)))
+            @test (@inferred head(expr)) == Inds((0 // 1, 1 // 1))
+            @test isequal(children(expr), (a,))
             @test (@inferred argument(expr)) ==ₛ a
-            @test isequal(indices(expr), (𝑖, 𝑗 + Literal(1)))
+            @test indices(expr) === (0 // 1, 1 // 1)
 
             @test (@inferred isliteral(expr)) == false
             @test (@inferred isindex(expr)) == false
@@ -294,8 +295,15 @@ Random.seed!(1234) # deterministic tests
 
             @test (@inferred tensorrank(expr)) == 0
             @test (@inferred isuniform(expr)) == false
+            @test (@inferred isuniform(DExpr(Inds((1 // 2,)), (b,)))) == true
 
-            @test (@inferred isuniform(DExpr(Inds(), (b, a, 𝑗)))) == false
+            @test (@inferred a[0, 1]) ==ₛ expr
+            @test indices(@inferred a[1 // 2, -1]) === (1 // 2, -1 // 1)
+            @test (@inferred iscomp(v[1])) == true
+            @test (@inferred isinds(v[1][1, 2])) == true
+            @test indices(v[1][1, 2]) === (1 // 1, 2 // 1)
+            @test_throws ArgumentError a[1 // 3]
+            @test_throws ArgumentError v[1 // 2]
 
             @test_throws ArgumentError operation(expr)
             @test_throws ArgumentError arguments(expr)
@@ -365,7 +373,7 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred v[1] <ₛ v[2])
         @test (@inferred u[2] <ₛ v[1])
         @test (@inferred a[𝓅] <ₛ a[𝓈])
-        @test (@inferred a[𝑖] <ₛ a[𝑗])
+        @test (@inferred a[0] <ₛ a[1])
 
         terms = DTerm[sin(b), sin(a), cos(a), Literal(2), a]
         expected = DTerm[a, Literal(2), cos(a), sin(a), sin(b)]

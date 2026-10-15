@@ -133,47 +133,6 @@ struct At
 end
 const LowerAxes{N} = NTuple{N, Union{Far, At}}
 
-function fold(ind::DTerm, a)
-    if isindex(ind)
-        i = value(ind)
-        i == a || throw(ArgumentError(LazyString("expected `Index(", a, ")`, got `Index(", i, ")`")))
-        return (1, 0)
-    end
-    if isliteral(ind)
-        v = value(ind)
-        isinteger(v) || throw(ArgumentError(LazyString("only integer offsets are supported in indexing expressions, got `", v, "`")))
-        return (0, convert(Int, v))
-    end
-    if iscall(ind)
-        op, args = operation(ind), arguments(ind)
-        if op == Fun(+)
-            m, o = 0, 0
-            for arg in args
-                ma, oa = fold(arg, a)
-                m += ma
-                o += oa
-            end
-            return m, o
-        end
-        if op == Fun(-)
-            if length(args) == 1
-                m, o = fold(args[1], a)
-                return -m, -o
-            end
-            m1, o1 = fold(args[1], a)
-            m2, o2 = fold(args[2], a)
-            return m1 - m2, o1 - o2
-        end
-    end
-    throw(ArgumentError(LazyString("cannot parse the index expression `", ind, "`")))
-end
-
-function shift(ind, a)
-    m, o = fold(ind, a)
-    m == 1 || throw(ArgumentError(LazyString("index expression must be in the form `i [± o]`, got `", ind, "`")))
-    return o
-end
-
 offset(::Lower, ::Point, i) = i
 offset(::Upper, ::Point, i) = -i
 
@@ -218,12 +177,13 @@ function candidates(pos::NTuple{N, Union{Far, Near}}, rules::Vector{<:Pair{<:Fac
         end |> Face
         group = Int[]
         for (i, (pat, reg)) in enumerate(rules)
-            # codim check
+            # check codim
             codims[i] == length(axes) || continue
             # check if face matches
             matches(pat, face) || continue
             # check if region matches
             all(pos[k].ξ ∈ reg for k in axes) || continue
+            # all checks passed, add the candidate rule's index to the group
             push!(group, i)
         end
         !isempty(group) && push!(groups, axes => group)
@@ -240,19 +200,23 @@ function candidates(pos::NTuple{N, Union{Far, Near}}, rules::Vector{<:Pair{<:Fac
     return groups
 end
 
-struct Rule
-    pattern::FacePattern
-    region::GridRegion
-end
+# struct SelectorPattern
+#     facepat::FacePattern
+#     region::GridRegion
+# end
 
-struct Select <: Operator
-    rules::Vector{Rule}
-    default::DTerm
-end
+# struct SelectorRule
+#     pattern::FacePattern
+#     region::GridRegion
+# end
 
-function lower(sel, locs, inds, axes)
-    shf = map(shift, inds, ntuple(identity, length(axes)))
-    pos = map(position, shf, locs, axes)
-    # TODO
-    return
-end
+# struct Selector <: Operator
+#     rules::Vector{Rule}
+#     default::DTerm
+# end
+
+# function lower(sel, locs, offsets, axes)
+#     pos = map(position, offsets, locs, axes)
+#     # TODO
+#     return
+# end
