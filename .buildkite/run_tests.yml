@@ -4,9 +4,8 @@ steps:
       setup:
         version:
           - "1.10"
-          - "1.11"
           - "1.12"
-          # - "1.13-nightly"
+          - "1.13"
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"
@@ -33,9 +32,8 @@ steps:
       setup:
         version:
           - "1.10"
-          - "1.11"
           - "1.12"
-          # - "1.13-nightly"
+          - "1.13"
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"
@@ -63,9 +61,8 @@ steps:
       setup:
         version:
           - "1.10"
-          - "1.11"
           - "1.12"
-          # - "1.13-nightly"
+          - "1.13"
     plugins:
       - JuliaCI/julia#v1:
           version: "{{matrix.version}}"

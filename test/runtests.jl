@@ -67,7 +67,14 @@ _, backends = parse_flag(ARGS, "--backends"; default=["CPU"])
 
 for backend in backends
     if backend != "CPU"
-        Pkg.add(backend)
+        # preferences only apply to direct deps of the test env, so add CUDA_Runtime_jll explicitly
+        # to honour a preset local CUDA toolkit (e.g. CSCS uenv), as in a regular `--project` run
+        pkgs = backend == "CUDA" ? ["CUDA", "CUDA_Runtime_jll"] : [backend]
+        # skip auto-precompilation: on Julia 1.13.2 it fails with "Unknown package" when the add
+        # changes indirect deps (JuliaLang/Pkg.jl#4866); test files precompile on load anyway
+        withenv("JULIA_PKG_PRECOMPILE_AUTO" => "0") do
+            Pkg.add(pkgs)
+        end
     end
     ENV["JULIA_CHMY_BACKEND_$backend"] = true
 end

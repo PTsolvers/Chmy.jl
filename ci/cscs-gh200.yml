@@ -2,19 +2,11 @@ include:
   - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
 
 UnitTest:
-  extends: .uenv-runner-daint-gh200
-  image: julia/26.3:v1
+  extends: .baremetal-runner-daint-gh200
   script:
     - export MPICH_GPU_SUPPORT_ENABLED=1
-    - julia -e 'println("Instantiating project");
-                using Pkg;
-                Pkg.activate(pwd())'
-    - julia -e 'println("Running tests");
-                using Pkg;
-                Pkg.activate(pwd());
-                Pkg.test("Chmy"; test_args=["--backends=CUDA"])'
+    - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.test("Chmy"; test_args=["--backends=CUDA"])'
   variables:
-    WITH_UENV_VIEW: 'juliaup'
     SLURM_JOB_NUM_NODES: 1
     SLURM_NTASKS_PER_NODE: 1
     SLURM_GPUS_PER_TASK: 1
