@@ -127,20 +127,6 @@ Base.in(ξ::Rational, r::NearBoundary) = zero(ξ) < ξ <= r.w
 # lowering context
 
 struct Far end
-struct At
-    side::Side
-    k::Int
-end
-const LowerAxes{N} = NTuple{N, Union{Far, At}}
-
-offset(::Lower, ::Point, i) = i
-offset(::Upper, ::Point, i) = -i
-
-offset(::Lower, ::Segment, i) = i + 1 // 2
-offset(::Upper, ::Segment, i) = -i - 1 // 2
-
-position(s, loc, ::Far) = Far()
-position(s, loc, x::At) = Near(x.side, x.k + offset(x.side, loc, s))
 
 # means that the sample is near the side of the axis at distance ξ
 struct Near
@@ -148,75 +134,12 @@ struct Near
     ξ::Rational{Int}
 end
 
+const Block{N} = NTuple{N, Union{Far, Near}}
+
+position(::Far, o) = Far()
+position(x::Near, o) = Near(x.side, x.side isa Lower ? x.ξ + o : x.ξ - o)
+
 # ghost axes are resolved first
 # then boundary axes
 # then near-boundary
 severity(ξ) = ξ < 0 ? 0 : ξ == 0 ? 1 : 2
-
-# check all combinations of Near axes
-# create faces for them
-# check which rules match
-# sort the groups
-function candidates(pos::NTuple{N, Union{Far, Near}}, rules::Vector{<:Pair{<:FacePattern, <:GridRegion}}) where {N}
-    # precompute codimensions of rules for known N once
-    # this step also throws for malformed rules
-    codims = map(r -> codim(first(r), N), rules)
-    # find all near axes of the position
-    near = findall(x -> x isa Near, pos)
-    # each group corresponds to a single face that could potentially contribute a rule to resolve the selector
-    # we can have multiple rules in a group because some rules might return nothing, then the next one will be tried
-    groups = Pair{Vector{Int}, Vector{Int}}[]
-    # iterate over all faces spanning near axes of position
-    # for p near axes, there are 2^p combinations of these axes
-    # but the first one would exclude all near axes
-    for mask in 1:(2^length(near) - 1)
-        axes = [near[i] for i in eachindex(near) if !iszero(mask & 1 << (i - 1))]
-        # create Face from the near axes
-        face = ntuple(Val(N)) do i
-            i ∈ axes ? pos[i].side : Span()
-        end |> Face
-        group = Int[]
-        for (i, (pat, reg)) in enumerate(rules)
-            # check codim
-            codims[i] == length(axes) || continue
-            # check if face matches
-            matches(pat, face) || continue
-            # check if region matches
-            all(pos[k].ξ ∈ reg for k in axes) || continue
-            # all checks passed, add the candidate rule's index to the group
-            push!(group, i)
-        end
-        !isempty(group) && push!(groups, axes => group)
-    end
-    # we sort groups by codim first
-    # then by "severity" (ghost axes come first, then boundary, then near-boundary)
-    # then by the index of the first matching rule
-    # tie-break by the axis index (lower first)
-    function priority(kv)
-        s = sort!([severity(pos[i].ξ) for i in kv[1]])
-        return (-length(kv[1]), s, first(kv[2]), kv[1])
-    end
-    sort!(groups; by = priority)
-    return groups
-end
-
-# struct SelectorPattern
-#     facepat::FacePattern
-#     region::GridRegion
-# end
-
-# struct SelectorRule
-#     pattern::FacePattern
-#     region::GridRegion
-# end
-
-# struct Selector <: Operator
-#     rules::Vector{Rule}
-#     default::DTerm
-# end
-
-# function lower(sel, locs, offsets, axes)
-#     pos = map(position, offsets, locs, axes)
-#     # TODO
-#     return
-# end

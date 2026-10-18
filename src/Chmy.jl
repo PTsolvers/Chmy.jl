@@ -69,6 +69,13 @@ export DifferentialOperator
 export Gradient, Divergence, Curl
 include("calculus.jl")
 
+export matches, dim, codim
+export Lower, Upper, Span
+export FacePattern, WallPattern, Face, Wall, AlongAxis, AnyWall, AnyCorner, Left, Right, Bottom, Top, Back, Front
+export Ghost, OnBoundary, NearBoundary
+export Far, Near, At
+include("topology.jl")
+
 export stencil_rule, lower
 include("lowering.jl")
 
@@ -77,6 +84,8 @@ include("simplify.jl")
 
 export Lifted
 include("lift.jl")
+
+include("selector.jl")
 
 export subs
 include("subs.jl")
@@ -87,13 +96,6 @@ include("binding.jl")
 
 export compile
 include("compile.jl")
-
-export matches, dim, codim
-export Lower, Upper, Span
-export FacePattern, WallPattern, Face, Wall, AlongAxis, AnyWall, AnyCorner, Left, Right, Bottom, Top, Back, Front
-export Ghost, OnBoundary, NearBoundary
-export Far, Near, At
-include("topology.jl")
 
 include("show.jl")
 
