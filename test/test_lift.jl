@@ -8,10 +8,6 @@ Chmy.stencil_rule(::WeightedStencil, args::Tuple{DTerm, DTerm}, ::LowerContext{1
 struct ShiftedStencil <: Operator end
 Chmy.stencil_rule(::ShiftedStencil, args::Tuple{DTerm}, ::LowerContext{2}) = args[1][1, 0] - args[1][0, -1]
 
-# uses its argument both at the evaluation point and through a sample
-struct PointwiseStencil <: Operator end
-Chmy.stencil_rule(::PointwiseStencil, args::Tuple{DTerm}, ::LowerContext{1}) = args[1] + args[1][1]
-
 @testset "lifting" begin
     @scalars f g
     d, s = CentralDifference(), StaggeredCentralDifference()
@@ -76,13 +72,4 @@ end
     )
 
     @test (@inferred stencil_rule(Lifted(op, (1, 2)), (f,), ctx)) ==ₛ f[1, 0, 0] - f[0, -1, 0]
-end
-
-@testset "lifting keeps the arguments" begin
-    @scalars u
-    # the argument holds a global sample: only the sample created by the rule is mirrored
-    @test lower(Lifted(PointwiseStencil(), -1)(u[1]), 𝓅) ==ₛ u[𝓅][1] + u[𝓅][0]
-    @test lower(Lifted(PointwiseStencil(), 1)(u[1]), 𝓅) ==ₛ u[𝓅][1] + u[𝓅][2]
-    # in 2D the argument's samples have another length, and are kept as well
-    @test lower(Lifted(PointwiseStencil(), -2)(u[1, 1]), 𝓅, 𝓅) ==ₛ u[𝓅, 𝓅][1, 1] + u[𝓅, 𝓅][1, 0]
 end

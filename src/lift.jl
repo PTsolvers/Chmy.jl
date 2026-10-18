@@ -11,8 +11,6 @@ struct Lifted{O <: Operator, K} <: Operator
     the first dimension of `op` along the third axis and the second along the first. A negative axis
     `-i` mirrors the stencil, i.e. the corresponding dimension of `op` is taken along the axis `i` with
     negated offsets, so that a rule written once for the lower wall can be reused at the upper wall.
-
-    Only the samples created by the stencil rule of `op` are lifted.
     """
     function Lifted(op::O, axes::NTuple{K, Integer}) where {O <: Operator, K}
         K > 0 || throw(ArgumentError("at least one lifted axis is required"))
@@ -52,15 +50,14 @@ function stencil_rule(lf::Lifted{O, K}, args::Tuple{Vararg{DTerm}}, ctx::LowerCo
     )
     term = stencil_rule(lf.op, args, lctx)::DTerm
     lf.axes == ntuple(identity, Val(N)) && return term
-    return insert_stencil(term, args, Val(N), lf.axes)
+    return insert_stencil(term, Val(N), lf.axes)
 end
 
 # replace kD samples `f[o₁, …, oₖ]` with nD samples where the offset along `|axes[j]|` is `sign(axes[j]) * oⱼ` and zero otherwise
-@inline function insert_stencil(term, kept, dims, axes)
-    any(x -> x ==ₛ term, kept) && return term
+@inline function insert_stencil(term, dims, axes)
     return @match term begin
         DExpr(Inds(offsets), (arg,)) && if length(offsets) == length(axes) end => makeinds_unchecked(arg, insert_offsets(dims, axes, offsets))
-        DExpr(head, args) => something(insert_args(head, args, kept, dims, axes), term)
+        DExpr(head, args) => something(insert_args(head, args, dims, axes), term)
         _ => term
     end
 end
@@ -74,16 +71,16 @@ end
     return result
 end
 
-@inline function insert_args(head, args, kept, dims, axes)
+@inline function insert_args(head, args, dims, axes)
     for k in eachindex(args)
-        arg = insert_stencil(args[k], kept, dims, axes)
+        arg = insert_stencil(args[k], dims, axes)
         arg ==ₛ args[k] && continue
-        return DExpr(head, insert_args(args, arg, kept, dims, axes, k))
+        return DExpr(head, insert_args(args, arg, dims, axes, k))
     end
     return nothing
 end
-@inline function insert_args(args::NTuple{N, DTerm}, arg, kept, dims, axes, k) where {N}
+@inline function insert_args(args::NTuple{N, DTerm}, arg, dims, axes, k) where {N}
     return ntuple(Val(N)) do j
-        j < k ? args[j] : j == k ? arg : insert_stencil(args[j], kept, dims, axes)
+        j < k ? args[j] : j == k ? arg : insert_stencil(args[j], dims, axes)
     end
 end
