@@ -24,11 +24,33 @@ Lifted(op::Operator, axes::Vararg{Integer, N}) where {N} = Lifted(op, axes)
 tensorrank(lf::Lifted, args) = tensorrank(lf.op, args)
 checkranks(lf::Lifted, args::NTuple{N, DTerm}) where {N} = checkranks(lf.op, args)
 
-function stencil_rule(lf::Lifted{O, K}, args::Tuple{Vararg{DTerm}}, dims::Val{N}) where {O, K, N}
+flip(::Lower) = Upper()
+flip(::Upper) = Lower()
+
+flipside(::Far) = Far()
+flipside(n::Near) = Near(flip(n.side), n.ξ)
+
+function stencil_rule(lf::Lifted{O, K}, args::Tuple{Vararg{DTerm}}, ctx::LowerContext{N}) where {O, K, N}
     maximum(abs, lf.axes) <= N || throw(ArgumentError("the lifted axes exceed the number of dimensions"))
-    term = stencil_rule(lf.op, args, Val(K))::DTerm
+    # construct the context restricted to the lifted axes
+    lctx = LowerContext(
+        ntuple(i -> ctx.locs[abs(lf.axes[i])], Val(K)),
+        # negate global offsets for negative axes
+        ntuple(Val(K)) do i
+            a = lf.axes[i]
+            o = ctx.offs[abs(a)]
+            return flipsign(o, a)
+        end,
+        # flip wall sides for negative axes
+        ntuple(Val(K)) do i
+            a = lf.axes[i]
+            b = ctx.blck[abs(a)]
+            return a > 0 ? b : flipside(b)
+        end
+    )
+    term = stencil_rule(lf.op, args, lctx)::DTerm
     lf.axes == ntuple(identity, Val(N)) && return term
-    return insert_stencil(term, dims, lf.axes)
+    return insert_stencil(term, Val(N), lf.axes)
 end
 
 # replace kD samples `f[o₁, …, oₖ]` with nD samples where the offset along `|axes[j]|` is `sign(axes[j]) * oⱼ` and zero otherwise
@@ -36,7 +58,7 @@ end
     return @match term begin
         DExpr(Inds(offsets), (arg,)) && if length(offsets) == length(axes) end => makeinds_unchecked(arg, insert_offsets(dims, axes, offsets))
         DExpr(head, args) => something(insert_args(head, args, dims, axes), term)
-        _ => return term
+        _ => term
     end
 end
 
