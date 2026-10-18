@@ -207,24 +207,24 @@ end
     @test isempty(candidates((Near(L, 3), Far()), clauses(Left() => NearBoundary(2))))
     # higher codimension first, then the lower axis on a tie
     on = (Near(L, 0), Near(L, 0))
-    @test candidates(on, clauses(AnyWall() => OnBoundary(), AnyCorner() => OnBoundary())) == [[1, 2] => [2], [1] => [1], [2] => [1]]
+    @test candidates(on, clauses(AnyWall() => OnBoundary(), AnyCorner() => OnBoundary())) == [[1, 2] => 2, [1] => 1, [2] => 1]
     # ghost axes before boundary axes, whatever the declaration order
     ghost_on = (Near(L, 0), Near(L, -1 // 2))
-    @test candidates(ghost_on, clauses(Left() => OnBoundary(), Bottom() => Ghost())) == [[2] => [2], [1] => [1]]
+    @test candidates(ghost_on, clauses(Left() => OnBoundary(), Bottom() => Ghost())) == [[2] => 2, [1] => 1]
     # a corner key needs every axis of the corner in its region
-    @test candidates(ghost_on, clauses(Left() => OnBoundary(), Bottom() => Ghost(), AnyCorner() => Ghost())) == [[2] => [2], [1] => [1]]
-    # several pairs per face, in declaration order; groups ordered by their first pair
+    @test candidates(ghost_on, clauses(Left() => OnBoundary(), Bottom() => Ghost(), AnyCorner() => Ghost())) == [[2] => 2, [1] => 1]
+    # the first matching clause of a face acts, later ones are shadowed; faces are ordered by their clause
     ghosts = (Near(L, -1 // 2), Near(L, -1 // 2))
-    @test candidates(ghosts, clauses(Left() => Ghost(), AnyWall() => Ghost())) == [[1] => [1, 2], [2] => [2]]
+    @test candidates(ghosts, clauses(Left() => Ghost(), AnyWall() => Ghost())) == [[1] => 1, [2] => 2]
     # upper sides
     near = (Near(U, 1 // 2), Near(L, 1 // 2))
-    @test candidates(near, clauses(AnyCorner() => NearBoundary(1), Right() => NearBoundary(1))) == [[1, 2] => [1], [1] => [2]]
+    @test candidates(near, clauses(AnyCorner() => NearBoundary(1), Right() => NearBoundary(1))) == [[1, 2] => 1, [1] => 2]
     # 3D: corner, then the one named edge, then the wall
     on3 = (Near(L, 0), Near(L, 0), Near(L, 0))
     rules3 = clauses(Left() => OnBoundary(), Face(L, L, Span()) => OnBoundary(), AnyCorner() => OnBoundary())
-    @test candidates(on3, rules3) == [[1, 2, 3] => [3], [1, 2] => [2], [1] => [1]]
+    @test candidates(on3, rules3) == [[1, 2, 3] => 3, [1, 2] => 2, [1] => 1]
     # malformed rules throw even without near axes
     @test_throws ArgumentError candidates((Far(), Far()), clauses((Left() | AnyCorner()) => Ghost()))
     @test_throws ArgumentError candidates(on, clauses(Face(L, L, Span()) => OnBoundary()))
-    @test (@inferred candidates(on3, rules3)) == [[1, 2, 3] => [3], [1, 2] => [2], [1] => [1]]
+    @test (@inferred candidates(on3, rules3)) == [[1, 2, 3] => 3, [1, 2] => 2, [1] => 1]
 end

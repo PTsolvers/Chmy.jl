@@ -1,5 +1,10 @@
 using Test
 using Chmy
+using Chmy: LowerContext
+
+# a pointwise operator defined only by its stencil rule, which keeps the call and samples the argument here
+struct Pointwise <: Operator end
+Chmy.stencil_rule(op::Pointwise, args::Tuple{DTerm}, ::LowerContext{N}) where {N} = op(args[1][ntuple(_ -> 0, N)...])
 
 @testset "lowering" begin
     @scalars f g @uniform(a)
@@ -23,6 +28,12 @@ using Chmy
         @test (@inferred lower(ξ¹ * f, 𝓈)) ==ₛ (𝑖 + 1 // 2) * f[𝓈][0]
         @test (@inferred lower(ξ² * f, 𝓈, 𝓅)) ==ₛ 𝑗 * f[𝓈, 𝓅][0, 0]
         @test (@inferred lower(s[1](ξ¹ * f), 𝓅)) ==ₛ (𝑖 + 1 // 2) * f[𝓈][0] - (𝑖 - 1 // 2) * f[𝓈][-1]
+    end
+
+    @testset "pointwise operators" begin
+        # the call is kept, and the operators inside its arguments are expanded
+        @test lower(Pointwise()(s[1](f)), (𝓈, 𝓅)) ==ₛ Pointwise()(f[𝓅, 𝓅][1, 0] - f[𝓅, 𝓅][0, 0])
+        @test lower(Pointwise()(Pointwise()(f)), (𝓅,)) ==ₛ Pointwise()(Pointwise()(f[𝓅][0]))
     end
 
     @testset "nested derivatives" begin
