@@ -16,8 +16,10 @@ stencil_rule(op::Operator, args, ctx::LowerContext) = _stencil_rule(op, args, ct
 
 _stencil_rule(op, args::Tuple{DTerm}, ::LowerContext{1}) = stencil_rule(op, only(args))
 
-# a pointwise function is its own stencil
-stencil_rule(op::Fun, args::Tuple{Vararg{DTerm}}, ::LowerContext) = makecall_unchecked(op, args)
+# a pointwise function reads its arguments at the evaluation point
+function stencil_rule(op::Fun, args::NTuple{M, DTerm}, ::LowerContext{N}) where {M, N}
+    return makecall_unchecked(op, ntuple(k -> makeinds(args[k], zero_offsets(Val(N))), Val(M)))
+end
 
 """
     lower(expr, locs)
@@ -36,7 +38,7 @@ lower(::DTerm, ::Tuple{}) = lower_nolocs_error()
 lower(expr::DTerm, locs::Vararg{Location, N}) where {N} = lower(expr, locs)
 
 function lower(term::DTerm, ctx::LowerContext{N}) where {N}
-    lower_at(scalar_components(term, N), ctx)
+    return lower_at(scalar_components(term, N), ctx)
 end
 
 @noinline lower_nolocs_error() = throw(ArgumentError("lowering requires at least one grid location"))
@@ -58,17 +60,11 @@ zero_offsets(::Val{N}) where {N} = ntuple(_ -> 0 // 1, Val(N))
 
 # lower `expr` evaluated at `offsets` from the evaluation point at `locs`
 #
-# functions are applied pointwise, other operators are expanded with stencil rules, which return
-# samples at offsets relative to the point where the operator is evaluated
+# operators are expanded with stencil rules, which return samples at offsets relative to the point
+# where the operator is evaluated
 function lower_at(term::DTerm, ctx::LowerContext{N}) where {N}
     return @match term begin
-        DExpr(Call(op), args) => begin
-            if op isa Fun
-                lower_args(op, args, ctx)
-            else
-                lower_at(stencil_rule(op, args, ctx)::DTerm, ctx)
-            end
-        end
+        DExpr(Call(op), args) => lower_result(stencil_rule(op, args, ctx)::DTerm, ctx)
         DExpr(Locs(explicit), (arg,)) => begin
             isuniform(arg) && return arg
             length(explicit) == N || locs_length_error()
@@ -82,9 +78,18 @@ function lower_at(term::DTerm, ctx::LowerContext{N}) where {N}
     end
 end
 
+# the result of a stencil rule combines samples and uniform terms with calls, which are kept as they are,
+# while the samples are lowered, expanding the operators inside them
+function lower_result(term::DTerm, ctx::LowerContext)::DTerm
+    return @match term begin
+        DExpr(Call(op), args) => lower_args(op, args, ctx)
+        _ => lower_at(term, ctx)
+    end
+end
+
 # specialize on arity to lower the arguments without a dynamic tuple map
 function lower_args(op, args::NTuple{M, DTerm}, ctx)::DTerm where {M}
-    return makecall_unchecked(op, ntuple(k -> lower_at(args[k], ctx), Val(M)))
+    return makecall_unchecked(op, ntuple(k -> lower_result(args[k], ctx), Val(M)))
 end
 
 # the offsets of a nested sample are relative to the offsets where the sample is evaluated
