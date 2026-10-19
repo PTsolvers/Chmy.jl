@@ -110,6 +110,7 @@ const ℐ = IdTensor
 function DTermImpl.DExpr(head::Head, args::NTuple{N, DTerm}) where {N}
     rank = @match head begin
         Call(op) => tensorrank(op, args)::Int
+        Pack(r, _, _) => r
         _ => 0
     end
     h = hash(head, hash(length(args), hash(:DExpr)))
@@ -181,6 +182,13 @@ islocs(term::DTerm) = isa_variant(term, DExpr) && isa_variant(term.head, Locs)
 Return `true` if `term` is a grid indexing expression.
 """
 isinds(term::DTerm) = isa_variant(term, DExpr) && isa_variant(term.head, Inds)
+
+"""
+    ispack(term)
+
+Return `true` if `term` is a tensor in component form, see [`pack`](@ref).
+"""
+ispack(term::DTerm) = isa_variant(term, DExpr) && isa_variant(term.head, Pack)
 
 """
     head(term)
@@ -374,6 +382,26 @@ function components(term::DTerm)
 end
 
 """
+    entries(term)
+
+Return the tuple of stored entries of a tensor in component form.
+"""
+function entries(term::DTerm)
+    return @match term begin
+        DExpr(Pack(_, _, _), data) => data
+        _ => throw(ArgumentError("only tensors in component form have entries"))
+    end
+end
+
+# the number of dimensions of a tensor in component form
+function packdims(term::DTerm)
+    return @match term begin
+        DExpr(Pack(_, dims, _), _) => dims
+        _ => throw(ArgumentError("only tensors in component form have a number of dimensions"))
+    end
+end
+
+"""
     locations(term)
 
 Return the location tuple of a location expression.
@@ -426,12 +454,13 @@ end
 """
     tensorkind(term)
 
-Return the symmetry kind of a named tensor.
+Return the symmetry kind of a named tensor or a packed tensor.
 """
 function tensorkind(term::DTerm)
     return @match term begin
         Tensor(_, _, kind, _) => kind
-        _ => throw(ArgumentError("only named tensors have a kind"))
+        DExpr(Pack(_, _, kind), _) => kind
+        _ => throw(ArgumentError("only named tensors and packed tensors have a kind"))
     end
 end
 
@@ -440,7 +469,8 @@ end
     getindex(term::DTerm, offsets::Union{Integer, Rational}...)
 
 Construct a symbolic tensor component if `term` is not a scalar, respecting symmetric, alternating,
-and diagonal tensor structure. Zero and identity tensors return literal component values.
+and diagonal tensor structure. Zero and identity tensors return literal component values, and packed
+tensors return the stored entry.
 If `term` is a scalar, construct a sample of `term` at `offsets` from the evaluation point,
 which must be multiples of `1//2`.
 """
@@ -472,6 +502,11 @@ function Base.getindex(term::DTerm, I::Vararg{Integer, N}) where {N}
         IdTensor(rank) => begin
             rank == N || throw(ArgumentError("number of subscripts not matching tensor rank"))
             allequal(I) ? Literal(1) : Literal(0)
+        end
+        DExpr(Pack(rank, dims, kind), data) => begin
+            rank == N || throw(ArgumentError("number of subscripts not matching tensor rank"))
+            all(i -> 1 <= i <= dims, I) || throw(BoundsError(term, I))
+            pack_entry(kind, dims, data, I)
         end
         _ => makecomp(term, I)
     end
@@ -525,6 +560,7 @@ function headrank(head)
         Locs(_) => 1
         Inds(_) => 2
         Call(_) => 3
+        Pack(_, _, _) => 4
     end
 end
 
@@ -542,6 +578,10 @@ function isless_expr(x, y)::Bool
         (Comp(ix), Comp(iy)) || (Locs(ix), Locs(iy)) || (Inds(ix), Inds(iy)) => begin
             ax[1] ==ₛ ay[1] || return ax[1] <ₛ ay[1]
             isless_args(ix, iy)
+        end
+        (Pack(rx, dx, _), Pack(ry, dy, _)) => begin
+            (rx, dx) == (ry, dy) || return isless((rx, dx), (ry, dy))
+            isless_args(ax, ay)
         end
         _ => error("unreachable")
     end

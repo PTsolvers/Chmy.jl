@@ -30,12 +30,18 @@ const Location = Union{Point, Segment}
 
 # head of a Chmy expression
 @data HeadImpl begin
-    export Call, Comp, Locs, Inds
+    export Call, Comp, Locs, Inds, Pack
 
     Call(Operator)
     Comp(Tuple{Vararg{Int}})
     Locs(Tuple{Vararg{Location}})
     Inds(Tuple{Vararg{Rational{Int}}})
+    # a tensor in component form, the children are the stored entries
+    struct Pack
+        rank::Int
+        dims::Int
+        kind::TensorKind
+    end
 end
 using .HeadImpl
 const Head = HeadImpl.Type
@@ -64,13 +70,6 @@ const Head = HeadImpl.Type
 end
 using .DTermImpl
 const DTerm = DTermImpl.Type
-
-struct TensorComponents
-    dims::Int
-    rank::Int
-    kind::TensorKind
-    data::Vector{DTerm}
-end
 
 struct Fun{F} <: Operator
     f::F
