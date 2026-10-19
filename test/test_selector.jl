@@ -1,6 +1,6 @@
 using Test
 using Chmy
-using Chmy: LowerContext, select, Next, Add, Scale, Dirichlet, Selector, SiteSelector
+using Chmy: LowerContext, select, Next, Add, Scale, Dirichlet, Neumann, Selector, SiteSelector
 
 # lower `expr` at the block `block`, with the evaluation point at zero offsets
 lowerat(expr, locs, block) = simplify(lower(expr, LowerContext(locs, map(_ -> 0 // 1, locs), block)))
@@ -70,5 +70,41 @@ lowerat(expr, locs, block) = simplify(lower(expr, LowerContext(locs, map(_ -> 0 
         @uniform @scalars g
         ghost = (Near(L, -1 // 2), Near(L, -1 // 2))
         @test_throws ArgumentError lowerat(select(u, AnyCorner() => Ghost() => Dirichlet(g)), (𝓈, 𝓈), ghost)
+    end
+
+    @testset "wall rules" begin
+        @uniform @scalars g gL gB
+        uL = Left() => Ghost() => Dirichlet(g)
+        # a ghost segment: the wall is half a cell away, the mirror sample one cell inside
+        @test lowerat(select(u, uL), (𝓈,), (Near(L, -1 // 2),)) ==ₛ simplify(2g - u[𝓈][1])
+        # the same at the upper wall, mirrored
+        @test lowerat(select(u, Right() => Ghost() => Dirichlet(g)), (𝓈,), (Near(U, -1 // 2),)) ==ₛ simplify(2g - u[𝓈][-1])
+        # a ghost point extrapolates from the boundary value as well, and the wall node takes the boundary value
+        rules = (Left() => OnBoundary() => Dirichlet(g), uL)
+        @test lowerat(select(u, rules...), (𝓅,), (Near(L, -1),)) ==ₛ simplify(2g - u[𝓅][2])
+        @test lowerat(select(u, rules...), (𝓅,), (Near(L, 0),)) ==ₛ g
+        # the boundary value is read at the wall, at both walls
+        @test lowerat(select(u, Left() => Ghost() => Dirichlet(sin(ξ¹))), (𝓈,), (Near(L, -1 // 2),)) ==ₛ simplify(2sin(𝑖 + 1) - u[𝓈][1])
+        @test lowerat(select(u, Right() => Ghost() => Dirichlet(sin(ξ¹))), (𝓈,), (Near(U, -1 // 2),)) ==ₛ simplify(2sin(𝑖) - u[𝓈][-1])
+        # an outward derivative gives the same expression at both walls
+        @test lowerat(select(u, AnyWall() => Ghost() => Neumann(g)), (𝓈,), (Near(L, -1 // 2),)) ==ₛ simplify(u[𝓈][1] + g)
+        @test lowerat(select(u, AnyWall() => Ghost() => Neumann(g)), (𝓈,), (Near(U, -1 // 2),)) ==ₛ simplify(u[𝓈][-1] + g)
+        @test lowerat(select(u, Left() => Ghost() => Neumann(g)), (𝓅,), (Near(L, -1),)) ==ₛ simplify(u[𝓅][2] + 2g)
+        # outside of their range the rules throw
+        @test_throws ArgumentError lowerat(select(u, Left() => NearBoundary(1) => Dirichlet(g)), (𝓈,), (Near(L, 1 // 2),))
+        @test_throws ArgumentError lowerat(select(u, Left() => OnBoundary() => Neumann(g)), (𝓅,), (Near(L, 0),))
+        # a diagonal ghost: the left rule moves the sample inside, where the bottom rule applies
+        rules = (Left() => Ghost() => Dirichlet(gL), Bottom() => Ghost() => Dirichlet(gB))
+        ghosts = (Near(L, -1 // 2), Near(L, -1 // 2))
+        @test lowerat(select(u, rules...), (𝓈, 𝓈), ghosts) ==ₛ simplify(2gL - (2gB - u[𝓈, 𝓈][1, 1]))
+    end
+
+    @testset "laplacian at a corner" begin
+        @uniform @scalars uL ĝ
+        D = StaggeredCentralDifference()
+        ũ = select(u, Left() => Ghost() => Dirichlet(uL), AnyWall() => Ghost() => Neumann(ĝ))
+        Δũ = D[1](D[1](ũ)) + D[2](D[2](ũ))
+        expected = u[𝓈, 𝓈][1, 0] + u[𝓈, 𝓈][0, 1] - 4 * u[𝓈, 𝓈][0, 0] + 2uL + ĝ
+        @test lowerat(Δũ, (𝓈, 𝓈), (Near(L, 1 // 2), Near(L, 1 // 2))) ==ₛ simplify(expected)
     end
 end

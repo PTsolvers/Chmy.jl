@@ -111,3 +111,28 @@ end
 stencil_rule(::Next, args::Tuple{DTerm}, ctx::LowerContext) = here(only(args), ctx)
 stencil_rule(a::Add, args::Tuple{DTerm}, ctx::LowerContext) = here(only(args), ctx) + here(a.val, ctx)
 stencil_rule(s::Scale, args::Tuple{DTerm}, ctx::LowerContext) = here(s.val, ctx) * here(only(args), ctx)
+
+ξ(ctx::LowerContext) = position(first(ctx.blck), first(ctx.offs)).ξ
+
+trace(x::DTerm, ctx::LowerContext) = isuniform(x) ? x : x[-ξ(ctx)]
+
+function stencil_rule(bc::Dirichlet, args::Tuple{DTerm}, ctx::LowerContext{1})
+    arg = only(args)
+    ξb = ξ(ctx)
+    if ξb == 0
+        return trace(bc.g, ctx)
+    end
+    if ξb < 0
+        return 2trace(bc.g, ctx) - arg[-2ξb]
+    end
+    throw(ArgumentError(lazy"Dirichlet rule can only be declared with Ghost() or OnBoundary() regions with ξ ≤ 0, got ξ = $ξb"))
+end
+
+function stencil_rule(bc::Neumann, args::Tuple{DTerm}, ctx::LowerContext{1})
+    arg = only(args)
+    ξb = ξ(ctx)
+    if ξb < 0
+        return arg[-2ξb] - 2ξb * trace(bc.g, ctx)
+    end
+    throw(ArgumentError(lazy"Neumann rule can only be declared with Ghost() region with ξ < 0, got ξ = $ξb"))
+end
