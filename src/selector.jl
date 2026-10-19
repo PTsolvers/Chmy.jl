@@ -85,7 +85,7 @@ function stencil_rule(site::SiteSelector{N}, args::Tuple{DTerm}, ctx::LowerConte
         return stencil_rule(site.selector, args, ctx)
     end
     arg = only(args)
-    isempty(site.faces) && return here(arg, ctx.blck)
+    isempty(site.faces) && return here(arg, ctx)
     axes, i = first(site.faces)
     rest = SiteSelector(
         site.selector,
@@ -102,12 +102,12 @@ function stencil_rule(site::SiteSelector{N}, args::Tuple{DTerm}, ctx::LowerConte
 end
 
 # the value of `x` at the sample being resolved
-here(x::DTerm, ::Block{N}) where {N} = x[zero_offsets(Val(N))...]
+here(x::DTerm, ::LowerContext{N}) where {N} = x[zero_offsets(Val(N))...]
 
 function stencil_rule(r::BoundaryRule, args, ::LowerContext{N}) where {N}
     return throw(ArgumentError(lazy"rule of type `$(typeof(r))` has no `stencil_rule` defined for codimension $N"))
 end
 
-stencil_rule(::Next, args::Tuple{DTerm}, ctx::LowerContext) = here(only(args), ctx.blck)
-stencil_rule(a::Add, args::Tuple{DTerm}, ctx::LowerContext) = here(only(args), ctx.blck) + here(a.val, ctx.blck)
-stencil_rule(s::Scale, args::Tuple{DTerm}, ctx::LowerContext) = here(s.val, ctx.blck) * here(only(args), ctx.blck)
+stencil_rule(::Next, args::Tuple{DTerm}, ctx::LowerContext) = here(only(args), ctx)
+stencil_rule(a::Add, args::Tuple{DTerm}, ctx::LowerContext) = here(only(args), ctx) + here(a.val, ctx)
+stencil_rule(s::Scale, args::Tuple{DTerm}, ctx::LowerContext) = here(s.val, ctx) * here(only(args), ctx)
