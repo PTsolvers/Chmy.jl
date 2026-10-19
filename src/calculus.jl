@@ -47,28 +47,26 @@ function checkranks(::Curl, args::NTuple{N, DTerm}) where {N}
 end
 
 function evaluate(grad::Gradient, args::Tuple{DTerm}, dims::Integer)
-    s = only(args)
-    return TensorComponents(Kind.None(), 1, dims) do (i,)
-        grad.op[i](s)
+    t = only(args)
+    return pack(Kind.None(), tensorrank(t) + 1, dims) do I
+        grad.op[I[1]](component(t, Base.tail(I)))
     end
 end
-function evaluate(grad::Gradient, args::Tuple{TensorComponents}, dims::Integer)
+function evaluate(divg::Divergence, args::Tuple{DTerm}, dims::Integer)
     t = only(args)
-    return TensorComponents(Kind.None(), t.rank + 1, dims) do I
-        grad.op[I[1]](t[Base.tail(I)...])
-    end
+    entry(I) = component_sum(DTerm[divg.op[i](t[i, I...]) for i in 1:dims])
+    tensorrank(t) == 1 && return entry(())
+    return pack(entry, Kind.None(), tensorrank(t) - 1, dims)
 end
-function evaluate(divg::Divergence, args::Tuple{TensorComponents}, dims::Integer)
-    t = only(args)
-    component(I) = component_sum(DTerm[divg.op[i](t[i, I...]) for i in 1:dims])
-    t.rank == 1 && return component(())
-    return TensorComponents(component, Kind.None(), t.rank - 1, dims)
-end
-function evaluate(curl::Curl, args::Tuple{TensorComponents}, dims::Integer)
+function evaluate(curl::Curl, args::Tuple{DTerm}, dims::Integer)
     v = only(args)
     dims == 3 || throw(ArgumentError(LazyString("curl is only supported for 3D vector fields, got dimension ", dims)))
-    return TensorComponents(Kind.None(), 1, dims) do (i,)
+    return pack(Kind.None(), 1, dims) do (i,)
         j, k = mod1(i + 1, 3), mod1(i + 2, 3)
         curl.op[j](v[k]) - curl.op[k](v[j])
     end
 end
+
+# the component `I` of a tensor in component form, or the scalar itself
+component(t::DTerm, ::Tuple{}) = t
+component(t::DTerm, I::Tuple) = t[I...]
