@@ -19,6 +19,7 @@ function canonicalize(term::DTerm)
         end
         ZeroTensor(0) => return ZERO
         IdTensor(0) => return ONE
+        DExpr(Pack(rank, dims, kind), data) => return canonicalize_pack(term, rank, dims, kind, data)
         DExpr(Call(op), args) => begin
             # polynomial collection, including scalar inverses
             if isscalarop(op) || (op isa Fun{typeof(inv)} && tensorrank(args[1]) == 0)
