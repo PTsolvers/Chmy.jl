@@ -25,9 +25,10 @@ Chmy.stencil_rule(op::Pointwise, args::Tuple{DTerm}, ::LowerContext{N}) where {N
     end
 
     @testset "free coordinates" begin
-        @test (@inferred lower(ξ¹ * f, 𝓈)) ==ₛ (𝑖 + 1 // 2) * f[𝓈][0]
-        @test (@inferred lower(ξ² * f, 𝓈, 𝓅)) ==ₛ 𝑗 * f[𝓈, 𝓅][0, 0]
-        @test (@inferred lower(s[1](ξ¹ * f), 𝓅)) ==ₛ (𝑖 + 1 // 2) * f[𝓈][0] - (𝑖 - 1 // 2) * f[𝓈][-1]
+        # point `1` lies on the lower wall, at the coordinate 0
+        @test (@inferred lower(ξ¹ * f, 𝓈)) ==ₛ (𝑖 - 1 // 2) * f[𝓈][0]
+        @test (@inferred lower(ξ² * f, 𝓈, 𝓅)) ==ₛ (𝑗 - 1) * f[𝓈, 𝓅][0, 0]
+        @test (@inferred lower(s[1](ξ¹ * f), 𝓅)) ==ₛ (𝑖 - 1 // 2) * f[𝓈][0] - (𝑖 - 3 // 2) * f[𝓈][-1]
     end
 
     @testset "pointwise operators" begin

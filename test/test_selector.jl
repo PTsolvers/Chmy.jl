@@ -84,8 +84,8 @@ lowerat(expr, locs, block) = simplify(lower(expr, LowerContext(locs, map(_ -> 0 
         @test lowerat(select(u, rules...), (𝓅,), (Near(L, -1),)) ==ₛ simplify(2g - u[𝓅][2])
         @test lowerat(select(u, rules...), (𝓅,), (Near(L, 0),)) ==ₛ g
         # the boundary value is read at the wall, at both walls
-        @test lowerat(select(u, Left() => Ghost() => Dirichlet(sin(ξ¹))), (𝓈,), (Near(L, -1 // 2),)) ==ₛ simplify(2sin(𝑖 + 1) - u[𝓈][1])
-        @test lowerat(select(u, Right() => Ghost() => Dirichlet(sin(ξ¹))), (𝓈,), (Near(U, -1 // 2),)) ==ₛ simplify(2sin(𝑖) - u[𝓈][-1])
+        @test lowerat(select(u, Left() => Ghost() => Dirichlet(sin(ξ¹))), (𝓈,), (Near(L, -1 // 2),)) ==ₛ simplify(2sin(𝑖) - u[𝓈][1])
+        @test lowerat(select(u, Right() => Ghost() => Dirichlet(sin(ξ¹))), (𝓈,), (Near(U, -1 // 2),)) ==ₛ simplify(2sin(𝑖 - 1) - u[𝓈][-1])
         # an outward derivative gives the same expression at both walls
         @test lowerat(select(u, AnyWall() => Ghost() => Neumann(g)), (𝓈,), (Near(L, -1 // 2),)) ==ₛ simplify(u[𝓈][1] + g)
         @test lowerat(select(u, AnyWall() => Ghost() => Neumann(g)), (𝓈,), (Near(U, -1 // 2),)) ==ₛ simplify(u[𝓈][-1] + g)

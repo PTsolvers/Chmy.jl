@@ -116,10 +116,11 @@ function sample(field::DTerm, ctx::LowerContext{N}) where {N}
     return makeinds_unchecked(makelocs_unchecked(field, map(sample_location, xs)), map(floor, xs))
 end
 
-# a free coordinate is the position of the evaluation point in grid index units
+# a free coordinate is the distance of the sample from the lower wall in grid units,
+# point `1` lies on the lower wall, so point `i` is at `i - 1` and segment `i` at `i - 1//2`
 function coordinate_value(offs::NTuple{N, Rational{Int}}, a, locs::NTuple{N, Location}) where {N}
     1 <= a <= N || coordinate_dims_error(a, N)
-    return offset_term(Index(a), sample_position(offs[a], locs[a]))
+    return offset_term(Index(a), sample_position(offs[a], locs[a]) - 1)
 end
 
 # canonical form `term`, `term + x`, or `term - x` of `term` shifted by `x`, with `x` positive
