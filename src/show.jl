@@ -1,5 +1,6 @@
 function Base.show(io::IO, ::MIME"text/plain", v::DTerm)
     return @match v begin
+        DExpr(Pack(rank, dims, kind), _) => print_pack_table(io, v, rank, dims, kind)
         DExpr(_, _) => print(io, "Expression:\n ", v)
         _ => print(io, v)
     end
@@ -17,7 +18,19 @@ function Base.show(io::IO, v::DTerm)
         DExpr(Comp(comp), (arg,)) => print_indexed(io, arg, comp)
         DExpr(Locs(locs), (arg,)) => print_indexed(io, arg, locs)
         DExpr(Inds(offsets), (arg,)) => print_indexed(io, arg, map(stencil_constant, offsets))
+        DExpr(Pack(_, dims, _), _) => print_pack(io, v, dims, ())
     end
+end
+
+# nested lists of all components, the outer list runs over the first index
+function print_pack(io, t, dims, I)
+    length(I) == tensorrank(t) && return print(io, t[I...])
+    print(io, '[')
+    for i in 1:dims
+        i > 1 && print(io, ", ")
+        print_pack(io, t, dims, (I..., i))
+    end
+    return print(io, ']')
 end
 
 function print_indexed(io, arg, inds)
@@ -257,20 +270,20 @@ end
 Base.show(io::IO, ::Segment) = print(io, "𝓈")
 Base.show(io::IO, ::Point) = print(io, "𝓅")
 
-function Base.show(io::IO, ::MIME"text/plain", t::TensorComponents)
-    print(io, "$(t.dims)-D ")
-    if t.kind == Kind.Sym()
+function print_pack_table(io, t, rank, dims, kind)
+    print(io, dims, "-D ")
+    if kind == Kind.Sym()
         print(io, "symmetric ")
-    elseif t.kind == Kind.Alt()
+    elseif kind == Kind.Alt()
         print(io, "alternating ")
-    elseif t.kind == Kind.Diag()
+    elseif kind == Kind.Diag()
         print(io, "diagonal ")
     end
-    println(io, "Tensor components:")
-    foreach_component(t.kind, t.dims, t.rank) do I
-        print(io, ' ')
+    print(io, "tensor components:")
+    foreach_component(kind, dims, rank) do I
+        print(io, "\n ")
         print_list(io, '[', I, ']')
-        println(io, " => ", t[Tuple(I)...])
+        print(io, " => ", t[I...])
     end
     return
 end
