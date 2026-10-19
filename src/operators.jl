@@ -1,6 +1,9 @@
 @inline function makecall(op::Operator, args::NTuple{N, DTerm}) where {N}
     checkranks(op, args)
-    return makecall_unchecked(op, args)
+    dims = packed_dims(args)
+    isnothing(dims) && return makecall_unchecked(op, args)
+    # all tensor arguments are in component form, so the call is evaluated right away
+    return something(evaluate(op, args, dims), makecall_unchecked(op, args))
 end
 makecall(op::Operator, args::Vararg{DTerm, N}) where {N} = makecall(op, args)
 makecall_unchecked(op::Operator, args::NTuple{N, DTerm}) where {N} = DExpr(Call(op), args)
@@ -25,6 +28,32 @@ function makeinds(arg::DTerm, offsets::NTuple{N, Union{Integer, Rational}}) wher
     return makeinds_unchecked(arg, map(Rational{Int}, offsets))
 end
 makeinds_unchecked(arg::DTerm, offsets::NTuple{N, Rational{Int}}) where {N} = DExpr(Inds(offsets), (arg,))
+
+function makepack(rank::Integer, dims::Integer, kind::TensorKind, data::Tuple{Vararg{DTerm}})
+    rank > 0 || throw(ArgumentError("tensors in component form must have a positive rank"))
+    dims > 0 || throw(ArgumentError("tensors in component form must have a positive number of dimensions"))
+    if length(data) != ncomponents(kind, dims, rank)
+        throw(ArgumentError("number of entries must match the number of stored components of the tensor"))
+    end
+    any(x -> tensorrank(x) > 0, data) && throw(ArgumentError("entries of a tensor in component form must be scalars"))
+    return makepack_unchecked(rank, dims, kind, data)
+end
+makepack_unchecked(rank::Integer, dims::Integer, kind::TensorKind, data::Tuple{Vararg{DTerm}}) = DExpr(Pack(rank, dims, kind), data)
+
+# the number of dimensions of the arguments if all tensor arguments are in component form, and `nothing` otherwise
+function packed_dims(args::NTuple{N, DTerm}) where {N}
+    dims = nothing
+    for x in args
+        tensorrank(x) == 0 && continue
+        ispack(x) || return nothing
+        d = packdims(x)
+        if !isnothing(dims) && dims != d
+            throw(DimensionMismatch("tensors in component form must have the same number of dimensions"))
+        end
+        dims = d
+    end
+    return dims
+end
 
 # make operators callable
 (op::Operator)(args::DTerm...) = makecall(op, args)
@@ -81,9 +110,7 @@ end
 
 checkranks(op::Fun, args::NTuple{N, DTerm}) where {N} = checkranks(op.f, args)
 
-# this function can check not only DTerm args, but also mix of DTerm and TensorComponents,
-# which is needed for validating broadcasted expressions involving TensorComponents
-function check_broadcast_ranks(op::BroadcastedFun, args::Tuple)
+function check_broadcast_ranks(op::BroadcastedFun, args::NTuple{N, DTerm}) where {N}
     rank = tensorrank(op, args)
     if any(x -> tensorrank(x) > 0 && tensorrank(x) != rank, args)
         throw(ArgumentError("all non-scalar broadcast arguments must have the same tensor rank"))
@@ -264,7 +291,8 @@ end
 # scalar unary operations
 isunaryminus(expr::DTerm) = isunary(expr) && operation(expr) === Fun(-)
 
-Base.:-(arg::DTerm) = makecall_unchecked(Fun(-), (arg,))
+# scalars skip the checks, while tensors in component form are negated right away
+Base.:-(arg::DTerm) = tensorrank(arg) == 0 ? makecall_unchecked(Fun(-), (arg,)) : makecall(Fun(-), (arg,))
 
 for op in (
         :sqrt, :abs,
