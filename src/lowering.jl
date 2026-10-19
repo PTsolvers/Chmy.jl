@@ -46,6 +46,7 @@ end
 @noinline locs_mismatch_error() = throw(ArgumentError("explicit locations of a field must match the locations where the field is sampled"))
 @noinline lower_rank_error() = throw(ArgumentError("lower requires a scalar expression; select a scalar entry, e.g. expr[1, 2]"))
 @noinline lower_dims_error() = throw(ArgumentError("grid samples must have the same number of offsets as the evaluation locations"))
+@noinline pack_lower_error() = throw(ArgumentError("tensors in component form cannot be lowered; select a scalar entry, e.g. t[1, 2]"))
 @noinline index_input_error() = throw(ArgumentError("grid indices are produced by lowering and cannot appear in the lowered expression, use coordinates instead"))
 @noinline function coordinate_dims_error(a, n)
     throw(ArgumentError(LazyString("coordinate `", Coordinate(a), "` exceeds the number of evaluation locations ", n)))
@@ -73,6 +74,7 @@ function lower_at(term::DTerm, ctx::LowerContext{N}) where {N}
         end
         DExpr(Inds(offs), (arg,)) => lower_sample(arg, offs, ctx)
         Coordinate(a) => coordinate_value(ctx.offs, a, ctx.locs)
+        DExpr(Pack(_, _, _), _) => pack_lower_error()
         Index(_) => index_input_error()
         _ => isuniform(term) ? term : sample(term, ctx)
     end
