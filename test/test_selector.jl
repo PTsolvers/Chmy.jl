@@ -1,6 +1,6 @@
 using Test
 using Chmy
-using Chmy: LowerContext, select, Next, Add, Scale
+using Chmy: LowerContext, select, Next, Add, Scale, Dirichlet, Selector, SiteSelector
 
 # lower `expr` at the block `block`, with the evaluation point at zero offsets
 lowerat(expr, locs, block) = simplify(lower(expr, LowerContext(locs, map(_ -> 0 // 1, locs), block)))
@@ -44,5 +44,31 @@ lowerat(expr, locs, block) = simplify(lower(expr, LowerContext(locs, map(_ -> 0 
         # next to the upper wall: the sample at +1//2 lies on the wall
         hi = lowerat(D[2](select(u, Top() => OnBoundary() => Add(q))), (𝓈, 𝓈), (Far(), Near(U, 1 // 2)))
         @test hi ==ₛ simplify((u[𝓈, 𝓅][0, 1] + q) - u[𝓈, 𝓅][0, 0])
+    end
+
+    @testset "upper walls" begin
+        # rules are lifted with negative axes on upper walls
+        @test lowerat(select(u, Right() => OnBoundary() => Add(p)), (𝓅,), (Near(U, 0),)) ==ₛ simplify(u[𝓅][0] + p)
+        rules = (Right() => OnBoundary() => Add(p), Top() => OnBoundary() => Scale(Literal(2)))
+        @test lowerat(select(u, rules...), (𝓅, 𝓅), (Near(U, 0), Near(U, 0))) ==ₛ simplify(2 * r + p)
+        # every wall of a 3D corner on mixed sides contributes once
+        corner3 = (Near(U, 0), Near(L, 0), Near(U, 0))
+        @test lowerat(select(u, AnyWall() => OnBoundary() => Add(p)), (𝓅, 𝓅, 𝓅), corner3) ==ₛ simplify(u[𝓅, 𝓅, 𝓅][0, 0, 0] + 3 * p)
+    end
+
+    @testset "site instances" begin
+        # instances built independently at the same site are equal, so they compare and hash by content
+        sel = Selector(operation(select(u, Left() => OnBoundary() => Add(p))).clauses)
+        a = SiteSelector(sel, (0 // 1, 0 // 1), (((1,) => 1),))
+        b = SiteSelector(sel, (0 // 1, 0 // 1), (((1,) => 1),))
+        @test a == b
+        @test hash(a) == hash(b)
+    end
+
+    @testset "unsupported codimension" begin
+        # a wall rule declared on a corner pattern
+        @uniform @scalars g
+        ghost = (Near(L, -1 // 2), Near(L, -1 // 2))
+        @test_throws ArgumentError lowerat(select(u, AnyCorner() => Ghost() => Dirichlet(g)), (𝓈, 𝓈), ghost)
     end
 end

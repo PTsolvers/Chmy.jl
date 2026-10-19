@@ -1,4 +1,4 @@
-abstract type BoundaryRule end
+abstract type BoundaryRule <: Operator end
 
 struct Next <: BoundaryRule end
 struct Add <: BoundaryRule
@@ -12,16 +12,26 @@ struct Dirichlet <: BoundaryRule
     g::DTerm
 end
 
+struct Neumann <: BoundaryRule
+    g::DTerm
+end
+
 struct BoundaryClause
     pattern::FacePattern
     region::GridRegion
     resolution::BoundaryRule
 end
 
-# the faces of the sample at `pos`, each with the first clause that matches it, in the order of resolution
-#
-# every non-empty subset of the near axes, with their sides, is a face of the sample; a clause matches a face if
-# its pattern holds on the face and its region holds along every axis of the face
+struct Selector <: Operator
+    clauses::Tuple{Vararg{BoundaryClause}}
+end
+
+struct SiteSelector{N} <: Operator
+    selector::Selector
+    offsets::NTuple{N, Rational{Int}}
+    faces::Tuple
+end
+
 function candidates(pos::Block{N}, clauses::Tuple{Vararg{BoundaryClause}}) where {N}
     # precompute codimensions of rules for known N once
     # this step also throws for malformed rules
@@ -36,9 +46,9 @@ function candidates(pos::Block{N}, clauses::Tuple{Vararg{BoundaryClause}}) where
         # make a Face from the near axes
         face = Face(ntuple(a -> a ∈ axes ? pos[a].side : Span(), Val(N)))
         # find the index of the first rule that fully matches the axes
-        i = findfirst(eachindex(clauses)) do i
-            c = clauses[i]
-            codims[i] == length(axes) && matches(c.pattern, face) && all(pos[a].ξ ∈ c.region for a in axes)
+        i = findfirst(eachindex(clauses)) do k
+            c = clauses[k]
+            codims[k] == length(axes) && matches(c.pattern, face) && all(pos[a].ξ ∈ c.region for a in axes)
         end
         isnothing(i) || push!(faces, axes => i)
     end
@@ -46,10 +56,6 @@ function candidates(pos::Block{N}, clauses::Tuple{Vararg{BoundaryClause}}) where
     # order of the clause, then the lower axes on a tie
     priority((axes, i)) = (-length(axes), sort!([severity(pos[a].ξ) for a in axes]), i, axes)
     return sort!(faces; by = priority)
-end
-
-struct Selector <: Operator
-    clauses::Tuple{Vararg{BoundaryClause}}
 end
 
 function select(term::DTerm, rules::Pair...)
@@ -63,15 +69,13 @@ function checkranks(::Selector, args::Tuple{DTerm})
     return
 end
 
-struct SiteSelector{N} <: Operator
-    selector::Selector
-    offsets::NTuple{N, Rational{Int}}
-    faces::Tuple
-end
+tensorrank(site::SiteSelector, args::Tuple{DTerm}) = tensorrank(site.selector, args)
+checkranks(site::SiteSelector, args::Tuple{DTerm}) = checkranks(site.selector, args)
 
 function stencil_rule(sel::Selector, args::Tuple{DTerm}, ctx::LowerContext{N}) where {N}
     pos = map(position, ctx.blck, ctx.offs)
-    faces = candidates(pos, sel.clauses)
+    # the number of faces and their codimensions are only known at runtime
+    faces = Tuple(Tuple(axes) => i for (axes, i) in candidates(pos, sel.clauses))
     site = SiteSelector(sel, ctx.offs, faces)
     return stencil_rule(site, args, ctx)
 end
@@ -89,8 +93,9 @@ function stencil_rule(site::SiteSelector{N}, args::Tuple{DTerm}, ctx::LowerConte
         Base.tail(site.faces)
     )(args...)
     pos = map(position, ctx.blck, ctx.offs)
-    signed_axes = ntuple(length(axes)) do a
-        pos[a].side isa Upper ? -axes[a] : axes[a]
+    signed_axes = ntuple(length(axes)) do k
+        a = axes[k]
+        pos[a].side isa Upper ? -a : a
     end
     lifted = Lifted(site.selector.clauses[i].resolution, signed_axes)
     return stencil_rule(lifted, (rest,), ctx)
@@ -98,3 +103,11 @@ end
 
 # the value of `x` at the sample being resolved
 here(x::DTerm, ::Block{N}) where {N} = x[zero_offsets(Val(N))...]
+
+function stencil_rule(r::BoundaryRule, args, ::LowerContext{N}) where {N}
+    return throw(ArgumentError(lazy"rule of type `$(typeof(r))` has no `stencil_rule` defined for codimension $N"))
+end
+
+stencil_rule(::Next, args::Tuple{DTerm}, ctx::LowerContext) = here(only(args), ctx.blck)
+stencil_rule(a::Add, args::Tuple{DTerm}, ctx::LowerContext) = here(only(args), ctx.blck) + here(a.val, ctx.blck)
+stencil_rule(s::Scale, args::Tuple{DTerm}, ctx::LowerContext) = here(s.val, ctx.blck) * here(only(args), ctx.blck)
