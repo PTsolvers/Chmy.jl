@@ -20,10 +20,10 @@ export DTerm, Literal, Index, Coordinate, Operator, Fun
 include("types.jl")
 
 export isexpr, iscall
-export isliteral, isindex, iscoordinate, istensor, iscomp, islocs, isinds, isuniform
+export isliteral, isindex, iscoordinate, istensor, iscomp, islocs, isinds, ispack, isuniform
 export head, children, operation, arguments
 export value, argument, arity, isunary, isbinary
-export components, locations, indices
+export components, entries, locations, indices
 export tensorrank, tensorname, tensorkind
 export ==ₛ, !=ₛ, <ₛ, isnegof, isstaticzero, isstaticone, isunaryminus
 export 𝒪, ℐ
@@ -54,6 +54,7 @@ include("utils.jl")
 export AbstractRule, Passthrough, Chain, Prewalk, Postwalk, Fixpoint
 include("rewriters.jl")
 
+export pack
 include("tensors.jl")
 
 export @scalars, @vectors, @tensors, @uniform, @sym, @diag, @alt

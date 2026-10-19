@@ -1,55 +1,60 @@
 """
     components(expr, dims)
 
-Convert `expr` to scalar component form in `dims` spatial dimensions.
-Expressions already in scalar component form are returned unchanged.
+Convert `expr` to component form in `dims` spatial dimensions, where every tensor is a [`pack`](@ref)
+of scalar entries. Expressions already in component form are returned unchanged.
 """
-function components(t::DTerm, dims::Integer)::Union{TensorComponents, DTerm}
+function components(t::DTerm, dims::Integer)::DTerm
     dims > 0 || throw(ArgumentError("dims must pe positive integer"))
     return something(components_changed(t, dims), t)
 end
 
-# returns nothing if `t` is already in scalar component form
-function components_changed(t::DTerm, dims::Integer)::Union{Nothing, TensorComponents, DTerm}
+# returns nothing if `t` is already in component form
+function components_changed(t::DTerm, dims::Integer)::Union{Nothing, DTerm}
     return @match t begin
         Tensor(rank, _, kind, _) => begin
             iszero(rank) && return nothing
-            return TensorComponents(kind, rank, dims) do I
+            pack(kind, rank, dims) do I
                 makecomp_unchecked(t, I)
             end
         end
         ZeroTensor(rank) => begin
             iszero(rank) && return ZERO
-            return literal_components(ZERO, dims, rank)
+            literal_pack(ZERO, dims, rank)
         end
         IdTensor(rank) => begin
             iszero(rank) && return ONE
-            return literal_components(ONE, dims, rank)
+            literal_pack(ONE, dims, rank)
         end
         DExpr(Comp(I), (arg,)) => begin
             istensor(arg) && return nothing
-            result = components(arg, dims)
-            if result isa TensorComponents
-                return result[I...]
-            else
-                return result
-            end
+            components(arg, dims)[I...]
         end
+        DExpr(Pack(_, d, _), _) && if d != dims end => pack_dims_error(d, dims)
         DExpr(Call(op), args) => begin
             lowered = components_args(args, dims)
             result = evaluate(op, something(lowered, args), dims)
             isnothing(result) || return result
+            # tensor-valued calls must be expanded to the component form
+            tensorrank(t) > 0 && expansion_error(op)
             # the call is already in component form, rebuild it only if the arguments changed
             isnothing(lowered) && return nothing
-            return makecall_unchecked(op, lowered)
+            makecall_unchecked(op, lowered)
         end
         DExpr(_, args) => begin
             lowered = components_args(args, dims)
             isnothing(lowered) && return nothing
-            return DExpr(head(t), lowered::Tuple{Vararg{DTerm}})
+            DExpr(head(t), lowered::Tuple{Vararg{DTerm}})
         end
-        _ => return nothing
+        _ => nothing
     end
+end
+
+@noinline function pack_dims_error(d, dims)
+    throw(DimensionMismatch(LazyString("tensor in component form has ", d, " dimensions, expected ", dims)))
+end
+@noinline function expansion_error(op)
+    throw(ArgumentError(LazyString("tensor-valued operator '", op, "' has no expansion to the component form")))
 end
 
 # expand only when one of the arguments changes, reusing the unchanged prefix
@@ -65,199 +70,168 @@ function components_args(args::NTuple{N, DTerm}, dims::Integer) where {N}
 end
 
 """
-    simplify(t::TensorComponents)
+    pack(array)
+    pack(f, kind, rank, dims)
 
-Simplify each stored scalar entry, then detect and extract the most structured storage supported by those entries.
+Construct a tensor in component form. The first method stores the entries of `array`, whose axes must
+have equal lengths, converting numbers to literals. The second method calls `f(I)` at each canonical index
+tuple `I` of a tensor with symmetry `kind` and rank `rank` in `dims` dimensions.
 """
-function simplify(t::TensorComponents)
-    data = map(simplify, t.data)
-    kind = detect_kind(t.kind, t.dims, t.rank, data)
-    if t.kind == kind
-        return TensorComponents(t.dims, t.rank, kind, data)
-    end
-    if t.kind == Kind.Alt() && kind == Kind.Diag()
-        return literal_components(ZERO, t.dims, t.rank)
-    end
-    return TensorComponents(kind, t.rank, t.dims) do I
-        data[linear_index(t.kind, t.dims, I)]
-    end
-end
-
-"""
-    TensorComponents(f, kind, rank, dims)
-
-Make a component representation of tensor by calling `f(I)` at each canonical index tuple.
-"""
-function TensorComponents(f::F, kind::TensorKind, rank::Integer, dims::Integer) where {F}
+function pack(f::F, kind::TensorKind, rank::Integer, dims::Integer) where {F}
     data = DTerm[]
     sizehint!(data, ncomponents(kind, dims, rank))
     foreach_component(kind, dims, rank) do I
         push!(data, f(I))
     end
-    return TensorComponents(dims, rank, kind, data)
+    return makepack(rank, dims, kind, Tuple(data))
 end
+function pack(array::AbstractArray)
+    allequal(size(array)) || throw(DimensionMismatch("all axes of a packed array must have the same length"))
+    # column-major order matches the linear indices of the tensors with no symmetry
+    data = map(asterm, vec(array))
+    return makepack(ndims(array), size(array, 1), Kind.None(), Tuple(data))
+end
+
+asterm(x::DTerm) = x
+asterm(x::Number) = Literal(x)
 
 ncomponents(::Kind.None, dims, rank) = dims^rank
 ncomponents(::Kind.Sym, dims, rank) = binomial(dims + rank - 1, rank)
 ncomponents(::Kind.Alt, dims, rank) = binomial(dims, rank)
 ncomponents(::Kind.Diag, dims, rank) = iszero(rank) ? 1 : dims
 
-tensorrank(t::TensorComponents) = t.rank
-tensorkind(t::TensorComponents) = t.kind
+# the entry of a tensor in component form at the index tuple `I`
+pack_entry(kind::Union{Kind.None, Kind.Sym}, dims, data, I) = data[linear_index(kind, dims, I)]
+function pack_entry(kind::Kind.Alt, dims, data, I)
+    allunique(I) || return ZERO
+    v = data[linear_index(kind, dims, I)]
+    return iseven(inversion_count(I)) ? v : -v
+end
+pack_entry(::Kind.Diag, dims, data, I) = allequal(I) ? data[I[1]] : ZERO
 
-Base.ndims(t::TensorComponents) = t.dims
+# the same tensor with other entries
+repack(t::DTerm, data) = makepack_unchecked(tensorrank(t), packdims(t), tensorkind(t), Tuple(data))
 
-ncomponents(t::TensorComponents) = length(t.data)
+# `evaluate(op, args, dims)` rewrites a call once the number of dimensions is known, or when all tensor
+# arguments are in component form; returning `nothing` keeps the call `op(args...)` as is
+evaluate(::Operator, ::Tuple{Vararg{DTerm}}, ::Integer) = nothing
+evaluate(op::Fun, args::Tuple{Vararg{DTerm}}, ::Integer) = evaluate(op.f, args)
+evaluate(f, args::Tuple{Vararg{DTerm}}) = nothing
 
-components(t::TensorComponents) = t.data
-
-isuniform(t::TensorComponents) = all(isuniform, t.data)
-
-"""
-    getindex(t::TensorComponents, inds...)
-
-Return the component of a tensor.
-"""
-function Base.getindex(t::TensorComponents, I::Vararg{Integer, N}) where {N}
-    N == t.rank || throw(ArgumentError("number of subscripts not matching tensor rank"))
-    if t.kind == Kind.Sym()
-        idx = linear_index(t.kind, t.dims, I)
-        return t.data[idx]
-    elseif t.kind == Kind.Alt()
-        allunique(I) || return ZERO
-        idx = linear_index(t.kind, t.dims, I)
-        v = t.data[idx]
-        return iseven(inversion_count(I)) ? v : -v
-    elseif t.kind == Kind.Diag()
-        return allequal(I) ? t.data[I[1]] : ZERO
-    elseif t.kind == Kind.None()
-        return t.data[linear_index(t.kind, t.dims, I)]
-    else
-        error("unreachable")
+function evaluate(op::BroadcastedFun, args::Tuple{Vararg{DTerm}}, ::Integer)
+    f = Fun(op)
+    k = findfirst(x -> tensorrank(x) > 0, args)
+    # broadcasting over scalars is a scalar call
+    isnothing(k) && return makecall_unchecked(f, args)
+    rank, dims = tensorrank(args[k]), packdims(args[k])
+    return pack(broadcast_kind(args, rank), rank, dims) do I
+        makecall_unchecked(f, map(x -> tensorrank(x) == 0 ? x : x[I...], args))
     end
 end
 
-Base.:-(a::TensorComponents, b::TensorComponents) = component_arithmetic(-, a, b)
-Base.:-(a::TensorComponents) = TensorComponents(a.dims, a.rank, a.kind, map(-, a.data))
+function broadcast_kind(args, rank)
+    # arbitrary functions preserve permutation symmetry
+    sym_or_diag = rank >= 2 && all(args) do x
+        tensorrank(x) == 0 || tensorkind(x) isa Union{Kind.Sym, Kind.Diag}
+    end
+    return sym_or_diag ? Kind.Sym() : Kind.None()
+end
 
-Base.:+(a::TensorComponents) = a
-Base.:+(a::TensorComponents, b::TensorComponents) = component_arithmetic(+, a, b)
-function Base.:+(a::TensorComponents, b::TensorComponents, c::TensorComponents, rest::TensorComponents...)
-    tensors = (a, b, c, rest...)
-    kind = foldl(promote_kind, map(tensorkind, tensors))
+function evaluate(::typeof(+), args::Tuple{Vararg{DTerm}})
+    tensorrank(first(args)) == 0 && return nothing
+    length(args) == 1 && return only(args)
+    t = first(args)
+    kind = foldl(promote_kind, map(tensorkind, args))
     terms = DTerm[]
-    sizehint!(terms, length(tensors))
-    if all(t -> t.kind == kind, tensors)
-        data = DTerm[component_sum_at!(terms, tensors, i) for i in eachindex(a.data)]
-        return TensorComponents(a.dims, a.rank, kind, data)
+    sizehint!(terms, length(args))
+    if all(x -> tensorkind(x) == kind, args)
+        return repack(t, (component_sum_at!(terms, args, i) for i in eachindex(entries(t))))
     end
-    return TensorComponents(kind, a.rank, a.dims) do I
-        component_sum_at!(terms, tensors, I)
+    return pack(kind, tensorrank(t), packdims(t)) do I
+        component_sum_at!(terms, args, I)
+    end
+end
+function evaluate(::typeof(-), args::Tuple{Vararg{DTerm}})
+    t = first(args)
+    tensorrank(t) == 0 && return nothing
+    length(args) == 1 && return repack(t, map(-, entries(t)))
+    return component_arithmetic(-, args...)
+end
+function evaluate(::typeof(*), args::Tuple{Vararg{DTerm}})
+    # at most one factor is a tensor
+    k = findfirst(x -> tensorrank(x) > 0, args)
+    isnothing(k) && return nothing
+    tensor = args[k]
+    factors = Tuple(args[j] for j in eachindex(args) if j != k)
+    isempty(factors) && return tensor
+    scalar = length(factors) == 1 ? only(factors) : makecall_unchecked(Fun(*), factors)
+    return repack(tensor, map(x -> scalar * x, entries(tensor)))
+end
+for op in (:/, ://, :÷)
+    @eval function evaluate(::typeof($op), args::Tuple{Vararg{DTerm}})
+        a, b = args
+        # the denominator is scalar by the expression's construction contract
+        tensorrank(a) == 0 && return nothing
+        return repack(a, map(x -> $op(x, b), entries(a)))
     end
 end
 
-Base.:*(s::DTerm, t::TensorComponents) = TensorComponents(t.dims, t.rank, t.kind, DTerm[s * x for x in t.data])
-Base.:*(s::Number, t::TensorComponents) = Literal(s) * t
+evaluate(::typeof(⋅), args::Tuple{DTerm, DTerm}) = contract_components(args..., 1)
+evaluate(::typeof(⊡), args::Tuple{DTerm, DTerm}) = contract_components(args..., 2)
 
-for op in (:*, :/, ://, :÷)
-    @eval begin
-        function Base.$op(t::TensorComponents, s::DTerm)
-            return TensorComponents(t.dims, t.rank, t.kind, DTerm[$op(x, s) for x in t.data])
-        end
-        Base.$op(t::TensorComponents, s::Number) = $op(t, Literal(s))
+function evaluate(::typeof(⊗), (a, b)::Tuple{DTerm, DTerm})
+    ra, rb = tensorrank(a), tensorrank(b)
+    return pack(Kind.None(), ra + rb, packdims(a)) do I
+        a[I[1:ra]...] * b[I[(ra + 1):end]...]
     end
 end
 
-"""
-    ⋅(a::TensorComponents, b::TensorComponents)
-
-Contract the last index of `a` with the first index of `b`.
-"""
-⋅(a::TensorComponents, b::TensorComponents) = contract_components(a, b, 1)
-
-"""
-    ⊡(a, b)
-
-Contract the last two indices of `a` with the first two indices of `b`.
-"""
-⊡(a::TensorComponents, b::TensorComponents) = contract_components(a, b, 2)
-
-"""
-    ⊗(a, b)
-
-Form the outer product, placing all indices of `a` before those of `b`.
-"""
-function ⊗(a::TensorComponents, b::TensorComponents)
-    rank = a.rank + b.rank
-    return TensorComponents(Kind.None(), rank, a.dims) do I
-        a[I[1:a.rank]...] * b[I[(a.rank + 1):end]...]
-    end
-end
-
-"""
-    cross(a::TensorComponents, b::TensorComponents)
-    ×(a, b)
-
-Compute the cross product of two three-dimensional component vectors.
-"""
-function ×(a::TensorComponents, b::TensorComponents)
-    a.dims == 3 || throw(ArgumentError("cross product requires dimension 3"))
-    data = DTerm[
+function evaluate(::typeof(×), (a, b)::Tuple{DTerm, DTerm})
+    packdims(a) == 3 || throw(ArgumentError("cross product requires dimension 3"))
+    data = (
         a[2] * b[3] - a[3] * b[2],
         a[3] * b[1] - a[1] * b[3],
         a[1] * b[2] - a[2] * b[1],
-    ]
-    return TensorComponents(3, 1, Kind.None(), data)
+    )
+    return makepack_unchecked(1, 3, Kind.None(), data)
 end
 
-"""
-    tr(t::TensorComponents)
-
-Return the scalar trace of a rank-2 component tensor.
-"""
-function tr(t::TensorComponents)
-    t.kind == Kind.Alt() && return ZERO
-    return component_sum(DTerm[t[i, i] for i in 1:t.dims])
+for op in (:transpose, :adjoint, :tr, :diag, :det, :cof, :inv, :sym, :asym, :gram, :cogram)
+    @eval function evaluate(f::typeof($op), args::Tuple{DTerm})
+        t = only(args)
+        tensorrank(t) == 0 && return nothing
+        return matrix_components(f, t)
+    end
 end
 
-"""
-    diag(t::TensorComponents)
-
-Extract the diagonal of a rank-2 tensor `t` as a vector.
-"""
-function diag(t::TensorComponents)
-    return TensorComponents(t.dims, 1, Kind.None(), DTerm[t[i, i] for i in 1:t.dims])
+# transpose of a rank-2 tensor, preserving its known kind
+function matrix_components(::typeof(transpose), t)
+    tensorkind(t) isa Union{Kind.Sym, Kind.Diag} && return t
+    tensorkind(t) == Kind.Alt() && return -t
+    return pack(I -> t[I[2], I[1]], Kind.None(), 2, packdims(t))
 end
 
-"""
-    transpose(t::TensorComponents)
+# Chmy's symbolic adjoint is a transpose, without complex conjugation
+matrix_components(::typeof(adjoint), t) = matrix_components(transpose, t)
 
-Transpose a rank-2 tensor `t`, preserving its known kind.
-"""
-function Base.transpose(t::TensorComponents)
-    t.kind isa Union{Kind.Sym, Kind.Diag} && return t
-    t.kind == Kind.Alt() && return -t
-    return TensorComponents(I -> t[I[2], I[1]], Kind.None(), 2, t.dims)
+function matrix_components(::typeof(tr), t)
+    tensorkind(t) == Kind.Alt() && return ZERO
+    return component_sum(DTerm[t[i, i] for i in 1:packdims(t)])
 end
 
-# Chmy's symbolic adjoint is a transpose, without complex conjugation.
-Base.adjoint(t::TensorComponents) = transpose(t)
+matrix_components(::typeof(diag), t) = pack(I -> t[I[1], I[1]], Kind.None(), 1, packdims(t))
 
-"""
-    det(t::TensorComponents)
-
-Return a determinant of a rank-2 tensor `t`.
-"""
-function det(t::TensorComponents)
-    d = t.dims
+function matrix_components(::typeof(det), t)
+    d = packdims(t)
     1 <= d <= 3 || throw(ArgumentError("determinant is supported only in dimensions 1–3"))
     d == 1 && return t[1, 1]
-    if t.kind == Kind.Diag()
-        return makecall_unchecked(Fun(*), Tuple(t.data))
-    elseif t.kind == Kind.Alt()
+    kind = tensorkind(t)
+    if kind == Kind.Diag()
+        return makecall_unchecked(Fun(*), entries(t))
+    elseif kind == Kind.Alt()
         return d == 2 ? t[1, 2]^2 : ZERO
     elseif d == 2
-        return t.kind == Kind.Sym() ?
+        return kind == Kind.Sym() ?
             t[1, 1] * t[2, 2] - t[1, 2]^2 :
             t[1, 1] * t[2, 2] - t[1, 2] * t[2, 1]
     end
@@ -268,18 +242,13 @@ function det(t::TensorComponents)
     #! format: on
 end
 
-"""
-    cof(t)
-
-Cofactor matrix of rank-2 tensor `t`. Only defined in dimensions 1–3.
-"""
-function cof(t::TensorComponents)
-    d = t.dims
+function matrix_components(::typeof(cof), t)
+    d = packdims(t)
     1 <= d <= 3 || throw(ArgumentError("cofactor matrix is supported only in dimensions 1–3"))
-    d == 1 && return literal_components(ONE, d, 2)
-    kind = d == 3 && t.kind == Kind.Alt() ? Kind.Sym() : t.kind
-    return TensorComponents(kind, 2, d) do (i, j)
-        if t.kind == Kind.Diag()
+    d == 1 && return literal_pack(ONE, d, 2)
+    kind = tensorkind(t)
+    return pack(d == 3 && kind == Kind.Alt() ? Kind.Sym() : kind, 2, d) do (i, j)
+        if kind == Kind.Diag()
             comps = DTerm[t[k, k] for k in 1:d if k != i]
             length(comps) == 1 && return only(comps)
             return makecall_unchecked(Fun(*), Tuple(comps))
@@ -290,71 +259,42 @@ function cof(t::TensorComponents)
     end
 end
 
-"""
-    adj(t)
+# the adjugate and the determinant are evaluated right away, since `t` is in component form
+matrix_components(::typeof(inv), t) = adj(t) / det(t)
 
-Adjugate (transposed cofactor matrix) of rank-2 tensor `t`. Only defined in dimensions 1–3.
-"""
-adj(t::TensorComponents) = cof(t)'
-
-"""
-    inv(t::TensorComponents)
-
-Return the inverse of rank-2 tensor `t`. Only defined in dimensions 1-3.
-"""
-Base.inv(t::TensorComponents) = adj(t) / det(t)
-
-"""
-    sym(t)
-
-Return the symmetric part `(t + t') / 2` of rank-2 tensor `t`.
-"""
-function sym(t::TensorComponents)
-    t.kind isa Union{Kind.Sym, Kind.Diag} && return t
-    t.kind == Kind.Alt() && return literal_components(ZERO, t.dims, 2)
-    return TensorComponents(Kind.Sym(), 2, t.dims) do (i, j)
+function matrix_components(::typeof(sym), t)
+    kind = tensorkind(t)
+    kind isa Union{Kind.Sym, Kind.Diag} && return t
+    kind == Kind.Alt() && return literal_pack(ZERO, packdims(t), 2)
+    return pack(Kind.Sym(), 2, packdims(t)) do (i, j)
         i == j ? t[i, i] : (1 // 2) * (t[i, j] + t[j, i])
     end
 end
 
-"""
-    asym(t)
-
-Return the antisymmetric part `(t - t') / 2` of rank-2 tensor `t`.
-"""
-function asym(t::TensorComponents)
-    t.kind == Kind.Alt() && return t
-    if t.kind isa Union{Kind.Sym, Kind.Diag}
-        return literal_components(ZERO, t.dims, 2)
-    end
-    return TensorComponents(Kind.Alt(), 2, t.dims) do (i, j)
+function matrix_components(::typeof(asym), t)
+    kind = tensorkind(t)
+    kind == Kind.Alt() && return t
+    kind isa Union{Kind.Sym, Kind.Diag} && return literal_pack(ZERO, packdims(t), 2)
+    return pack(Kind.Alt(), 2, packdims(t)) do (i, j)
         (1 // 2) * (t[i, j] - t[j, i])
     end
 end
 
-"""
-    gram(t)
-
-Return the Gramian `t' ⋅ t` of rank-2 tensor `t`.
-"""
-function gram(t::TensorComponents)
-    kind = t.kind == Kind.Diag() ? Kind.Diag() : Kind.Sym()
-    return TensorComponents(kind, 2, t.dims) do (i, j)
-        t.kind == Kind.Diag() && return t[i, i]^2
-        component_sum(DTerm[t[k, i] * t[k, j] for k in 1:t.dims])
+# the Gramian `t' ⋅ t`
+function matrix_components(::typeof(gram), t)
+    d, diagonal = packdims(t), tensorkind(t) == Kind.Diag()
+    return pack(diagonal ? Kind.Diag() : Kind.Sym(), 2, d) do (i, j)
+        diagonal && return t[i, i]^2
+        component_sum(DTerm[t[k, i] * t[k, j] for k in 1:d])
     end
 end
 
-"""
-    cogram(t)
-
-Return the co-Gramian `t ⋅ t'` of rank-2 tensor `t`.
-"""
-function cogram(t::TensorComponents)
-    kind = t.kind == Kind.Diag() ? Kind.Diag() : Kind.Sym()
-    return TensorComponents(kind, 2, t.dims) do (i, j)
-        t.kind == Kind.Diag() && return t[i, i]^2
-        component_sum(DTerm[t[i, k] * t[j, k] for k in 1:t.dims])
+# the co-Gramian `t ⋅ t'`
+function matrix_components(::typeof(cogram), t)
+    d, diagonal = packdims(t), tensorkind(t) == Kind.Diag()
+    return pack(diagonal ? Kind.Diag() : Kind.Sym(), 2, d) do (i, j)
+        diagonal && return t[i, i]^2
+        component_sum(DTerm[t[i, k] * t[j, k] for k in 1:d])
     end
 end
 
@@ -392,10 +332,19 @@ visit_components(f, ::Kind.Sym, dims, rank) = nondecreasing(f, dims, rank)
 visit_components(f, ::Kind.Alt, dims, rank) = increasing(f, dims, rank)
 visit_components(f, ::Kind.None, dims, rank) = cartesian(f, dims, rank)
 
-function literal_components(x::DTerm, dims, rank)
+function literal_pack(x::DTerm, dims, rank)
     kind = rank < 2 ? Kind.None() : Kind.Diag()
-    data = fill(x, ncomponents(kind, dims, rank))
-    return TensorComponents(dims, rank, kind, data)
+    return makepack_unchecked(rank, dims, kind, ntuple(_ -> x, ncomponents(kind, dims, rank)))
+end
+
+# the most structured storage supported by the entries of a tensor in component form
+function canonicalize_pack(t::DTerm, rank, dims, kind, data)
+    detected = detect_kind(kind, dims, rank, data)
+    kind == detected && return t
+    kind == Kind.Alt() && detected == Kind.Diag() && return literal_pack(ZERO, dims, rank)
+    return pack(detected, rank, dims) do I
+        data[linear_index(kind, dims, I)]
+    end
 end
 
 function detect_kind(kind::TensorKind, dims, rank, data)
@@ -450,103 +399,6 @@ function isdiag(kind::TensorKind, dims, rank, data)
     end
 end
 
-# `evaluate(op, args, dims)` rewrites a call once the number of dimensions is known,
-# returning `nothing` keeps the call `op(args...)` as is
-evaluate(op::Operator, args::Tuple, ::Integer) = evaluate(op, args)
-evaluate(::Operator, ::Tuple{Vararg{DTerm}}, ::Integer) = nothing
-evaluate(op::BroadcastedFun, args::Tuple{Vararg{DTerm}}, ::Integer) = makecall_unchecked(Fun(op), args)
-evaluate(op::Fun, args::Tuple) = evaluate(op.f, args)::Union{DTerm, TensorComponents}
-evaluate(op::Operator, args::Tuple) = makecall_unchecked(op, args::Tuple{Vararg{DTerm}})
-
-broadcast_component(t::DTerm, I) = t
-broadcast_component(t::TensorComponents, I) = t[I...]
-
-function checkdims(args::Tuple, dims::Integer)
-    if any(x -> x isa TensorComponents && x.dims != dims, args)
-        throw(DimensionMismatch("broadcast tensor dimensions must match"))
-    end
-    return
-end
-
-function broadcast_kind(args::Tuple, rank::Integer)
-    # arbitrary functions preserve permutation symmetry
-    sym_or_diag = rank >= 2 && all(args) do x
-        !(x isa TensorComponents) || x.kind isa Union{Kind.Sym, Kind.Diag}
-    end
-    return sym_or_diag ? Kind.Sym() : Kind.None()
-end
-
-function evaluate(op::BroadcastedFun, args::Tuple)::Union{DTerm, TensorComponents}
-    f = Fun(op)
-    # k cannot be nothing, all-DTerm broadcasts are evaluated as scalar calls
-    k = findfirst(x -> x isa TensorComponents, args)::Int
-    tensor = args[k]::TensorComponents
-    check_broadcast_ranks(op, args)
-    checkdims(args, tensor.dims)
-    kind = broadcast_kind(args, tensor.rank)
-    return TensorComponents(kind, tensor.rank, tensor.dims) do I
-        scalars = map(x -> broadcast_component(x, I), args)
-        makecall_unchecked(f, scalars::Tuple{Vararg{DTerm}})
-    end
-end
-
-function broadcasted(f, arg::Union{DTerm, TensorComponents}, args::Union{DTerm, TensorComponents}...)
-    inputs = (arg, args...)
-    # k cannot be nothing, all-DTerm calls will be dispatched to a method from operators.jl
-    k = findfirst(x -> x isa TensorComponents, inputs)::Int
-    dims = (inputs[k]::TensorComponents).dims
-    op = BroadcastedFun(f)
-    lowered = map(x -> x isa DTerm ? components(x, dims) : x, inputs)
-    return evaluate(op, lowered)
-end
-broadcasted(f, a::TensorComponents, b::Number) = broadcasted(f, a, Literal(b))
-broadcasted(f, a::Number, b::TensorComponents) = broadcasted(f, Literal(a), b)
-function broadcasted(::typeof(Base.literal_pow), f, t::TensorComponents, ::Val{N}) where {N}
-    return broadcasted(f, t, Literal(N))
-end
-
-evaluate(f, args::Tuple) = makecall_unchecked(Fun(f), args::Tuple{Vararg{DTerm}})
-for op in (:+, :-)
-    @eval function evaluate(::typeof($op), args::Tuple)
-        if first(args) isa DTerm
-            return makecall_unchecked(Fun($op), args::Tuple{Vararg{DTerm}})
-        end
-        return $op(args...)
-    end
-end
-function evaluate(::typeof(*), args::Tuple)
-    # at most one factor is a tensor
-    k = findfirst(Base.Fix2(isa, TensorComponents), args)
-    isnothing(k) && return makecall_unchecked(Fun(*), args::Tuple{Vararg{DTerm}})
-    tensor = args[k]::TensorComponents
-    factors = Tuple(args[j]::DTerm for j in eachindex(args) if j != k)
-    isempty(factors) && return tensor
-    scalar = length(factors) == 1 ? only(factors) : makecall_unchecked(Fun(*), factors)
-    return scalar * tensor
-end
-for op in (:/, ://, :÷)
-    @eval function evaluate(::typeof($op), args::Tuple)
-        a, b = args
-        if a isa DTerm
-            return makecall_unchecked(Fun($op), args::Tuple{Vararg{DTerm}})
-        end
-        # the denominator is scalar by the expression's construction contract
-        return $op(a, b)
-    end
-end
-for op in (:⋅, :⊡, :⊗, :×)
-    @eval evaluate(::typeof($op), args::Tuple) = $op(args...)
-end
-for op in (:transpose, :adjoint, :tr, :diag, :det, :cof, :inv, :sym, :asym, :gram, :cogram)
-    @eval function evaluate(::typeof($op), args::Tuple)
-        arg = only(args)
-        if arg isa DTerm
-            return makecall_unchecked(Fun($op), args::Tuple{Vararg{DTerm}})
-        end
-        return $op(arg)
-    end
-end
-
 promote_kind(::T, ::T) where {T <: TensorKind} = T()
 promote_kind(::Kind.None, ::Kind.None) = Kind.None()
 
@@ -558,15 +410,15 @@ promote_kind(::Kind.Diag, ::Kind.Sym) = Kind.Sym()
 
 promote_kind(a, b) = promote_kind(b, a)
 
-function component_arithmetic(f::F, a::TensorComponents, b::TensorComponents) where {F}
-    if a.kind == b.kind
-        data = map(a.data, b.data) do x, y
+function component_arithmetic(f::F, a::DTerm, b::DTerm) where {F}
+    if tensorkind(a) == tensorkind(b)
+        data = map(entries(a), entries(b)) do x, y
             makecall_unchecked(Fun(f), (x, y))
         end
-        return TensorComponents(a.dims, a.rank, a.kind, data)
+        return repack(a, data)
     end
-    kind = promote_kind(a.kind, b.kind)
-    return TensorComponents(kind, a.rank, a.dims) do I
+    kind = promote_kind(tensorkind(a), tensorkind(b))
+    return pack(kind, tensorrank(a), packdims(a)) do I
         makecall_unchecked(Fun(f), (a[I...], b[I...]))
     end
 end
@@ -575,7 +427,7 @@ function component_sum_at!(terms, tensors, index)
     empty!(terms)
     for t in tensors
         # linear data indices are used only when all storage kinds match
-        x = index isa Int ? t.data[index] : t[index...]
+        x = index isa Int ? entries(t)[index] : t[index...]
         push!(terms, x)
     end
     return component_sum(terms)
@@ -591,20 +443,20 @@ function component_sum(terms)
 end
 
 function contraction_component(a, b, I, n)
-    free = a.rank - n
+    free = tensorrank(a) - n
     left, right = I[1:free], I[(free + 1):end]
     terms = DTerm[]
-    sizehint!(terms, ncomponents(Kind.None(), a.dims, n))
-    foreach_component(Kind.None(), a.dims, n) do K
+    sizehint!(terms, ncomponents(Kind.None(), packdims(a), n))
+    foreach_component(Kind.None(), packdims(a), n) do K
         push!(terms, a[left..., K...] * b[K..., right...])
     end
     return component_sum(terms)
 end
 
-function contract_components(a::TensorComponents, b::TensorComponents, n)
-    rank = a.rank + b.rank - 2n
+function contract_components(a::DTerm, b::DTerm, n)
+    rank = tensorrank(a) + tensorrank(b) - 2n
     rank == 0 && return contraction_component(a, b, (), n)
-    return TensorComponents(I -> contraction_component(a, b, I, n), Kind.None(), rank, a.dims)
+    return pack(I -> contraction_component(a, b, I, n), Kind.None(), rank, packdims(a))
 end
 
 function cofactor3(t, row, col)
