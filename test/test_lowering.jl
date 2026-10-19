@@ -6,6 +6,10 @@ using Chmy: LowerContext
 struct Pointwise <: Operator end
 Chmy.stencil_rule(op::Pointwise, args::Tuple{DTerm}, ::LowerContext{N}) where {N} = op(args[1][ntuple(_ -> 0, N)...])
 
+# an operator whose stencil rule returns a tensor in component form instead of a scalar
+struct Unindexed <: Operator end
+Chmy.stencil_rule(::Unindexed, args::Tuple{DTerm}, ::LowerContext) = pack([args[1], args[1]])
+
 @testset "lowering" begin
     @scalars f g @uniform(a)
     @vectors u v
@@ -54,6 +58,18 @@ Chmy.stencil_rule(op::Pointwise, args::Tuple{DTerm}, ::LowerContext{N}) where {N
         @test (@inferred lower((A ⋅ B)[1, 2], 𝓅, 𝓅)) ==ₛ
             A[1, 1][𝓅, 𝓅][0, 0] * B[1, 2][𝓅, 𝓅][0, 0] + A[1, 2][𝓅, 𝓅][0, 0] * B[2, 2][𝓅, 𝓅][0, 0]
         @test (@inferred lower(f .+ g, 𝓈, 𝓈)) ==ₛ f[𝓈, 𝓈][0, 0] + g[𝓈, 𝓈][0, 0]
+    end
+
+    @testset "tensors in component form" begin
+        gravity = pack([0, -1])
+        # a call with all tensor arguments in component form is evaluated right away
+        @test ispack(f * gravity)
+        @test simplify(lower((f * gravity)[2], 𝓅, 𝓅)) ==ₛ -f[𝓅, 𝓅][0, 0]
+        # mixed with coordinate-free tensors, the call is evaluated during lowering
+        @test simplify(lower((u + gravity)[2], 𝓅, 𝓅)) ==ₛ u[2][𝓅, 𝓅][0, 0] - 1
+        @test_throws DimensionMismatch lower((u + gravity)[2], 𝓅, 𝓅, 𝓅)
+        # a stencil rule must not return a tensor in component form
+        @test_throws ArgumentError lower(Unindexed()(f), 𝓅, 𝓅)
     end
 
     @testset "errors" begin

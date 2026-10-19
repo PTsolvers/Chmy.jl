@@ -1,6 +1,6 @@
 using Test
 using Chmy
-using Chmy: DExpr, Call, Comp, Locs, Inds, Kind, TensorKind, Tensor, ZeroTensor, IdTensor
+using Chmy: DExpr, Call, Comp, Locs, Inds, Pack, Kind, TensorKind, Tensor, ZeroTensor, IdTensor
 using Moshi.Data: isa_variant
 
 using Random
@@ -310,6 +310,54 @@ Random.seed!(1234) # deterministic tests
             @test_throws ArgumentError components(expr)
             @test_throws ArgumentError locations(expr)
             @test_throws ArgumentError tensorkind(expr)
+            @test_throws ArgumentError tensorname(expr)
+        end
+
+        @testset "Pack" begin
+            @scalars a b c
+            @vectors v
+            expr = @inferred pack([a, b])
+
+            @test expr isa DTerm
+            @test (@inferred isa_variant(expr, DExpr))
+
+            @test (@inferred isexpr(expr)) == true
+            @test (@inferred ispack(expr)) == true
+            @test (@inferred ispack(v)) == false
+
+            @test (@inferred head(expr)) == Pack(1, 2, Kind.None())
+            @test isequal(entries(expr), (a, b))
+            @test (@inferred tensorrank(expr)) == 1
+            @test tensorkind(expr) == Kind.None()
+            @test (@inferred isuniform(expr)) == false
+            @test (@inferred isuniform(pack([0, -9.81]))) == true
+
+            # entries are compared and hashed by content
+            @test expr ==ₛ pack([a, b])
+            @test hash(expr) == hash(pack([a, b]))
+            @test expr !=ₛ pack([b, a])
+
+            # indexing returns the stored entries, respecting the symmetry of the storage
+            @test (@inferred expr[2]) ==ₛ b
+            sym = DExpr(Pack(2, 2, Kind.Sym()), (a, b, c))
+            @test sym[2, 1] ==ₛ b
+            alt = DExpr(Pack(2, 2, Kind.Alt()), (a,))
+            @test alt[1, 2] ==ₛ a
+            @test alt[2, 1] ==ₛ -a
+            @test alt[1, 1] ==ₛ Literal(0)
+            diagonal = DExpr(Pack(2, 2, Kind.Diag()), (a, b))
+            @test diagonal[2, 2] ==ₛ b
+            @test diagonal[1, 2] ==ₛ Literal(0)
+            @test_throws ArgumentError expr[1, 1]
+            @test_throws BoundsError expr[3]
+
+            @test_throws ArgumentError pack(fill(a))
+            @test_throws ArgumentError pack([v, v])
+            @test_throws DimensionMismatch pack([a b c; a b c])
+
+            @test_throws ArgumentError operation(expr)
+            @test_throws ArgumentError argument(expr)
+            @test_throws ArgumentError components(expr)
             @test_throws ArgumentError tensorname(expr)
         end
     end
