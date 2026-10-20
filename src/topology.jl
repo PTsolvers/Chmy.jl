@@ -120,15 +120,16 @@ struct NearBoundary
 end
 const GridRegion = Union{NearBoundary, OnBoundary, Ghost}
 
-Base.in(ξ::Rational, ::Ghost) = ξ < zero(ξ)
+Base.in(ξ::Rational, ::Ghost) = ξ > zero(ξ)
 Base.in(ξ::Rational, ::OnBoundary) = iszero(ξ)
-Base.in(ξ::Rational, r::NearBoundary) = zero(ξ) < ξ <= r.w
+Base.in(ξ::Rational, r::NearBoundary) = -r.w <= ξ < zero(ξ)
 
 # lowering context
 
 struct Far end
 
-# means that the sample is near the side of the axis at distance ξ
+# means that the sample is near the side of the axis, at the signed distance ξ from the wall along the outward
+# normal, i.e. ξ > 0 in the ghost region, ξ = 0 on the wall, and ξ < 0 inside the domain
 struct Near
     side::Side
     ξ::Rational{Int}
@@ -137,9 +138,13 @@ end
 const Block{N} = NTuple{N, Union{Far, Near}}
 
 position(::Far, o) = Far()
-position(x::Near, o) = Near(x.side, x.side isa Lower ? x.ξ + o : x.ξ - o)
+position(x::Near, o) = Near(x.side, x.ξ + outward(x.side) * o)
+
+# the direction of the outward normal along the axis
+outward(::Lower) = -1
+outward(::Upper) = 1
 
 # ghost axes are resolved first
 # then boundary axes
 # then near-boundary
-severity(ξ) = ξ < 0 ? 0 : ξ == 0 ? 1 : 2
+severity(ξ) = ξ > 0 ? 0 : ξ == 0 ? 1 : 2

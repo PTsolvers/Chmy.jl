@@ -1,6 +1,6 @@
 using Test
 using Chmy
-using Chmy: candidates, BoundaryClause, Next
+using Chmy: candidates, BoundaryClause
 
 @testset verbose = true "FacePattern" begin
     @testset "Face" begin
@@ -179,45 +179,46 @@ using Chmy: candidates, BoundaryClause, Next
 end
 
 @testset "regions" begin
-    @test -1 // 2 ∈ Ghost()
+    # ξ is the signed distance along the outward normal, positive in the ghost region
+    @test 1 // 2 ∈ Ghost()
     @test 0 // 1 ∉ Ghost()
     @test 0 // 1 ∈ OnBoundary()
     @test -1 // 2 ∉ OnBoundary()
     @test 1 // 2 ∉ OnBoundary()
     @test 0 // 1 ∉ NearBoundary(2)
-    @test 1 // 2 ∈ NearBoundary(2)
-    @test 2 // 1 ∈ NearBoundary(2)
-    @test 5 // 2 ∉ NearBoundary(2)
+    @test -1 // 2 ∈ NearBoundary(2)
+    @test -2 // 1 ∈ NearBoundary(2)
+    @test -5 // 2 ∉ NearBoundary(2)
 end
 
 @testset "position" begin
-    @test Chmy.position(Near(Lower(), 2), 0) == Near(Lower(), 2)
-    @test Chmy.position(Near(Lower(), 1), 1 // 2) == Near(Lower(), 3 // 2)
-    @test Chmy.position(Near(Upper(), 2), 1) == Near(Upper(), 1)
-    @test Chmy.position(Near(Upper(), 1 // 2), 1) == Near(Upper(), -1 // 2)
+    # positive offsets move inward from the lower wall and outward from the upper one
+    @test Chmy.position(Near(Lower(), -2), 0) == Near(Lower(), -2)
+    @test Chmy.position(Near(Lower(), -1), 1 // 2) == Near(Lower(), -3 // 2)
+    @test Chmy.position(Near(Upper(), -2), 1) == Near(Upper(), -1)
+    @test Chmy.position(Near(Upper(), -1 // 2), 1) == Near(Upper(), 1 // 2)
     @test Chmy.position(Far(), 3) == Far()
 end
 
 @testset "candidates" begin
     L, U = Lower(), Upper()
-    # clauses with a placeholder resolution, only patterns and regions matter here
-    clauses(pairs...) = map(p -> BoundaryClause(first(p), last(p), Next()), pairs)
+    clauses(pairs...) = map(p -> BoundaryClause(first(p), last(p)), pairs)
     # no near axes, or near axes outside the region
     @test isempty(candidates((Far(), Far()), clauses(Left() => Ghost())))
-    @test isempty(candidates((Near(L, 3), Far()), clauses(Left() => NearBoundary(2))))
+    @test isempty(candidates((Near(L, -3), Far()), clauses(Left() => NearBoundary(2))))
     # higher codimension first, then the lower axis on a tie
     on = (Near(L, 0), Near(L, 0))
     @test candidates(on, clauses(AnyWall() => OnBoundary(), AnyCorner() => OnBoundary())) == [[1, 2] => 2, [1] => 1, [2] => 1]
     # ghost axes before boundary axes, whatever the declaration order
-    ghost_on = (Near(L, 0), Near(L, -1 // 2))
+    ghost_on = (Near(L, 0), Near(L, 1 // 2))
     @test candidates(ghost_on, clauses(Left() => OnBoundary(), Bottom() => Ghost())) == [[2] => 2, [1] => 1]
     # a corner key needs every axis of the corner in its region
     @test candidates(ghost_on, clauses(Left() => OnBoundary(), Bottom() => Ghost(), AnyCorner() => Ghost())) == [[2] => 2, [1] => 1]
     # the first matching clause of a face acts, later ones are shadowed; faces are ordered by their clause
-    ghosts = (Near(L, -1 // 2), Near(L, -1 // 2))
+    ghosts = (Near(L, 1 // 2), Near(L, 1 // 2))
     @test candidates(ghosts, clauses(Left() => Ghost(), AnyWall() => Ghost())) == [[1] => 1, [2] => 2]
     # upper sides
-    near = (Near(U, 1 // 2), Near(L, 1 // 2))
+    near = (Near(U, -1 // 2), Near(L, -1 // 2))
     @test candidates(near, clauses(AnyCorner() => NearBoundary(1), Right() => NearBoundary(1))) == [[1, 2] => 1, [1] => 2]
     # 3D: corner, then the one named edge, then the wall
     on3 = (Near(L, 0), Near(L, 0), Near(L, 0))

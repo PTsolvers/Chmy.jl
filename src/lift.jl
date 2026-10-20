@@ -10,7 +10,7 @@ struct Lifted{O <: Operator, K} <: Operator
     of `op` is taken along `axes[k]`. The axes may be in any order, e.g. `Lifted(op, 3, 1)` applies
     the first dimension of `op` along the third axis and the second along the first. A negative axis
     `-i` mirrors the stencil, i.e. the corresponding dimension of `op` is taken along the axis `i` with
-    negated offsets, so that a rule written once for the lower wall can be reused at the upper wall.
+    negated offsets, so that a rule written once for the upper wall can be reused at the lower wall.
     """
     function Lifted(op::O, axes::NTuple{K, Integer}) where {O <: Operator, K}
         K > 0 || throw(ArgumentError("at least one lifted axis is required"))
