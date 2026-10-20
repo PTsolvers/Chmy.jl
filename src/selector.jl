@@ -1,25 +1,23 @@
-abstract type BoundaryRule <: Operator end
+# boundary operators carry no data, the data are the arguments of their calls, e.g. `Dirichlet()(g)`,
+# and the selected term is prepended to them when the operator is applied
+abstract type BoundaryOperator <: Operator end
 
-struct Next <: BoundaryRule end
-struct Add <: BoundaryRule
-    val::DTerm
-end
-struct Scale <: BoundaryRule
-    val::DTerm
-end
+# the data of boundary operators may be tensors
+checkranks(::BoundaryOperator, ::NTuple{N, DTerm}) where {N} = nothing
 
-struct Dirichlet <: BoundaryRule
-    g::DTerm
-end
+struct Next <: BoundaryOperator end
+struct Add <: BoundaryOperator end
+struct Scale <: BoundaryOperator end
+struct Dirichlet <: BoundaryOperator end
+struct Neumann <: BoundaryOperator end
 
-struct Neumann <: BoundaryRule
-    g::DTerm
-end
+# an operator without data can be given without a call
+asrule(r::DTerm) = r
+asrule(op::BoundaryOperator) = op()
 
 struct BoundaryClause
     pattern::FacePattern
     region::GridRegion
-    resolution::BoundaryRule
 end
 
 struct Selector <: Operator
@@ -58,21 +56,22 @@ function candidates(pos::Block{N}, clauses::Tuple{Vararg{BoundaryClause}}) where
     return sort!(faces; by = priority)
 end
 
+# the selector call holds the selected term followed by the boundary operator calls of the clauses
 function select(term::DTerm, rules::Pair...)
-    clauses = map(p -> BoundaryClause(p[1], p[2]...), rules)
-    return Selector(clauses)(term)
+    clauses = map(p -> BoundaryClause(p[1], first(p[2])), rules)
+    return Selector(clauses)(term, map(p -> asrule(last(p[2])), rules)...)
 end
 
-tensorrank(::Selector, args::Tuple{DTerm}) = tensorrank(only(args))
-function checkranks(::Selector, args::Tuple{DTerm})
-    tensorrank(only(args)) > 0 && throw(ArgumentError("only scalar arguments are supported by selectors for now"))
+tensorrank(::Selector, args::Tuple{Vararg{DTerm}}) = tensorrank(first(args))
+function checkranks(::Selector, args::Tuple{Vararg{DTerm}})
+    tensorrank(first(args)) > 0 && throw(ArgumentError("only scalar arguments are supported by selectors for now"))
     return
 end
 
-tensorrank(site::SiteSelector, args::Tuple{DTerm}) = tensorrank(site.selector, args)
-checkranks(site::SiteSelector, args::Tuple{DTerm}) = checkranks(site.selector, args)
+tensorrank(site::SiteSelector, args::Tuple{Vararg{DTerm}}) = tensorrank(site.selector, args)
+checkranks(site::SiteSelector, args::Tuple{Vararg{DTerm}}) = checkranks(site.selector, args)
 
-function stencil_rule(sel::Selector, args::Tuple{DTerm}, ctx::LowerContext{N}) where {N}
+function stencil_rule(sel::Selector, args::Tuple{Vararg{DTerm}}, ctx::LowerContext{N}) where {N}
     pos = map(position, ctx.blck, ctx.offs)
     # the number of faces and their codimensions are only known at runtime
     faces = Tuple(Tuple(axes) => i for (axes, i) in candidates(pos, sel.clauses))
@@ -80,12 +79,11 @@ function stencil_rule(sel::Selector, args::Tuple{DTerm}, ctx::LowerContext{N}) w
     return stencil_rule(site, args, ctx)
 end
 
-function stencil_rule(site::SiteSelector{N}, args::Tuple{DTerm}, ctx::LowerContext{N}) where {N}
+function stencil_rule(site::SiteSelector{N}, args::Tuple{Vararg{DTerm}}, ctx::LowerContext{N}) where {N}
     if ctx.offs != site.offsets
         return stencil_rule(site.selector, args, ctx)
     end
-    arg = only(args)
-    isempty(site.faces) && return here(arg, ctx)
+    isempty(site.faces) && return here(first(args), ctx)
     axes, i = first(site.faces)
     rest = SiteSelector(
         site.selector,
@@ -93,46 +91,45 @@ function stencil_rule(site::SiteSelector{N}, args::Tuple{DTerm}, ctx::LowerConte
         Base.tail(site.faces)
     )(args...)
     pos = map(position, ctx.blck, ctx.offs)
-    signed_axes = ntuple(length(axes)) do k
-        a = axes[k]
-        pos[a].side isa Upper ? -a : a
-    end
-    lifted = Lifted(site.selector.clauses[i].resolution, signed_axes)
-    return stencil_rule(lifted, (rest,), ctx)
+    # rules are written in the frame of the outward normal, i.e. for the upper wall
+    signed_axes = ntuple(k -> outward(pos[axes[k]].side) * axes[k], length(axes))
+    rule = args[1 + i]
+    lifted = Lifted(operation(rule), signed_axes)
+    return stencil_rule(lifted, (rest, arguments(rule)...), ctx)
 end
 
 # the value of `x` at the sample being resolved
 here(x::DTerm, ::LowerContext{N}) where {N} = x[zero_offsets(Val(N))...]
 
-function stencil_rule(r::BoundaryRule, args, ::LowerContext{N}) where {N}
-    return throw(ArgumentError(lazy"rule of type `$(typeof(r))` has no `stencil_rule` defined for codimension $N"))
+function stencil_rule(r::BoundaryOperator, args, ::LowerContext{N}) where {N}
+    return throw(ArgumentError(lazy"boundary operator of type `$(typeof(r))` has no `stencil_rule` defined for $(length(args)) arguments and codimension $N"))
 end
 
-stencil_rule(::Next, args::Tuple{DTerm}, ctx::LowerContext) = here(only(args), ctx)
-stencil_rule(a::Add, args::Tuple{DTerm}, ctx::LowerContext) = here(only(args), ctx) + here(a.val, ctx)
-stencil_rule(s::Scale, args::Tuple{DTerm}, ctx::LowerContext) = here(s.val, ctx) * here(only(args), ctx)
+stencil_rule(::Next, (u,)::Tuple{DTerm}, ctx::LowerContext) = here(u, ctx)
+stencil_rule(::Add, (u, e)::Tuple{DTerm, DTerm}, ctx::LowerContext) = here(u, ctx) + here(e, ctx)
+stencil_rule(::Scale, (u, w)::Tuple{DTerm, DTerm}, ctx::LowerContext) = here(w, ctx) * here(u, ctx)
 
 ξ(ctx::LowerContext) = position(first(ctx.blck), first(ctx.offs)).ξ
 
 trace(x::DTerm, ctx::LowerContext) = isuniform(x) ? x : x[-ξ(ctx)]
 
-function stencil_rule(bc::Dirichlet, args::Tuple{DTerm}, ctx::LowerContext{1})
-    arg = only(args)
+function stencil_rule(::Dirichlet, (u, g)::Tuple{DTerm, DTerm}, ctx::LowerContext{1})
     ξb = ξ(ctx)
     if ξb == 0
-        return trace(bc.g, ctx)
+        return trace(g, ctx)
     end
-    if ξb < 0
-        return 2trace(bc.g, ctx) - arg[-2ξb]
+    if ξb > 0
+        # the mirror sample inside the domain
+        return 2trace(g, ctx) - u[-2ξb]
     end
-    throw(ArgumentError(lazy"Dirichlet rule can only be declared with Ghost() or OnBoundary() regions with ξ ≤ 0, got ξ = $ξb"))
+    throw(ArgumentError(lazy"Dirichlet rule can only be declared with Ghost() or OnBoundary() regions with ξ ≥ 0, got ξ = $ξb"))
 end
 
-function stencil_rule(bc::Neumann, args::Tuple{DTerm}, ctx::LowerContext{1})
-    arg = only(args)
+# `g` is the outward normal derivative
+function stencil_rule(::Neumann, (u, g)::Tuple{DTerm, DTerm}, ctx::LowerContext{1})
     ξb = ξ(ctx)
-    if ξb < 0
-        return arg[-2ξb] - 2ξb * trace(bc.g, ctx)
+    if ξb > 0
+        return u[-2ξb] + 2ξb * trace(g, ctx)
     end
-    throw(ArgumentError(lazy"Neumann rule can only be declared with Ghost() region with ξ < 0, got ξ = $ξb"))
+    throw(ArgumentError(lazy"Neumann rule can only be declared with Ghost() region with ξ > 0, got ξ = $ξb"))
 end
