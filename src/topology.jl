@@ -118,11 +118,18 @@ struct OnBoundary end
 struct NearBoundary
     w::Rational{Int}
 end
-const GridRegion = Union{NearBoundary, OnBoundary, Ghost}
+struct EitherRegion{P, Q}
+    p::P
+    q::Q
+end
+const GridRegion = Union{NearBoundary, OnBoundary, Ghost, EitherRegion}
 
 Base.in(ξ::Rational, ::Ghost) = ξ > zero(ξ)
 Base.in(ξ::Rational, ::OnBoundary) = iszero(ξ)
 Base.in(ξ::Rational, r::NearBoundary) = -r.w <= ξ < zero(ξ)
+Base.in(ξ::Rational, r::EitherRegion) = ξ ∈ r.p || ξ ∈ r.q
+
+Base.:|(p::GridRegion, q::GridRegion) = EitherRegion(p, q)
 
 # lowering context
 

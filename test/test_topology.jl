@@ -189,6 +189,10 @@ end
     @test -1 // 2 ∈ NearBoundary(2)
     @test -2 // 1 ∈ NearBoundary(2)
     @test -5 // 2 ∉ NearBoundary(2)
+    # a union of regions
+    @test 0 // 1 ∈ Ghost() | OnBoundary()
+    @test 1 // 2 ∈ Ghost() | OnBoundary()
+    @test -1 // 2 ∉ Ghost() | OnBoundary()
 end
 
 @testset "position" begin
@@ -202,30 +206,47 @@ end
 
 @testset "candidates" begin
     L, U = Lower(), Upper()
-    clauses(pairs...) = map(p -> BoundaryClause(first(p), last(p)), pairs)
+    clauses(pairs...) = map(p -> BoundaryClause(first(p), last(p), ()), pairs)
     # no near axes, or near axes outside the region
-    @test isempty(candidates((Far(), Far()), clauses(Left() => Ghost())))
-    @test isempty(candidates((Near(L, -3), Far()), clauses(Left() => NearBoundary(2))))
+    @test isempty(candidates((Far(), Far()), (), clauses(Left() => Ghost())))
+    @test isempty(candidates((Near(L, -3), Far()), (), clauses(Left() => NearBoundary(2))))
     # higher codimension first, then the lower axis on a tie
     on = (Near(L, 0), Near(L, 0))
-    @test candidates(on, clauses(AnyWall() => OnBoundary(), AnyCorner() => OnBoundary())) == [[1, 2] => 2, [1] => 1, [2] => 1]
+    @test candidates(on, (), clauses(AnyWall() => OnBoundary(), AnyCorner() => OnBoundary())) == [[1, 2] => 2, [1] => 1, [2] => 1]
     # ghost axes before boundary axes, whatever the declaration order
     ghost_on = (Near(L, 0), Near(L, 1 // 2))
-    @test candidates(ghost_on, clauses(Left() => OnBoundary(), Bottom() => Ghost())) == [[2] => 2, [1] => 1]
+    @test candidates(ghost_on, (), clauses(Left() => OnBoundary(), Bottom() => Ghost())) == [[2] => 2, [1] => 1]
     # a corner key needs every axis of the corner in its region
-    @test candidates(ghost_on, clauses(Left() => OnBoundary(), Bottom() => Ghost(), AnyCorner() => Ghost())) == [[2] => 2, [1] => 1]
+    @test candidates(ghost_on, (), clauses(Left() => OnBoundary(), Bottom() => Ghost(), AnyCorner() => Ghost())) == [[2] => 2, [1] => 1]
     # the first matching clause of a face acts, later ones are shadowed; faces are ordered by their clause
     ghosts = (Near(L, 1 // 2), Near(L, 1 // 2))
-    @test candidates(ghosts, clauses(Left() => Ghost(), AnyWall() => Ghost())) == [[1] => 1, [2] => 2]
+    @test candidates(ghosts, (), clauses(Left() => Ghost(), AnyWall() => Ghost())) == [[1] => 1, [2] => 2]
     # upper sides
     near = (Near(U, -1 // 2), Near(L, -1 // 2))
-    @test candidates(near, clauses(AnyCorner() => NearBoundary(1), Right() => NearBoundary(1))) == [[1, 2] => 1, [1] => 2]
+    @test candidates(near, (), clauses(AnyCorner() => NearBoundary(1), Right() => NearBoundary(1))) == [[1, 2] => 1, [1] => 2]
     # 3D: corner, then the one named edge, then the wall
     on3 = (Near(L, 0), Near(L, 0), Near(L, 0))
     rules3 = clauses(Left() => OnBoundary(), Face(L, L, Span()) => OnBoundary(), AnyCorner() => OnBoundary())
-    @test candidates(on3, rules3) == [[1, 2, 3] => 3, [1, 2] => 2, [1] => 1]
+    @test candidates(on3, (), rules3) == [[1, 2, 3] => 3, [1, 2] => 2, [1] => 1]
     # malformed rules throw even without near axes
-    @test_throws ArgumentError candidates((Far(), Far()), clauses((Left() | AnyCorner()) => Ghost()))
-    @test_throws ArgumentError candidates(on, clauses(Face(L, L, Span()) => OnBoundary()))
-    @test (@inferred candidates(on3, rules3)) == [[1, 2, 3] => 3, [1, 2] => 2, [1] => 1]
+    @test_throws ArgumentError candidates((Far(), Far()), (), clauses((Left() | AnyCorner()) => Ghost()))
+    @test_throws ArgumentError candidates(on, (), clauses(Face(L, L, Span()) => OnBoundary()))
+    @test (@inferred candidates(on3, (), rules3)) == [[1, 2, 3] => 3, [1, 2] => 2, [1] => 1]
+end
+
+@testset "candidates of tensor components" begin
+    L = Lower()
+    on = (Near(L, 0), Near(L, 0))
+    sliced = (BoundaryClause(AnyWall(), OnBoundary(), (Normal(),)), BoundaryClause(AnyWall(), OnBoundary(), (Tangential(),)))
+    # the normal component of each wall takes the first clause, the tangential one the second, faces are ordered by their clause
+    @test candidates(on, (1,), sliced) == [[1] => 1, [2] => 2]
+    @test candidates(on, (2,), sliced) == [[2] => 1, [1] => 2]
+    # fixed components and every component
+    fixed = (BoundaryClause(Left(), OnBoundary(), (2, :)),)
+    @test candidates(on, (2, 1), fixed) == [[1] => 1]
+    @test isempty(candidates(on, (1, 2), fixed))
+    @test (@inferred candidates(on, (1,), sliced)) == [[1] => 1, [2] => 2]
+    # normal and tangential components are only defined on walls, and fixed components must exist
+    @test_throws ArgumentError candidates(on, (1,), (BoundaryClause(AnyCorner(), OnBoundary(), (Normal(),)),))
+    @test_throws ArgumentError candidates(on, (1,), (BoundaryClause(Left(), OnBoundary(), (3,)),))
 end

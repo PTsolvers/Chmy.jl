@@ -64,8 +64,8 @@ lowerat(expr, locs, block) = simplify(locate(lower(expr, block), locs))
     @testset "site instances" begin
         # instances built independently at the same site are equal, so they compare and hash by content
         sel = operation(select(u, Left() => OnBoundary() => Add()(p)))
-        a = SiteSelector(sel, (0 // 1, 0 // 1), (((1,) => 1),))
-        b = SiteSelector(sel, (0 // 1, 0 // 1), (((1,) => 1),))
+        a = SiteSelector(sel, (), (0 // 1, 0 // 1), (((1,) => 1),))
+        b = SiteSelector(sel, (), (0 // 1, 0 // 1), (((1,) => 1),))
         @test a == b
         @test hash(a) == hash(b)
     end
@@ -111,5 +111,63 @@ lowerat(expr, locs, block) = simplify(locate(lower(expr, block), locs))
         Δũ = D[1](D[1](ũ)) + D[2](D[2](ũ))
         expected = u[𝓈, 𝓈][1, 0] + u[𝓈, 𝓈][0, 1] - 4 * u[𝓈, 𝓈][0, 0] + 2uL + ĝ
         @test lowerat(Δũ, (𝓈, 𝓈), (Near(L, -1 // 2), Near(L, -1 // 2))) ==ₛ simplify(expected)
+    end
+end
+
+@testset "tensor slices" begin
+    @vectors V t
+    @tensors 2 σ
+    @uniform @scalars g h
+    L, U = Lower(), Upper()
+    bottom, top = (Far(), Near(L, 0)), (Far(), Near(U, 0))
+
+    @testset "vectors" begin
+        # the normal component is taken along the outward normal, so it changes sign at the lower wall
+        V̄ = select(V, AnyWall() => OnBoundary() => Normal() => Dirichlet()(g))
+        @test lowerat(V̄[2], (𝓅, 𝓅), bottom) ==ₛ simplify(-g)
+        @test lowerat(V̄[2], (𝓅, 𝓅), top) ==ₛ g
+        @test lowerat(V̄[1], (𝓅, 𝓅), bottom) ==ₛ V[1][𝓅, 𝓅][0, 0]
+        # a later clause applies to the components that the earlier one does not match
+        V̄ = select(V, Bottom() => OnBoundary() => Normal() => Dirichlet()(g), Bottom() => OnBoundary() => Tangential() => Add()(h))
+        @test lowerat(V̄[1], (𝓅, 𝓅), bottom) ==ₛ simplify(V[1][𝓅, 𝓅][0, 0] + h)
+        # fixed and all components are in the local frame as well
+        @test lowerat(select(V, Bottom() => OnBoundary() => 2 => Dirichlet()(g))[2], (𝓅, 𝓅), bottom) ==ₛ simplify(-g)
+        @test lowerat(select(V, Bottom() => OnBoundary() => (:) => Dirichlet()(g))[1], (𝓅, 𝓅), bottom) ==ₛ g
+    end
+
+    @testset "rank 2" begin
+        # vector data are indexed by the free slots
+        σ̄ = select(σ, AnyWall() => Ghost() => (Normal(), :) => Dirichlet()(t))
+        @test lowerat(σ̄[2, 1], (𝓈, 𝓈), (Far(), Near(U, 1 // 2))) ==ₛ simplify(2 * t[1][𝓈, 𝓅][0, 0] - σ[2, 1][𝓈, 𝓈][0, -1])
+        @test lowerat(σ̄[2, 1], (𝓈, 𝓈), (Far(), Near(L, 1 // 2))) ==ₛ simplify(-2 * t[1][𝓈, 𝓅][0, 1] - σ[2, 1][𝓈, 𝓈][0, 1])
+        # two indices along the normal keep the sign
+        @test lowerat(σ̄[2, 2], (𝓈, 𝓈), (Far(), Near(L, 1 // 2))) ==ₛ simplify(2 * t[2][𝓈, 𝓅][0, 1] - σ[2, 2][𝓈, 𝓈][0, 1])
+        @test lowerat(σ̄[1, 2], (𝓈, 𝓈), (Far(), Near(L, 1 // 2))) ==ₛ σ[1, 2][𝓈, 𝓈][0, 0]
+    end
+
+    @testset "stokes" begin
+        @scalars P
+        @uniform @scalars η
+        grad = Gradient(StaggeredCentralDifference())
+        # no penetration on the bottom wall
+        V̄ = select(V, Bottom() => OnBoundary() => Normal() => Dirichlet()(Literal(0)))
+        τ = -P * ℐ(2) + 2η * sym(grad(V̄))
+        # free slip on the bottom wall, free surface on the top wall
+        τ̄ = select(
+            τ, Bottom() => OnBoundary() => (Normal(), Tangential()) => Dirichlet()(Literal(0)),
+            Top() => Ghost() | OnBoundary() => (Normal(), :) => Dirichlet()(𝒪(1))
+        )
+        @test lowerat(τ̄[2, 1], (𝓅, 𝓅), bottom) ==ₛ Literal(0)
+        @test lowerat(τ̄[1, 1], (𝓅, 𝓅), bottom) ==ₛ lowerat(τ[1, 1], (𝓅, 𝓅), bottom)
+        # the ghost value mirrors the value inside the domain
+        ghost = (Far(), Near(U, 1 // 2))
+        @test lowerat(τ̄[2, 2], (𝓈, 𝓈), ghost) ==ₛ simplify(-lowerat(τ[2, 2][0, -1], (𝓈, 𝓈), ghost))
+    end
+
+    @testset "malformed slices" begin
+        # the slice has one slot per index, and tensor data have the rank of its free slots
+        @test_throws ArgumentError select(V, Left() => Ghost() => Dirichlet()(g))
+        @test_throws ArgumentError select(σ, Left() => Ghost() => Normal() => Dirichlet()(g))
+        @test_throws ArgumentError select(σ, Left() => Ghost() => (Normal(), 1) => Dirichlet()(t))
     end
 end
