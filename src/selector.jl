@@ -29,6 +29,60 @@ Matches every tensor component tangential to a wall in a tensor slice of a bound
 """
 struct Tangential end
 
+"""
+    AnyNormal()
+
+The outward unit normal of the wall, a vector that is only known when a boundary clause is resolved at a wall, so it
+can only appear in the data of boundary rules. See also `𝐧`.
+"""
+struct AnyNormal <: Operator end
+
+"""
+    AnyTangent(k = 1)
+
+The unit tangent of the wall along the component matched by the `k`-th `Tangential()` slot of a tensor slice, a vector
+that is only known when a boundary clause is resolved, so it can only appear in the data of boundary rules. See also `𝐭`.
+"""
+struct AnyTangent <: Operator
+    slot::Int
+end
+AnyTangent() = AnyTangent(1)
+
+tensorrank(::Union{AnyNormal, AnyTangent}, args) = 1
+
+const 𝐧 = AnyNormal()()
+const 𝐭 = AnyTangent()()
+
+printop(io, ::AnyNormal, args) = print(io, '𝐧')
+function printop(io, t::AnyTangent, args)
+    print(io, '𝐭')
+    t.slot == 1 || print_subscript(io, t.slot)
+    return
+end
+
+unitvector(a, s, dims) = pack([i == a ? s : 0 for i in 1:dims])
+
+# the vectors of the wall with the signed outward axes `signed_axes` in the global frame, where `tangents` are the
+# components of the tangential slots, other operators are kept
+wallvector(op::Operator, signed_axes, tangents, dims) = nothing
+function wallvector(::AnyNormal, signed_axes, tangents, dims)
+    length(signed_axes) == 1 ||
+        throw(ArgumentError(lazy"the normal is only defined on walls, got a face of codimension $(length(signed_axes))"))
+    a = only(signed_axes)
+    return unitvector(abs(a), sign(a), dims)
+end
+function wallvector(t::AnyTangent, signed_axes, tangents, dims)
+    t.slot <= length(tangents) ||
+        throw(ArgumentError(lazy"the tangent $(t.slot) requires as many tangential slots, got $(length(tangents))"))
+    # tangential axes are never mirrored, so the tangent is the same in the global and the local frame
+    return unitvector(tangents[t.slot], 1, dims)
+end
+
+# replace the normal and tangent vectors in the data `g` with their components at the resolved wall
+function wallvectors(g::DTerm, signed_axes, tangents, dims)
+    return postwalk(t -> iscall(t) ? wallvector(operation(t), signed_axes, tangents, dims) : nothing, g)
+end
+
 # a tensor slice holds one slot per tensor index: `:` matches every component, `i` the i-th component, and `Normal()`
 # and `Tangential()` the components normal and tangential to a wall
 struct BoundaryClause
@@ -59,10 +113,23 @@ matchslice(slice, comps, axes)::Bool = all(map((s, c) -> matchslot(s, c, axes), 
 isfree(::Union{Colon, Tangential}) = true
 isfree(::Union{Int, Normal}) = false
 
-freecomps(slice, comps) = Tuple(c for (s, c) in zip(slice, comps) if isfree(s))
+istangential(::Tangential) = true
+istangential(::Union{Colon, Int, Normal}) = false
 
-# scalar data apply to every component of the slice
-slicedata(g::DTerm, slice, comps) = tensorrank(g) == 0 ? g : g[freecomps(slice, comps)...]
+freecomps(slice, comps) = Tuple(c for (s, c) in zip(slice, comps) if isfree(s))
+tangentcomps(slice, comps) = Tuple(c for (s, c) in zip(slice, comps) if istangential(s))
+
+# rules are written in the frame of the outward normal, where a component changes sign with every index along a
+# mirrored axis
+orient(x, comps, signed_axes) = isodd(count(c -> -c ∈ signed_axes, comps)) ? -x : x
+
+# scalar data apply to every component of the slice, while tensor data are given in the global frame and their
+# components are taken in the frame of the outward normal
+function slicedata(g::DTerm, slice, comps, signed_axes)
+    tensorrank(g) == 0 && return g
+    free = freecomps(slice, comps)
+    return orient(g[free...], free, signed_axes)
+end
 
 struct Selector <: Operator
     clauses::Tuple{Vararg{BoundaryClause}}
@@ -143,6 +210,10 @@ tensorrank(site::SiteSelector, args::Tuple{Vararg{DTerm}}) = tensorrank(site.sel
 # the arguments of a site selector are the ones of its selector, checked when the selector call was built
 checkranks(::SiteSelector, ::Tuple{Vararg{DTerm}}) = nothing
 
+# a selector prints as the selected term, highlighted in red
+printop(io, ::Union{Selector, SiteSelector}, args) = printstyled(io, first(args); color = :red)
+printprec(::Union{Selector, SiteSelector}, args) = printprec(first(args))
+
 function lower_rule(sel::Selector, args, comps, offs, block)
     pos = map(position, block, offs)
     # the number of faces and their codimensions are only known at runtime
@@ -166,14 +237,15 @@ function lower_rule(site::SiteSelector, args, comps, offs, block)
     pos = map(position, block, offs)
     # rules are written in the frame of the outward normal, i.e. for the upper wall
     signed_axes = ntuple(k -> outward(pos[axes[k]].side) * axes[k], length(axes))
-    # the component in that frame changes sign with every index along a mirrored axis
-    flips = count(c -> -c ∈ signed_axes, comps)
-    orient(x) = isodd(flips) ? -x : x
     rule = args[1 + i]
     slice = site.selector.clauses[i].slice
-    data = map(g -> slicedata(g, slice, comps), arguments(rule))
+    tangents = tangentcomps(slice, comps)
+    data = map(arguments(rule)) do g
+        slicedata(wallvectors(g, signed_axes, tangents, length(offs)), slice, comps, signed_axes)
+    end
     lifted = Lifted(operation(rule), signed_axes)
-    return orient(lower_rule(lifted, (orient(rest[comps...]), data...), (), offs, block))
+    flip(x) = orient(x, comps, signed_axes)
+    return flip(lower_rule(lifted, (flip(rest[comps...]), data...), (), offs, block))
 end
 
 lower_rule(::Next, (u,)::Tuple{DTerm}, offs, block) = here(u, offs)

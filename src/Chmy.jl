@@ -86,7 +86,7 @@ include("simplify.jl")
 export Lifted
 include("lift.jl")
 
-export Normal, Tangential
+export Normal, Tangential, AnyNormal, AnyTangent, 𝐧, 𝐭
 include("selector.jl")
 
 export subs

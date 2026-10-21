@@ -140,8 +140,8 @@ end
         σ̄ = select(σ, AnyWall() => Ghost() => (Normal(), :) => Dirichlet()(t))
         @test lowerat(σ̄[2, 1], (𝓈, 𝓈), (Far(), Near(U, 1 // 2))) ==ₛ simplify(2 * t[1][𝓈, 𝓅][0, 0] - σ[2, 1][𝓈, 𝓈][0, -1])
         @test lowerat(σ̄[2, 1], (𝓈, 𝓈), (Far(), Near(L, 1 // 2))) ==ₛ simplify(-2 * t[1][𝓈, 𝓅][0, 1] - σ[2, 1][𝓈, 𝓈][0, 1])
-        # two indices along the normal keep the sign
-        @test lowerat(σ̄[2, 2], (𝓈, 𝓈), (Far(), Near(L, 1 // 2))) ==ₛ simplify(2 * t[2][𝓈, 𝓅][0, 1] - σ[2, 2][𝓈, 𝓈][0, 1])
+        # two indices along the normal keep the sign, while the vector data are global and change sign along the normal
+        @test lowerat(σ̄[2, 2], (𝓈, 𝓈), (Far(), Near(L, 1 // 2))) ==ₛ simplify(-2 * t[2][𝓈, 𝓅][0, 1] - σ[2, 2][𝓈, 𝓈][0, 1])
         @test lowerat(σ̄[1, 2], (𝓈, 𝓈), (Far(), Near(L, 1 // 2))) ==ₛ σ[1, 2][𝓈, 𝓈][0, 0]
     end
 
@@ -162,6 +162,38 @@ end
         # the ghost value mirrors the value inside the domain
         ghost = (Far(), Near(U, 1 // 2))
         @test lowerat(τ̄[2, 2], (𝓈, 𝓈), ghost) ==ₛ simplify(-lowerat(τ[2, 2][0, -1], (𝓈, 𝓈), ghost))
+    end
+
+    @testset "wall vectors" begin
+        @uniform @scalars β
+        @uniform @vectors W
+        @vectors v
+        # the normal points outwards, so the normal component of a global vector is the same at both walls
+        V̄ = select(V, AnyWall() => OnBoundary() => Normal() => Dirichlet()(W ⋅ 𝐧))
+        @test lowerat(V̄[2], (𝓅, 𝓅), bottom) ==ₛ W[2]
+        @test lowerat(V̄[2], (𝓅, 𝓅), top) ==ₛ W[2]
+        # a global vector along the normal
+        V̄ = select(V, AnyWall() => OnBoundary() => (:) => Dirichlet()(g * 𝐧))
+        @test lowerat(V̄[2], (𝓅, 𝓅), bottom) ==ₛ simplify(-g)
+        @test lowerat(V̄[2], (𝓅, 𝓅), top) ==ₛ g
+        @test lowerat(V̄[1], (𝓅, 𝓅), bottom) ==ₛ Literal(0)
+        # partial slip, the tangential traction is proportional to the tangential velocity
+        vᵗ = v - (v ⋅ 𝐧) * 𝐧
+        σ̄ = select(σ, AnyWall() => Ghost() => (Normal(), Tangential()) => Dirichlet()(β * vᵗ))
+        @test lowerat(σ̄[2, 1], (𝓈, 𝓈), (Far(), Near(L, 1 // 2))) ==ₛ simplify(-2β * v[1][𝓈, 𝓅][0, 1] - σ[2, 1][𝓈, 𝓈][0, 1])
+        @test lowerat(σ̄[2, 1], (𝓈, 𝓈), (Far(), Near(U, 1 // 2))) ==ₛ simplify(2β * v[1][𝓈, 𝓅][0, 0] - σ[2, 1][𝓈, 𝓈][0, -1])
+        @test lowerat(σ̄[1, 2], (𝓈, 𝓈), (Near(L, 1 // 2), Far())) ==ₛ simplify(-2β * v[2][𝓅, 𝓈][1, 0] - σ[1, 2][𝓈, 𝓈][1, 0])
+        # every tangential component has its own tangent
+        σ̄ = select(σ, Bottom() => Ghost() => (Normal(), Tangential()) => Dirichlet()(β * (v ⋅ 𝐭)))
+        bottom3 = (Far(), Near(L, 1 // 2), Far())
+        for c in (1, 3)
+            @test lowerat(σ̄[2, c], (𝓈, 𝓈, 𝓈), bottom3) ==ₛ simplify(-2β * v[c][𝓈, 𝓅, 𝓈][0, 1, 0] - σ[2, c][𝓈, 𝓈, 𝓈][0, 1, 0])
+        end
+        # the normal is only defined on walls, the tangent only for tangential slots, and both only in the rule data
+        corner = (Near(L, 0), Near(L, 0))
+        @test_throws ArgumentError lowerat(select(V, AnyCorner() => OnBoundary() => (:) => Dirichlet()(𝐧))[1], (𝓅, 𝓅), corner)
+        @test_throws ArgumentError lowerat(select(V, AnyWall() => OnBoundary() => Normal() => Dirichlet()(v ⋅ 𝐭))[2], (𝓅, 𝓅), bottom)
+        @test_throws ArgumentError lowerat(𝐧[1], (𝓅, 𝓅), bottom)
     end
 
     @testset "malformed slices" begin
