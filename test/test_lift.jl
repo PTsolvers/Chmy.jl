@@ -45,6 +45,16 @@ end
     @test_throws ArgumentError lower_rule(Lifted(op, (1, -3)), (f,), (), offs2, far2)
 end
 
+@testset "lifting tensors" begin
+    # tensor components are not mapped to the lifted axes, so only scalar calls of scalars can be lifted
+    @scalars f
+    @vectors V
+    d = CentralDifference()
+    offs, far = (0 // 1, 0 // 1), (Far(), Far())
+    @test_throws ArgumentError lower_rule(Lifted(Gradient(d), (2, 1)), (f,), (1,), offs, far)
+    @test_throws ArgumentError lower_rule(Lifted(Divergence(d), (2, 1)), (V,), (), offs, far)
+end
+
 @testset "lifting Near axes" begin
     @scalars f
     op = ShiftedStencil()

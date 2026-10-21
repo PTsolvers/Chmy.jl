@@ -32,6 +32,9 @@ flipside(n::Near) = Near(flip(n.side), n.ξ)
 
 function lower_rule(lf::Lifted{O, K}, args, comps, offs::NTuple{N, Rational{Int}}, block::Block{N}) where {O, K, N}
     maximum(abs, lf.axes) <= N || throw(ArgumentError("the lifted axes exceed the number of dimensions"))
+    # tensor components are not mapped to the lifted axes yet, so only scalar calls of scalars can be lifted
+    isempty(comps) || expansion_error(lf)
+    checkscalar(lf, args)
     # the offsets and the block restricted to the lifted axes, negating the offsets and flipping the wall sides
     # for negative axes
     loffs = map(a -> flipsign(offs[abs(a)], a), lf.axes)
