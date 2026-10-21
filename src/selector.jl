@@ -71,65 +71,59 @@ end
 tensorrank(site::SiteSelector, args::Tuple{Vararg{DTerm}}) = tensorrank(site.selector, args)
 checkranks(site::SiteSelector, args::Tuple{Vararg{DTerm}}) = checkranks(site.selector, args)
 
-function stencil_rule(sel::Selector, args::Tuple{Vararg{DTerm}}, ctx::LowerContext{N}) where {N}
-    pos = map(position, ctx.blck, ctx.offs)
+function lower_rule(sel::Selector, args, offs, block)
+    pos = map(position, block, offs)
     # the number of faces and their codimensions are only known at runtime
     faces = Tuple(Tuple(axes) => i for (axes, i) in candidates(pos, sel.clauses))
-    site = SiteSelector(sel, ctx.offs, faces)
-    return stencil_rule(site, args, ctx)
+    site = SiteSelector(sel, offs, faces)
+    return lower_rule(site, args, offs, block)
 end
 
-function stencil_rule(site::SiteSelector{N}, args::Tuple{Vararg{DTerm}}, ctx::LowerContext{N}) where {N}
-    if ctx.offs != site.offsets
-        return stencil_rule(site.selector, args, ctx)
+function lower_rule(site::SiteSelector, args, offs, block)
+    if offs != site.offsets
+        return lower_rule(site.selector, args, offs, block)
     end
-    isempty(site.faces) && return here(first(args), ctx)
+    isempty(site.faces) && return here(first(args), offs)
     axes, i = first(site.faces)
     rest = SiteSelector(
         site.selector,
         site.offsets,
         Base.tail(site.faces)
     )(args...)
-    pos = map(position, ctx.blck, ctx.offs)
+    pos = map(position, block, offs)
     # rules are written in the frame of the outward normal, i.e. for the upper wall
     signed_axes = ntuple(k -> outward(pos[axes[k]].side) * axes[k], length(axes))
     rule = args[1 + i]
     lifted = Lifted(operation(rule), signed_axes)
-    return stencil_rule(lifted, (rest, arguments(rule)...), ctx)
+    return lower_rule(lifted, (rest, arguments(rule)...), (), offs, block)
 end
 
-# the value of `x` at the sample being resolved
-here(x::DTerm, ::LowerContext{N}) where {N} = x[zero_offsets(Val(N))...]
+lower_rule(::Next, (u,)::Tuple{DTerm}, offs, block) = here(u, offs)
+lower_rule(::Add, (u, e)::Tuple{DTerm, DTerm}, offs, block) = here(u, offs) + here(e, offs)
+lower_rule(::Scale, (u, w)::Tuple{DTerm, DTerm}, offs, block) = here(w, offs) * here(u, offs)
 
-function stencil_rule(r::BoundaryOperator, args, ::LowerContext{N}) where {N}
-    return throw(ArgumentError(lazy"boundary operator of type `$(typeof(r))` has no `stencil_rule` defined for $(length(args)) arguments and codimension $N"))
-end
+ξ(offs, block) = position(first(block), first(offs)).ξ
 
-stencil_rule(::Next, (u,)::Tuple{DTerm}, ctx::LowerContext) = here(u, ctx)
-stencil_rule(::Add, (u, e)::Tuple{DTerm, DTerm}, ctx::LowerContext) = here(u, ctx) + here(e, ctx)
-stencil_rule(::Scale, (u, w)::Tuple{DTerm, DTerm}, ctx::LowerContext) = here(w, ctx) * here(u, ctx)
+# the value of `x` on the wall
+trace(x::DTerm, offs, block) = x[-ξ(offs, block)]
 
-ξ(ctx::LowerContext) = position(first(ctx.blck), first(ctx.offs)).ξ
-
-trace(x::DTerm, ctx::LowerContext) = isuniform(x) ? x : x[-ξ(ctx)]
-
-function stencil_rule(::Dirichlet, (u, g)::Tuple{DTerm, DTerm}, ctx::LowerContext{1})
-    ξb = ξ(ctx)
+function lower_rule(::Dirichlet, (u, g)::Tuple{DTerm, DTerm}, offs::NTuple{1, Rational{Int}}, block::Block{1})
+    ξb = ξ(offs, block)
     if ξb == 0
-        return trace(g, ctx)
+        return trace(g, offs, block)
     end
     if ξb > 0
         # the mirror sample inside the domain
-        return 2trace(g, ctx) - u[-2ξb]
+        return 2trace(g, offs, block) - u[-2ξb]
     end
     throw(ArgumentError(lazy"Dirichlet rule can only be declared with Ghost() or OnBoundary() regions with ξ ≥ 0, got ξ = $ξb"))
 end
 
 # `g` is the outward normal derivative
-function stencil_rule(::Neumann, (u, g)::Tuple{DTerm, DTerm}, ctx::LowerContext{1})
-    ξb = ξ(ctx)
+function lower_rule(::Neumann, (u, g)::Tuple{DTerm, DTerm}, offs::NTuple{1, Rational{Int}}, block::Block{1})
+    ξb = ξ(offs, block)
     if ξb > 0
-        return u[-2ξb] + 2ξb * trace(g, ctx)
+        return u[-2ξb] + 2ξb * trace(g, offs, block)
     end
     throw(ArgumentError(lazy"Neumann rule can only be declared with Ghost() region with ξ > 0, got ξ = $ξb"))
 end

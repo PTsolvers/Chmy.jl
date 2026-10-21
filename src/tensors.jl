@@ -1,52 +1,19 @@
 """
-    components(expr, dims)
+    components(term, dims)
 
-Convert `expr` to component form in `dims` spatial dimensions, where every tensor is a [`pack`](@ref)
-of scalar entries. Expressions already in component form are returned unchanged.
+Return `term` in component form in `dims` spatial dimensions, i.e. a [`pack`](@ref) of the components `term[I...]`,
+which are not expanded further. Scalars and tensors already in component form are returned unchanged.
 """
 function components(t::DTerm, dims::Integer)::DTerm
-    dims > 0 || throw(ArgumentError("dims must pe positive integer"))
-    return something(components_changed(t, dims), t)
-end
-
-# returns nothing if `t` is already in component form
-function components_changed(t::DTerm, dims::Integer)::Union{Nothing, DTerm}
+    dims > 0 || throw(ArgumentError("dims must be a positive integer"))
+    tensorrank(t) == 0 && return t
     return @match t begin
-        Tensor(rank, _, kind, _) => begin
-            iszero(rank) && return nothing
-            pack(kind, rank, dims) do I
-                makecomp_unchecked(t, I)
-            end
-        end
-        ZeroTensor(rank) => begin
-            iszero(rank) && return ZERO
-            literal_pack(ZERO, dims, rank)
-        end
-        IdTensor(rank) => begin
-            iszero(rank) && return ONE
-            literal_pack(ONE, dims, rank)
-        end
-        DExpr(Comp(I), (arg,)) => begin
-            istensor(arg) && return nothing
-            components(arg, dims)[I...]
-        end
-        DExpr(Pack(_, d, _), _) && if d != dims end => pack_dims_error(d, dims)
-        DExpr(Call(op), args) => begin
-            lowered = components_args(args, dims)
-            result = evaluate(op, something(lowered, args), dims)
-            isnothing(result) || return result
-            # tensor-valued calls must be expanded to the component form
-            tensorrank(t) > 0 && expansion_error(op)
-            # the call is already in component form, rebuild it only if the arguments changed
-            isnothing(lowered) && return nothing
-            makecall_unchecked(op, lowered)
-        end
-        DExpr(_, args) => begin
-            lowered = components_args(args, dims)
-            isnothing(lowered) && return nothing
-            DExpr(head(t), lowered::Tuple{Vararg{DTerm}})
-        end
-        _ => nothing
+        DExpr(Pack(_, d, _), _) => d == dims ? t : pack_dims_error(d, dims)
+        Tensor(rank, _, kind, _) => pack(I -> makecomp_unchecked(t, I), kind, rank, dims)
+        ZeroTensor(rank) => literal_pack(ZERO, dims, rank)
+        IdTensor(rank) => literal_pack(ONE, dims, rank)
+        # the kind of a tensor-valued expression is not known
+        _ => pack(I -> makecomp_unchecked(t, I), Kind.None(), tensorrank(t), dims)
     end
 end
 
@@ -57,17 +24,9 @@ end
     throw(ArgumentError(LazyString("tensor-valued operator '", op, "' has no expansion to the component form")))
 end
 
-# expand only when one of the arguments changes, reusing the unchanged prefix
-function components_args(args::NTuple{N, DTerm}, dims::Integer) where {N}
-    for k in eachindex(args)
-        arg = components_changed(args[k], dims)
-        isnothing(arg) && continue
-        return ntuple(Val(N)) do j
-            j < k ? args[j] : j == k ? arg : components(args[j], dims)
-        end
-    end
-    return nothing
-end
+# the component `I` of a tensor in component form, or the scalar itself
+component(t::DTerm, ::Tuple{}) = t
+component(t::DTerm, I::Tuple) = t[I...]
 
 """
     pack(array)
@@ -112,13 +71,12 @@ pack_entry(::Kind.Diag, dims, data, I) = allequal(I) ? data[I[1]] : ZERO
 # the same tensor with other entries
 repack(t::DTerm, data) = makepack_unchecked(tensorrank(t), packdims(t), tensorkind(t), Tuple(data))
 
-# `evaluate(op, args, dims)` rewrites a call once the number of dimensions is known, or when all tensor
-# arguments are in component form; returning `nothing` keeps the call `op(args...)` as is
-evaluate(::Operator, ::Tuple{Vararg{DTerm}}, ::Integer) = nothing
-evaluate(op::Fun, args::Tuple{Vararg{DTerm}}, ::Integer) = evaluate(op.f, args)
+# `evaluate(op, args)` evaluates a pointwise function of tensors in component form; returning `nothing` keeps
+# the call `op(args...)` as is
+evaluate(op::Fun, args::Tuple{Vararg{DTerm}}) = evaluate(op.f, args)
 evaluate(f, args::Tuple{Vararg{DTerm}}) = nothing
 
-function evaluate(op::BroadcastedFun, args::Tuple{Vararg{DTerm}}, ::Integer)
+function evaluate(op::BroadcastedFun, args::Tuple{Vararg{DTerm}})
     f = Fun(op)
     k = findfirst(x -> tensorrank(x) > 0, args)
     # broadcasting over scalars is a scalar call

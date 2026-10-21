@@ -1,9 +1,8 @@
 @inline function makecall(op::Operator, args::NTuple{N, DTerm}) where {N}
     checkranks(op, args)
-    dims = packed_dims(args)
-    isnothing(dims) && return makecall_unchecked(op, args)
-    # all tensor arguments are in component form, so the call is evaluated right away
-    return something(evaluate(op, args, dims), makecall_unchecked(op, args))
+    isnothing(packed_dims(args)) && return makecall_unchecked(op, args)
+    # all tensor arguments are in component form, so pointwise functions are evaluated right away
+    return something(evaluate(op, args), makecall_unchecked(op, args))
 end
 makecall(op::Operator, args::Vararg{DTerm, N}) where {N} = makecall(op, args)
 makecall_unchecked(op::Operator, args::NTuple{N, DTerm}) where {N} = DExpr(Call(op), args)

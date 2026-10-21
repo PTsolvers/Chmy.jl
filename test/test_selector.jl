@@ -1,9 +1,9 @@
 using Test
 using Chmy
-using Chmy: LowerContext, select, Next, Add, Scale, Dirichlet, Neumann, SiteSelector
+using Chmy: select, Next, Add, Scale, Dirichlet, Neumann, SiteSelector
 
-# lower `expr` at the block `block`, with the evaluation point at zero offsets
-lowerat(expr, locs, block) = simplify(lower(expr, LowerContext(locs, map(_ -> 0 // 1, locs), block)))
+# lower `expr` evaluated in the block `block`, and locate it at `locs`
+lowerat(expr, locs, block) = simplify(locate(lower(expr, block), locs))
 
 @testset "selector" begin
     @scalars u

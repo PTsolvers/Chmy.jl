@@ -77,7 +77,7 @@ export Ghost, OnBoundary, NearBoundary
 export Far, Near, At
 include("topology.jl")
 
-export stencil_rule, lower
+export lower_rule, lower, locate
 include("lowering.jl")
 
 export canonicalize, simplify

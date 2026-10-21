@@ -3,10 +3,6 @@ using Chmy
 using Chmy: Kind
 import LinearAlgebra
 
-# a scalar operator rewritten depending on the number of dimensions
-struct Scaled <: Operator end
-Chmy.evaluate(::Scaled, args::Tuple{DTerm}, dims::Integer) = only(args) / dims
-
 @testset "tensor components" begin
     @scalars a b c
     @vectors u v w
@@ -36,9 +32,23 @@ Chmy.evaluate(::Scaled, args::Tuple{DTerm}, dims::Integer) = only(args) / dims
         @test_throws BoundsError uc[3]
     end
 
+    @testset "expressions" begin
+        # the components of tensor-valued expressions are not expanded
+        product = @inferred components(A ⋅ B, 2)
+        @test tensorkind(product) == Kind.None()
+        @test product[1, 2] ==ₛ (A ⋅ B)[1, 2]
+        # scalars and tensors in component form are returned unchanged
+        scalar = sin(a) + b * u[1]
+        @test (@inferred components(scalar, 2)) === scalar
+        uc = components(u, 2)
+        @test (@inferred components(uc, 2)) === uc
+        @test_throws DimensionMismatch components(uc, 3)
+    end
+
     @testset "kind promotion and detection" begin
-        @test tensorkind(components(S + D, 2)) == Kind.Sym()
-        @test tensorkind(components(S + K, 2)) == Kind.None()
+        Sc, Kc, Dc = components(S, 2), components(K, 2), components(D, 2)
+        @test tensorkind(Sc + Dc) == Kind.Sym()
+        @test tensorkind(Sc + Kc) == Kind.None()
         z = Literal(0)
         for (data, kind) in (
                 (DTerm[a, b, b, c], Kind.Sym()),
@@ -53,47 +63,34 @@ Chmy.evaluate(::Scaled, args::Tuple{DTerm}, dims::Integer) = only(args) / dims
     end
 
     @testset "arithmetic and contractions" begin
+        # operations on tensors in component form are evaluated right away
+        uc, vc, wc = components(u, 2), components(v, 2), components(w, 2)
+        Ac, Bc = components(A, 2), components(B, 2)
         for (input, expected) in (
-                (-v, -v[1]),
-                (u - v, u[1] - v[1]),
-                (u + v + w, u[1] + v[1] + w[1]),
-                (a * v, a * v[1]),
-                (v / a, v[1] / a),
-                (v // a, v[1] // a),
-                (v ÷ a, v[1] ÷ a),
-                ((A + B) ⋅ v, (A[1, 1] + B[1, 1]) * v[1] + (A[1, 2] + B[1, 2]) * v[2]),
-                (u ⋅ A, u[1] * A[1, 1] + u[2] * A[2, 1]),
+                (-vc, -v[1]),
+                (uc - vc, u[1] - v[1]),
+                (uc + vc + wc, u[1] + v[1] + w[1]),
+                (a * vc, a * v[1]),
+                (vc / a, v[1] / a),
+                (vc // a, v[1] // a),
+                (vc ÷ a, v[1] ÷ a),
+                ((Ac + Bc) ⋅ vc, (A[1, 1] + B[1, 1]) * v[1] + (A[1, 2] + B[1, 2]) * v[2]),
+                (uc ⋅ Ac, u[1] * A[1, 1] + u[2] * A[2, 1]),
             )
-            tc = @inferred components(input, 2)
-            @test tc[1] ==ₛ expected
+            @test input[1] ==ₛ expected
         end
-        @test (@inferred components(u ⋅ v, 2)) ==ₛ u[1] * v[1] + u[2] * v[2]
-        product = @inferred components(A ⋅ B, 2)
+        @test (@inferred uc ⋅ vc) ==ₛ u[1] * v[1] + u[2] * v[2]
+        product = @inferred Ac ⋅ Bc
         @test product[1, 2] ==ₛ A[1, 1] * B[1, 2] + A[1, 2] * B[2, 2]
-        outer = @inferred components(u ⊗ v, 2)
+        outer = @inferred uc ⊗ vc
         @test outer[1, 2] ==ₛ u[1] * v[2]
-        @test (@inferred components(A ⊡ B, 2)) ==ₛ A[1, 1] * B[1, 1] + A[2, 1] * B[2, 1] + A[1, 2] * B[1, 2] + A[2, 2] * B[2, 2]
+        @test (@inferred Ac ⊡ Bc) ==ₛ A[1, 1] * B[1, 1] + A[2, 1] * B[2, 1] + A[1, 2] * B[1, 2] + A[2, 2] * B[2, 2]
 
-        cross = @inferred components(u × v, 3)
+        cross = @inferred components(u, 3) × components(v, 3)
         @test cross[1] ==ₛ u[2] * v[3] - u[3] * v[2]
         @test cross[2] ==ₛ u[3] * v[1] - u[1] * v[3]
         @test cross[3] ==ₛ u[1] * v[2] - u[2] * v[1]
-        @test_throws ArgumentError components(u × v, 2)
-    end
-
-    @testset "idempotence" begin
-        for input in (sin.(A .+ a) .* B .^ 2, A ⋅ B, u ⊗ v)
-            tc = components(input, 2)
-            @test (@inferred components(tc[1, 2], 2)) ==ₛ tc[1, 2]
-        end
-        scalar = sin(a) + b * u[1]
-        @test (@inferred components(scalar, 2)) ==ₛ scalar
-        @test components(scalar, 2) === scalar
-    end
-
-    @testset "dimension-dependent scalar operators" begin
-        @test (@inferred components(Scaled()(a), 2)) ==ₛ a / 2
-        @test components(sin(Scaled()(a)), 3) ==ₛ sin(a / 3)
+        @test_throws ArgumentError uc × vc
     end
 
     @testset "matrix operations" begin

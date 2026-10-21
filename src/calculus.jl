@@ -46,27 +46,22 @@ function checkranks(::Curl, args::NTuple{N, DTerm}) where {N}
     return
 end
 
-function evaluate(grad::Gradient, args::Tuple{DTerm}, dims::Integer)
-    t = only(args)
-    return pack(Kind.None(), tensorrank(t) + 1, dims) do I
-        grad.op[I[1]](component(t, Base.tail(I)))
-    end
-end
-function evaluate(divg::Divergence, args::Tuple{DTerm}, dims::Integer)
-    t = only(args)
-    entry(I) = component_sum(DTerm[divg.op[i](t[i, I...]) for i in 1:dims])
-    tensorrank(t) == 1 && return entry(())
-    return pack(entry, Kind.None(), tensorrank(t) - 1, dims)
-end
-function evaluate(curl::Curl, args::Tuple{DTerm}, dims::Integer)
-    v = only(args)
-    dims == 3 || throw(ArgumentError(LazyString("curl is only supported for 3D vector fields, got dimension ", dims)))
-    return pack(Kind.None(), 1, dims) do (i,)
-        j, k = mod1(i + 1, 3), mod1(i + 2, 3)
-        curl.op[j](v[k]) - curl.op[k](v[j])
-    end
+# the rules read the components of the argument through its component form, which checks the dimensions of packs
+
+# the gradient differentiates the component `tail(comps)` of the argument along the axis `first(comps)`
+function lower_rule(grad::Gradient, args, comps, offs, block)
+    t = components(only(args), length(offs))
+    return here(grad.op[first(comps)](component(t, Base.tail(comps))), offs)
 end
 
-# the component `I` of a tensor in component form, or the scalar itself
-component(t::DTerm, ::Tuple{}) = t
-component(t::DTerm, I::Tuple) = t[I...]
+function lower_rule(divg::Divergence, args, comps, offs, block)
+    t = components(only(args), length(offs))
+    return here(component_sum(DTerm[divg.op[i](t[i, comps...]) for i in eachindex(offs)]), offs)
+end
+
+function lower_rule(curl::Curl, args, (i,), offs, block)
+    length(offs) == 3 || throw(ArgumentError(LazyString("curl is only supported for 3D vector fields, got dimension ", length(offs))))
+    v = components(only(args), 3)
+    j, k = mod1(i + 1, 3), mod1(i + 2, 3)
+    return here(curl.op[j](v[k]) - curl.op[k](v[j]), offs)
+end

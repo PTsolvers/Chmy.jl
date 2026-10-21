@@ -177,7 +177,7 @@ end
 # build the expression that reads the field `f` at the stencil node `x` relative to the evaluation point
 #
 # for collocated differences `x` is an integer offset, and for staggered differences `x` is
-# a half-integer offset; the grid locations and indices of the samples are inferred during lowering
+# a half-integer offset; the grid locations and indices of the samples are inferred by `locate`
 field_sample(x) = :(f[$x])
 
 # build the weighted sum of field samples for the stencil with nodes `x` and `weights`
@@ -217,6 +217,9 @@ function difference_expr(x, weights)
     return something(result, :ZERO)
 end
 
-@generated function stencil_rule(d::Union{Difference, StaggeredDifference}, f::DTerm)
-    return difference_expr(stencil_nodes(d()), stencil_weights(d()))
+@generated function lower_rule(d::Union{Difference, StaggeredDifference}, args::Tuple{DTerm})
+    return quote
+        f = only(args)
+        $(difference_expr(stencil_nodes(d()), stencil_weights(d())))
+    end
 end

@@ -30,25 +30,13 @@ flip(::Upper) = Lower()
 flipside(::Far) = Far()
 flipside(n::Near) = Near(flip(n.side), n.ξ)
 
-function stencil_rule(lf::Lifted{O, K}, args::Tuple{Vararg{DTerm}}, ctx::LowerContext{N}) where {O, K, N}
+function lower_rule(lf::Lifted{O, K}, args, comps, offs::NTuple{N, Rational{Int}}, block::Block{N}) where {O, K, N}
     maximum(abs, lf.axes) <= N || throw(ArgumentError("the lifted axes exceed the number of dimensions"))
-    # construct the context restricted to the lifted axes
-    lctx = LowerContext(
-        ntuple(i -> ctx.locs[abs(lf.axes[i])], Val(K)),
-        # negate global offsets for negative axes
-        ntuple(Val(K)) do i
-            a = lf.axes[i]
-            o = ctx.offs[abs(a)]
-            return flipsign(o, a)
-        end,
-        # flip wall sides for negative axes
-        ntuple(Val(K)) do i
-            a = lf.axes[i]
-            b = ctx.blck[abs(a)]
-            return a > 0 ? b : flipside(b)
-        end
-    )
-    term = stencil_rule(lf.op, args, lctx)::DTerm
+    # the offsets and the block restricted to the lifted axes, negating the offsets and flipping the wall sides
+    # for negative axes
+    loffs = map(a -> flipsign(offs[abs(a)], a), lf.axes)
+    lblock = map(a -> a > 0 ? block[a] : flipside(block[-a]), lf.axes)
+    term = lower_rule(lf.op, args, comps, loffs, lblock)::DTerm
     lf.axes == ntuple(identity, Val(N)) && return term
     return insert_stencil(term, Val(N), lf.axes)
 end
