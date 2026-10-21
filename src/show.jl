@@ -14,7 +14,7 @@ function Base.show(io::IO, v::DTerm)
         Tensor(rank, name, _, _) => print_tensor(io, rank, name)
         ZeroTensor(_) => print(io, '𝒪')
         IdTensor(_) => print(io, 'ℐ')
-        DExpr(Call(op), args) => print_call(io, op, args)
+        DExpr(Call(op), args) => printop(io, op, args)
         DExpr(Comp(comp), (arg,)) => print_indexed(io, arg, comp)
         DExpr(Locs(locs), (arg,)) => print_indexed(io, arg, locs)
         DExpr(Inds(offsets), (arg,)) => print_indexed(io, arg, map(stencil_constant, offsets))
@@ -34,10 +34,8 @@ function print_pack(io, t, dims, I)
 end
 
 function print_indexed(io, arg, inds)
-    parens = !isnothing(printed_operator(arg))
-    parens && print(io, '(')
-    print(io, arg)
-    parens && print(io, ')')
+    # indexing binds tighter than any operator
+    print_operand(io, arg, typemax(Int))
     return print_list(io, '[', inds, ']')
 end
 
@@ -103,12 +101,6 @@ function print_tensor(io, rank, name)
     return
 end
 
-"""
-    print_opname(io, op)
-
-Print the name used for `op` in expression calls to `io`. Specialize this method
-for custom operators to control their call names. The default uses `show(io, op)`.
-"""
 print_opname(io, op::Operator) = show(io, op)
 print_opname(io, op::Fun) = print(io, nameof(op.f))
 function print_opname(io, op::BroadcastedFun)
@@ -128,9 +120,47 @@ function print_opname(io, op::Lifted)
     return
 end
 
-function print_call(io, op::Operator, args)
+"""
+    printop(io, op, args)
+
+Print the call of the operator `op` with the arguments `args` to `io`. Specialize this method together with
+[`printprec`](@ref) to control how calls of custom operators are displayed. The default prints the operator name
+followed by the parenthesized list of arguments.
+"""
+function printop(io, op::Operator, args)
     print_opname(io, op)
     return print_list(io, '(', args, ')')
+end
+
+"""
+    printprec(op, args)
+
+The precedence of the call of `op` with `args` as printed by [`printop`](@ref), or `0` if the call is printed in a
+self-delimiting form, e.g. as a function call. An operand is parenthesized if its precedence is positive and not
+higher than the precedence of the enclosing operator.
+"""
+printprec(::Operator, args) = 0
+
+# unary operators bind as tight as `^`, so that `-a * b` needs no parentheses, but `-(a ^ 2)` does
+const UNARY_PREC = Base.operator_precedence(:^)
+
+printprec(term::DTerm) = @match term begin
+    DExpr(Call(op), args) => printprec(op, args)
+    Literal(val) => literalprec(val)
+    _ => 0
+end
+
+literalprec(val) = 0
+literalprec(::Rational) = Base.operator_precedence(Symbol("//"))
+literalprec(val::Real) = signbit(val) ? UNARY_PREC : 0
+
+# parenthesize the operand if it doesn't bind tighter than the enclosing operator
+function print_operand(io, arg, prec)
+    parens = 0 < printprec(arg) <= prec
+    parens && print(io, '(')
+    print(io, arg)
+    parens && print(io, ')')
+    return
 end
 
 printed_opname(op::Fun) = nameof(op.f)
@@ -139,126 +169,37 @@ function printed_opname(op::BroadcastedFun)
     return Base.isoperator(name) ? Symbol('.', name) : name
 end
 
-function print_call(io, op::Union{Fun, BroadcastedFun}, args)
+function printprec(op::Union{Fun, BroadcastedFun}, args)
     opname = printed_opname(op)
+    Base.isoperator(opname) || return 0
+    length(args) == 1 && Base.isunaryoperator(opname) && return UNARY_PREC
+    length(args) >= 2 && Base.isbinaryoperator(opname) && return Base.operator_precedence(opname)
+    return 0
+end
 
-    if !Base.isoperator(opname)
-        print_opname(io, op)
-        return print_list(io, '(', args, ')')
-    end
-
-    if length(args) == 1 && Base.isunaryoperator(opname)
-        print_opname(io, op)
-        arg = only(args)
-        parens = need_parens(arg)
+function printop(io, op::Union{Fun, BroadcastedFun}, args)
+    prec = printprec(op, args)
+    if prec == 0
+        # operators that can't be printed in operator form are printed as `(op)(args...)`
+        parens = Base.isoperator(printed_opname(op))
         parens && print(io, '(')
-        print(io, arg)
-        parens && print(io, ')')
-        return
-    end
-
-    if length(args) < 2 || !Base.isbinaryoperator(opname)
-        print(io, '(')
         print_opname(io, op)
-        print(io, ')')
+        parens && print(io, ')')
         return print_list(io, '(', args, ')')
     end
-
+    if length(args) == 1
+        print_opname(io, op)
+        return print_operand(io, only(args), prec)
+    end
     for (i, arg) in enumerate(args)
-        omit_operator = i > 1 && omit_mul(args[i - 1], arg, opname)
-        if i > 1 && !omit_operator
+        if i > 1
             print(io, ' ')
             print_opname(io, op)
             print(io, ' ')
         end
-
-        parens = need_parens(arg, opname, i)
-        if i < length(args) &&
-                omit_mul(arg, args[i + 1], opname) &&
-                coef_needs_parens(arg)
-            parens = true
-        end
-
-        parens && print(io, '(')
-        print(io, arg)
-        parens && print(io, ')')
+        print_operand(io, arg, prec)
     end
     return
-end
-
-function omit_mul(left, right, op)
-    op === :* || return false
-    isreal(left) || return false
-    return @match right begin
-        Tensor(_, name, _, _) => Base.isidentifier(name)
-        _ => false
-    end
-end
-
-function coef_needs_parens(term)
-    return @match term begin
-        Literal(val) => !(val isa Integer && !(val isa Bool)) &&
-            !(val isa AbstractFloat && isfinite(val))
-        _ => false
-    end
-end
-
-function printed_operator(term)
-    return @match term begin
-        DExpr(Call(op), args) => begin
-            op isa Union{Fun, BroadcastedFun} || return nothing
-            opname = printed_opname(op)
-            if !Base.isoperator(opname)
-                nothing
-            elseif length(args) == 1 && Base.isunaryoperator(opname)
-                (opname, Base.operator_precedence(:^), true)
-            elseif length(args) >= 2 && Base.isbinaryoperator(opname)
-                (opname, Base.operator_precedence(opname), false)
-            else
-                nothing
-            end
-        end
-        Literal(val) => begin
-            if val isa Rational
-                (Symbol("//"), Base.operator_precedence(Symbol("//")), false)
-            elseif val isa Real && signbit(val)
-                (:-, Base.operator_precedence(:^), true)
-            else
-                nothing
-            end
-        end
-        _ => nothing
-    end
-end
-
-# unary operator needs parentheses
-function need_parens(arg)
-    child = printed_operator(arg)
-    isnothing(child) && return false
-
-    _, precedence, unary = child
-    return unary || precedence < Base.operator_precedence(:^)
-end
-
-# general operator needs parentheses
-function need_parens(arg, op, position)
-    child = printed_operator(arg)
-    isnothing(child) && return false
-
-    child_op, child_precedence, _ = child
-    precedence = Base.operator_precedence(op)
-    child_precedence < precedence && return true
-    child_precedence > precedence && return false
-
-    if child_op === op && op in (:+, :++, :*, :.+, :.++, :.*)
-        return false
-    elseif precedence == Base.operator_precedence(:>)
-        return true
-    elseif Base.operator_associativity(op) === :right
-        return position == 1
-    else
-        return position > 1
-    end
 end
 
 function print_list(io, b, list, e)
