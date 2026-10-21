@@ -62,7 +62,7 @@ isfree(::Union{Int, Normal}) = false
 freecomps(slice, comps) = Tuple(c for (s, c) in zip(slice, comps) if isfree(s))
 
 # scalar data apply to every component of the slice
-slicedata(g::DTerm, slice, comps) = tensorrank(g) == 0 ? g : component(g, freecomps(slice, comps))
+slicedata(g::DTerm, slice, comps) = tensorrank(g) == 0 ? g : g[freecomps(slice, comps)...]
 
 struct Selector <: Operator
     clauses::Tuple{Vararg{BoundaryClause}}
@@ -155,7 +155,7 @@ function lower_rule(site::SiteSelector, args, comps, offs, block)
     if comps != site.comps || offs != site.offsets
         return lower_rule(site.selector, args, comps, offs, block)
     end
-    isempty(site.faces) && return here(component(first(args), comps), offs)
+    isempty(site.faces) && return here(first(args)[comps...], offs)
     axes, i = first(site.faces)
     rest = SiteSelector(
         site.selector,
@@ -173,7 +173,7 @@ function lower_rule(site::SiteSelector, args, comps, offs, block)
     slice = site.selector.clauses[i].slice
     data = map(g -> slicedata(g, slice, comps), arguments(rule))
     lifted = Lifted(operation(rule), signed_axes)
-    return orient(lower_rule(lifted, (orient(component(rest, comps)), data...), (), offs, block))
+    return orient(lower_rule(lifted, (orient(rest[comps...]), data...), (), offs, block))
 end
 
 lower_rule(::Next, (u,)::Tuple{DTerm}, offs, block) = here(u, offs)

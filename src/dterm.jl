@@ -465,15 +465,20 @@ function tensorkind(term::DTerm)
 end
 
 """
+    getindex(term::DTerm)
     getindex(term::DTerm, I::Integer...)
     getindex(term::DTerm, offsets::Union{Integer, Rational}...)
 
-Construct a symbolic tensor component if `term` is not a scalar, respecting symmetric, alternating,
+Without indices, return the scalar `term` itself. Otherwise, construct a symbolic tensor component if `term` is not a scalar, respecting symmetric, alternating,
 and diagonal tensor structure. Zero and identity tensors return literal component values, and packed
 tensors return the stored entry.
 If `term` is a scalar, construct a sample of `term` at `offsets` from the evaluation point,
 which must be multiples of `1//2`.
 """
+function Base.getindex(term::DTerm)
+    tensorrank(term) == 0 || throw(ArgumentError("number of subscripts not matching tensor rank"))
+    return term
+end
 function Base.getindex(term::DTerm, I::Vararg{Integer, N}) where {N}
     tensorrank(term) == 0 && return makeinds(term, I)
     return @match term begin

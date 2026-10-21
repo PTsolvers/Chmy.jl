@@ -26,6 +26,8 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred isexpr(lit)) == false
         @test (@inferred iscall(lit)) == false
 
+        @test (@inferred lit[]) === lit
+
         @test_throws ArgumentError head(lit)
         @test_throws ArgumentError children(lit)
         @test_throws ArgumentError operation(lit)
@@ -127,6 +129,7 @@ Random.seed!(1234) # deterministic tests
         @test_throws ArgumentError components(t)
         @test_throws ArgumentError indices(t)
         @test_throws ArgumentError locations(t)
+        @test_throws ArgumentError t[]
 
         for rank in 1:4, kind in KINDS, uniform in (true, false)
             name = gensym("tensor")

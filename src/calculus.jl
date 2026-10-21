@@ -51,7 +51,7 @@ end
 # the gradient differentiates the component `tail(comps)` of the argument along the axis `first(comps)`
 function lower_rule(grad::Gradient, args, comps, offs, block)
     t = components(only(args), length(offs))
-    return here(grad.op[first(comps)](component(t, Base.tail(comps))), offs)
+    return here(grad.op[first(comps)](t[Base.tail(comps)...]), offs)
 end
 
 function lower_rule(divg::Divergence, args, comps, offs, block)

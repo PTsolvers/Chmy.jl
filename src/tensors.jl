@@ -24,10 +24,6 @@ end
     throw(ArgumentError(LazyString("tensor-valued operator '", op, "' has no expansion to the component form")))
 end
 
-# the component `I` of a tensor in component form, or the scalar itself
-component(t::DTerm, ::Tuple{}) = t
-component(t::DTerm, I::Tuple) = t[I...]
-
 """
     pack(array)
     pack(f, kind, rank, dims)

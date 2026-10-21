@@ -28,7 +28,7 @@ lower_rule(op::Operator, args) = no_rule_error(op, args, 1)
 # computing the entire result to read its component `comps`
 function lower_rule(op::Union{Fun, BroadcastedFun}, args, comps, offs, block)
     result = evaluate(op, map(x -> components(x, length(offs)), args))
-    isnothing(result) || return here(component(result, comps), offs)
+    isnothing(result) || return here(result[comps...], offs)
     # a scalar function of scalars reads its arguments at the evaluation point
     isempty(comps) || expansion_error(op)
     return makecall_unchecked(op, map(x -> here(x, offs), args))
