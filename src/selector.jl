@@ -10,10 +10,15 @@ struct Add <: BoundaryOperator end
 struct Scale <: BoundaryOperator end
 struct Dirichlet <: BoundaryOperator end
 struct Neumann <: BoundaryOperator end
+struct Replace <: BoundaryOperator end
 
 # an operator without data can be given without a call
-asrule(r::DTerm) = r
 asrule(op::BoundaryOperator) = op()
+
+# a term that is not a boundary operator call replaces the selected term
+asrule(r::DTerm) = iscall(r) ? asrule(operation(r), r) : Replace()(r)
+asrule(::BoundaryOperator, r) = r
+asrule(::Operator, r) = Replace()(r)
 
 """
     Normal()
@@ -249,6 +254,7 @@ function lower_rule(site::SiteSelector, args, comps, offs, block)
 end
 
 lower_rule(::Next, (u,)::Tuple{DTerm}, offs, block) = here(u, offs)
+lower_rule(::Replace, (u, v)::Tuple{DTerm, DTerm}, offs, block) = here(v, offs)
 lower_rule(::Add, (u, e)::Tuple{DTerm, DTerm}, offs, block) = here(u, offs) + here(e, offs)
 lower_rule(::Scale, (u, w)::Tuple{DTerm, DTerm}, offs, block) = here(w, offs) * here(u, offs)
 

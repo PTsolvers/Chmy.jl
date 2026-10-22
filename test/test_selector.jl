@@ -6,7 +6,7 @@ using Chmy: select, Next, Add, Scale, Dirichlet, Neumann, SiteSelector
 lowerat(expr, locs, block) = simplify(locate(lower(expr, block), locs))
 
 @testset "selector" begin
-    @scalars u
+    @scalars u v
     @uniform @scalars p q pc
     L, U = Lower(), Upper()
     half = Literal(1 // 2)
@@ -24,6 +24,12 @@ lowerat(expr, locs, block) = simplify(locate(lower(expr, block), locs))
         # only the bottom wall is near, so the left clause never applies
         rules = (Left() => OnBoundary() => Add()(p), Bottom() => OnBoundary() => Add()(q))
         @test lowerat(select(u, rules...), (𝓅, 𝓅), (Far(), Near(L, 0))) ==ₛ simplify(r + q)
+    end
+
+    @testset "replacement" begin
+        # a term that is not a boundary operator call replaces the selected term
+        @test lowerat(select(u, AnyWall() => OnBoundary() => v), (𝓅, 𝓅), (Far(), Near(L, 0))) ==ₛ v[𝓅, 𝓅][0, 0]
+        @test lowerat(select(u, Left() => OnBoundary() => p + q), (𝓅, 𝓅), (Near(L, 0), Far())) ==ₛ simplify(p + q)
     end
 
     @testset "composition at a corner" begin
