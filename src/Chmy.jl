@@ -86,6 +86,7 @@ include("simplify.jl")
 export Lifted
 include("lift.jl")
 
+export BoundaryOperator, Next, Add, Scale, Dirichlet, Neumann
 export Normal, Tangential, AnyNormal, AnyTangent, 𝐧, 𝐭
 include("selector.jl")
 
