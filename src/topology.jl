@@ -7,6 +7,8 @@ const FaceMarker = Union{Span, Side}
 
 abstract type FacePattern end
 
+dim(p::FacePattern, n) = n - codim(p, n)
+
 struct Face{N} <: FacePattern
     axes::NTuple{N, FaceMarker}
 end
