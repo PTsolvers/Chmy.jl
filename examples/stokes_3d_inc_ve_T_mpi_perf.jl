@@ -108,7 +108,9 @@ end
     dims_l = nxyz_l
     dims_g = dims_l .* dims(topo)
     grid   = UniformGrid(arch; origin=(-lx/2, -ly/2, -lz/2), extent=(lx, ly, lz), dims=dims_g)
-    launch = Launcher(arch, grid; outer_width=(128, 8, 4))
+    # the time loop runs once per launcher, to report the throughput with and without the overlap of
+    # boundary conditions and halo exchange with the computation
+    launchers = (overlapped=Launcher(arch, grid; outer_width=(128, 8, 4)), plain=Launcher(arch, grid))
     nx, ny, nz = dims_g
     dx, dy, dz = spacing(grid)
     nt     = 8
@@ -167,9 +169,10 @@ end
     KernelAbstractions.synchronize(backend)
     # action
     tic, wtime = 0.0, 0.0
+    teff = Dict(name => Float64[] for name in keys(launchers))
     # GC.gc(); GC.gc(false)
-    for it in 1:nt
-        (me==0) && (sleep(2); @printf("it = %d/%d \n", it, nt))
+    for (name, launch) in pairs(launchers), it in 1:nt
+        (me==0) && (sleep(2); @printf("%s: it = %d/%d \n", name, it, nt))
         MPI.Barrier(cart_comm(topo))
         launch(arch, grid, update_old! => (T, τ, T_old, τ_old))
         # time step
@@ -210,12 +213,19 @@ end
             nIO = 2*10 + 17
             Teff_min = nIO * sizeof(Float64) * prod(nxyz_l) / wtime_max
             Teff_max = nIO * sizeof(Float64) * prod(nxyz_l) / wtime_min
-            printstyled("Performance: T_eff [min max] = $(round(Teff_min, sigdigits=8)) $(round(Teff_max, sigdigits=8)) \n"; bold=true, color=:green)
+            push!(teff[name], Teff_min)
+            printstyled("Performance ($name): T_eff [min max] = $(round(Teff_min, sigdigits=8)) $(round(Teff_max, sigdigits=8)) \n"; bold=true, color=:green)
         end
         # A_eff = (2*10 + 17) / 1e9 * prod(nxyz_l) * sizeof(Float64)
         # T_eff = A_eff ./ wtime_it
         # @printf("  Executed %d steps in = %1.3e sec (@ T_eff = %1.2f GB/s - device %s) \n", (niter - warmup), wtime,
         #         round(T_eff, sigdigits=6), AMDGPU.device_id())
+    end
+    # overlap report: median over the time steps of the T_eff (min over ranks) of each launcher
+    if me == 0
+        med(v) = sort(v)[cld(length(v), 2)]
+        T_ovl, T_pln = med(teff[:overlapped]), med(teff[:plain])
+        printstyled(@sprintf("Overlap: T_eff median overlapped = %.1f GB/s, plain = %.1f GB/s, ratio = %.2f \n", T_ovl, T_pln, T_ovl / T_pln); bold=true, color=:cyan)
     end
     # GC.gc(true)
     KernelAbstractions.synchronize(backend)
