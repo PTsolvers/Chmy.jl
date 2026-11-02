@@ -8,7 +8,8 @@ using MPI
 
 EXCLUDE_TESTS = []
 
-istest(f) = startswith(f, "test_") && endswith(f, ".jl")
+istest(f)    = startswith(f, "test_") && endswith(f, ".jl")
+ismpitest(f) = startswith(f, "mpitest_") && endswith(f, ".jl")
 
 function parse_flag(args, flag; default=nothing, type::DataType=Nothing)
     key = findfirst(arg -> startswith(arg, flag), args)
@@ -40,9 +41,10 @@ function parse_flag(args, flag; default=nothing, type::DataType=Nothing)
     return true, parse.(Ref(type), values)
 end
 
-function runtests()
-    testdir   = @__DIR__
-    testfiles = sort(filter(istest, readdir(testdir)))
+function runtests(nranks)
+    testdir      = @__DIR__
+    testfiles    = sort(filter(istest, readdir(testdir)))
+    mpitestfiles = sort(filter(ismpitest, readdir(testdir)))
 
     nfail = 0
     printstyled("Testing package Chmy.jl\n"; bold=true, color=:white)
@@ -60,10 +62,28 @@ function runtests()
             nfail += 1
         end
     end
+
+    # multi-rank tests (`--mpi=N`), launched with the mpiexec configured for MPI.jl
+    if nranks > 0 && Sys.iswindows()
+        @info "Skip MPI tests on Windows"
+    elseif nranks > 0
+        for f in mpitestfiles
+            println("")
+            try
+                run(`$(MPI.mpiexec()) -n $nranks $(Base.julia_cmd()) --startup-file=no $(joinpath(testdir, f))`)
+            catch ex
+                @error ex
+                nfail += 1
+            end
+        end
+    else
+        @info "Skip MPI tests (pass --mpi=N to run them on N ranks)"
+    end
     return nfail
 end
 
 _, backends = parse_flag(ARGS, "--backends"; default=["CPU"])
+_, nranks   = parse_flag(ARGS, "--mpi"; default=[0], type=Int)
 
 for backend in backends
     if backend != "CPU"
@@ -79,4 +99,4 @@ for backend in backends
     ENV["JULIA_CHMY_BACKEND_$backend"] = true
 end
 
-exit(runtests())
+exit(runtests(first(nranks)))

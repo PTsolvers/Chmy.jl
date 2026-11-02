@@ -18,7 +18,7 @@ steps:
 
       julia -e 'println("+++ :julia: Running tests")
                 using Pkg
-                Pkg.test("Chmy"; test_args=["--backends=CUDA"], coverage=true)'
+                Pkg.test("Chmy"; test_args=["--backends=CUDA", "--mpi=2"], coverage=true)'
     agents:
       queue: "cuda"
     timeout_in_minutes: 120
@@ -46,7 +46,7 @@ steps:
 
       julia -e 'println("+++ :julia: Running tests")
                 using Pkg
-                Pkg.test("Chmy"; test_args=["--backends=AMDGPU"], coverage=true)'
+                Pkg.test("Chmy"; test_args=["--backends=AMDGPU", "--mpi=2"], coverage=true)'
     agents:
       queue: "rocm"
       rocmgpu: "*"
