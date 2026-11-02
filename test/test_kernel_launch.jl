@@ -97,6 +97,19 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             end
         end
 
+        # the worker tasks of an overlapped launcher activate the architecture (device, stream priority)
+        if isdefined(KernelAbstractions, :device)
+            @testset "workers run on the device of the architecture" begin
+                launcher = Launcher(arch, grid; outer_width=(1, 1))
+                seen = Ref{Any}(nothing)
+                for worker in Iterators.flatten(launcher.workers)
+                    put!(() -> (seen[] = KernelAbstractions.device(backend)), worker)
+                    wait(worker)
+                    @test seen[] == KernelAbstractions.device(backend)
+                end
+            end
+        end
+
         @testset "overlapped launch matches plain launch" begin
             for (dims, outer_width) in (((32,), (4,)), ((32, 16), (4, 2)), ((16, 12, 8), (4, 2, 2)))
                 N  = length(dims)

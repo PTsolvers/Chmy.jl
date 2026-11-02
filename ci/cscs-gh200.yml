@@ -5,10 +5,29 @@ UnitTest:
   extends: .baremetal-runner-daint-gh200
   script:
     - export MPICH_GPU_SUPPORT_ENABLED=1
+    # several Julia threads, so that the worker tasks of the overlapped launches run concurrently
+    - export JULIA_NUM_THREADS=4
     - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.test("Chmy"; test_args=["--backends=CUDA"])'
   variables:
     SLURM_JOB_NUM_NODES: 1
     SLURM_NTASKS_PER_NODE: 1
+    SLURM_GPUS_PER_TASK: 1
+    SLURM_TIMELIMIT: "00:15:00"
+
+MPITest:
+  extends: .baremetal-runner-daint-gh200
+  script:
+    - export MPICH_GPU_SUPPORT_ENABLED=1 JULIA_NUM_THREADS=4
+    - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.instantiate()'
+    # skip auto-precompilation on add (JuliaLang/Pkg.jl#4866), see PerfTest
+    - JULIA_PKG_PRECOMPILE_AUTO=0 srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.add(["CUDA", "CUDA_Runtime_jll"])'
+    - srun -n 1 --uenv julia/26.3:v1 --view=juliaup julia --project=. -e 'using Pkg; Pkg.precompile()'
+    # the multi-rank test files as job steps (4 ranks, one GPU each, GPU-aware MPI)
+    - export JULIA_CHMY_BACKEND_CUDA=1 JULIA_CHMY_TEST_GPU_AWARE=1
+    - for f in test/mpitest_*.jl; do srun -n 4 --uenv julia/26.3:v1 --view=juliaup julia --project=. $f || exit 1; done
+  variables:
+    SLURM_JOB_NUM_NODES: 1
+    SLURM_NTASKS_PER_NODE: 4
     SLURM_GPUS_PER_TASK: 1
     SLURM_TIMELIMIT: "00:15:00"
 
