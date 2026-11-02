@@ -6,6 +6,7 @@ export worksize, outer_width, inner_worksize, inner_offset, outer_worksize, oute
 using Chmy
 using Chmy.Architectures
 using Chmy.Grids
+using Chmy.Fields
 using Chmy.BoundaryConditions
 using Chmy.Workers
 
@@ -127,8 +128,19 @@ end
 
 import KernelAbstractions.NDIteration.StaticSize
 
-# recursively apply a function to all fields of an object
-@generated function deepmap!(fn::F, x::T) where {F,T}
+# recursively apply a function to an object and its fields; arrays are leaves (follow `parent` only)
+@inline deepmap!(fn::F, x) where {F} = deepmap_fields!(fn, x)
+
+@inline function deepmap!(fn::F, x::AbstractArray) where {F}
+    fn(x)
+    p = parent(x)
+    p === x || deepmap!(fn, p)
+    return
+end
+
+@inline deepmap!(fn::F, x::AbstractField) where {F} = deepmap_fields!(fn, x)
+
+@generated function deepmap_fields!(fn::F, x::T) where {F,T}
     names = fieldnames(x)
     N     = length(names)
     quote
@@ -138,14 +150,19 @@ import KernelAbstractions.NDIteration.StaticSize
             args = getfield(x, $names[i])
             deepmap!(fn, args) # deepmap calls a function on its fields
         end
+        return
     end
 end
 
-# helper function to temporarily disable task sync for arguments
-function with_no_task_sync!(fn::F, args::T) where {F,T}
+# run `fn` with the implicit synchronization of the arrays in `args` suspended, after waiting for pending work
+function with_no_task_sync!(fn::F, backend::Backend, args::T) where {F,T}
+    KernelAbstractions.synchronize(backend)
     deepmap!(disable_task_sync!, args)
-    fn()
-    deepmap!(enable_task_sync!, args)
+    try
+        fn()
+    finally
+        deepmap!(enable_task_sync!, args)
+    end
     return
 end
 
@@ -158,7 +175,7 @@ end
         fun(args..., offset)
         bc!(arch, grid, bc)
     else
-        with_no_task_sync!(args) do
+        with_no_task_sync!(backend, args) do
             inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
             inner_fun(args..., offset + Offset(inner_offset(launcher)...))
 

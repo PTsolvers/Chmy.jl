@@ -82,9 +82,10 @@ Base.unsafe_wrap(::CPU, ptr::Ptr, dims) = unsafe_wrap(Array, ptr, dims)
 
 pointertype(::CPU, T::DataType) = Ptr{T}
 
-# because of https://github.com/JuliaGPU/CUDA.jl/pull/2335
+# implicit synchronization of backend arrays (https://github.com/JuliaGPU/CUDA.jl/pull/2335), see the extensions
 disable_task_sync!(::Any) = nothing
 enable_task_sync!(::Any)  = nothing
+task_sync_enabled(::Any)  = nothing
 
 gpu_aware_compat(::CPU) = false
 

@@ -119,3 +119,6 @@ for it in 1:nt
     launch(arch, grid, update_C! => (C, q, Δt, grid); bc=batch(grid, C => Neumann(); exchange=C))
 end
 ```
+
+!!! note "Overlap and implicit synchronization"
+    With `outer_width`, the launcher computes the inner points on the task-local stream, and the boundary regions, their boundary conditions and the MPI exchange on the streams of worker tasks. CUDA.jl (≥ 6.3) and AMDGPU.jl (≥ 2.11) order every use of an array on a stream after its last use on another stream, which would serialize these. The launcher therefore waits for the work pending on the task-local stream and suspends this implicit synchronization for the arrays passed to the kernel while it runs. Work on these arrays issued from other tasks must be synchronized by the caller before the launch. On AMDGPU.jl < 2.11 the implicit synchronization cannot be suspended: the results are correct, but computation and communication do not overlap.
