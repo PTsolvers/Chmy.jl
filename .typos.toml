@@ -1,4 +1,5 @@
 [default.extend-words]
+HSA = "HSA" # ROCm runtime (HSA_ENABLE_IPC_MODE_LEGACY), not "HAS"
 ix = "ix"
 iy = "iy"
 iz = "iz"

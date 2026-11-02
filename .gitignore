@@ -6,6 +6,8 @@ node_modules
 
 Manifest.toml
 LocalPreferences.toml
+# except the MPI preferences of the beverin CI jobs
+!ci/beverin_mpi_prefs/LocalPreferences.toml
 
 .DS_Store
 .vscode

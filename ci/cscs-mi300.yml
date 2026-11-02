@@ -1,0 +1,61 @@
+include:
+  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+
+stages:
+  - single-rank
+  - multi-rank # runs only if the single-rank tests pass
+
+# Beverin (MI300A): the uenv provides ROCm and cray-mpich but no Julia, so the x86_64 Julia build of the CI user is used. The Chmy CI
+# depot lives on $SCRATCH; the jobs of the multi-rank stage run concurrently and put a job-local depot in front of it (concurrent
+# writers evict each other's compiled caches). The single-rank job runs Pkg.test without an MPI launcher (singleton MPICH_jll, which
+# needs FI_PROVIDER=tcp instead of the cxi set by the uenv view). The multi-rank jobs use the cray-mpich of the uenv through the
+# preferences in ci/beverin_mpi_prefs (stacked on the load path), run the test files and the perf example as job steps (srun) and
+# enable ROCm-aware MPI (MPICH_GPU_SUPPORT_ENABLED=1 with HSA_ENABLE_IPC_MODE_LEGACY=1; needs the exportable memory pools of
+# AMDGPU.jl >= 2.11). No per-task GPU binding: Chmy picks the device of each rank by its node-local rank.
+.mi300:
+  extends: .baremetal-runner-beverin-mi300
+  variables:
+    SLURM_JOB_NUM_NODES: 1
+    SLURM_TIMELIMIT: '00:45:00'
+    UENV: '56ebb909a6164680'                         # prgenv-gnu/7.2.3 (ROCm 7.2.3, cray-mpich 9.1.0)
+    JULIA: '/users/lraess/julia_amd/julia_amd-1.13'  # same Julia version as on GH200
+    JULIA_AMDGPU_DISABLE_ARTIFACTS: '1'              # ROCm of the uenv
+    JULIA_AMDGPU_CORE_MUST_LOAD: '1'
+    JULIA_AMDGPU_HIP_MUST_LOAD: '1'
+    JULIA_NUM_THREADS: '4'
+  before_script:
+    - mkdir -p $CI_PROJECT_DIR/.tmp
+    - export TMPDIR=$CI_PROJECT_DIR/.tmp CHMY_CI_DEPOT=$SCRATCH/.julia-chmy-ci-beverin
+
+mi300 - 1 rank:
+  extends: .mi300
+  stage: single-rank
+  script:
+    - uenv run $UENV --view=default -- env JULIA_DEPOT_PATH=$CHMY_CI_DEPOT FI_PROVIDER=tcp $JULIA --project --startup-file=no -e 'using Pkg; Pkg.instantiate(); Pkg.test(; test_args=["--backends=AMDGPU"])'
+
+.mi300-multi:
+  extends: .mi300
+  stage: multi-rank
+  variables:
+    SLURM_NTASKS_PER_NODE: 4
+    MPICH_GPU_SUPPORT_ENABLED: '1'
+    HSA_ENABLE_IPC_MODE_LEGACY: '1'
+  before_script:
+    - mkdir -p $CI_PROJECT_DIR/.tmp
+    - export TMPDIR=$CI_PROJECT_DIR/.tmp CHMY_CI_DEPOT=$SCRATCH/.julia-chmy-ci-beverin
+    - export DEPOT=$CI_PROJECT_DIR/.julia:$CHMY_CI_DEPOT JULIA_LOAD_PATH=:$CI_PROJECT_DIR/ci/beverin_mpi_prefs
+    # AMDGPU into the project (as CUDA on GH200), compiled once before the ranks start
+    - uenv run $UENV --view=default -- env JULIA_DEPOT_PATH=$DEPOT JULIA_PKG_PRECOMPILE_AUTO=0 $JULIA --project --startup-file=no -e 'using Pkg; Pkg.instantiate(); Pkg.add("AMDGPU")'
+    - uenv run $UENV --view=default -- env JULIA_DEPOT_PATH=$DEPOT $JULIA --project --startup-file=no -e 'using Pkg; Pkg.precompile()'
+
+mi300 - 4 ranks:
+  extends: .mi300-multi
+  script:
+    - export JULIA_CHMY_BACKEND_AMDGPU=1 JULIA_CHMY_TEST_GPU_AWARE=1
+    - for f in test/mpitest_*.jl; do uenv run $UENV --view=default -- env JULIA_DEPOT_PATH=$DEPOT srun -n 4 $JULIA --project --startup-file=no $f || exit 1; done
+
+mi300 - perf:
+  extends: .mi300-multi
+  script:
+    - export CHMY_PERF_BACKEND=AMDGPU
+    - uenv run $UENV --view=default -- env JULIA_DEPOT_PATH=$DEPOT srun -n 4 $JULIA --project --startup-file=no examples/stokes_3d_inc_ve_T_mpi_perf.jl

@@ -5,10 +5,19 @@ using Printf
 # using JSON
 # using CairoMakie
 
-# using AMDGPU
-# AMDGPU.allowscalar(false)
-using CUDA
-CUDA.allowscalar(false)
+# backend from the environment (CHMY_PERF_BACKEND=CUDA, the default, or AMDGPU), for the CSCS CI on GH200 and beverin
+const PERF_BACKEND = get(ENV, "CHMY_PERF_BACKEND", "CUDA")
+if PERF_BACKEND == "AMDGPU"
+    using AMDGPU
+    AMDGPU.allowscalar(false)
+    backend = ROCBackend()
+elseif PERF_BACKEND == "CUDA"
+    using CUDA
+    CUDA.allowscalar(false)
+    backend = CUDABackend()
+else
+    error("CHMY_PERF_BACKEND must be CUDA or AMDGPU, got $PERF_BACKEND")
+end
 
 using MPI
 MPI.Init()
@@ -87,8 +96,9 @@ end
 end
 
 @views function main(backend=CPU(); nxyz_l=(126, 126, 126))
-    arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0); device_id=1)
-    # arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0))
+    # one visible GPU per rank (e.g. Slurm --gpus-per-task=1) -> device 1, otherwise the device is picked by node-local rank
+    ndev = isdefined(KernelAbstractions, :ndevices) ? KernelAbstractions.ndevices(backend) : 1
+    arch = Arch(backend, MPI.COMM_WORLD, (0, 0, 0); device_id=(ndev == 1 ? 1 : nothing))
     topo = topology(arch)
     me   = global_rank(topo)
     # geometry
@@ -253,8 +263,6 @@ end
 # res = params.res
 res = 512
 
-# main(ROCBackend(); nxyz_l=(res, res, res) .- 2)
-main(CUDABackend(); nxyz_l=(res, res, res) .- 2)
-# main(; nxyz_l=(254, 254, 254))
+main(backend; nxyz_l=(res, res, res) .- 2)
 
 MPI.Finalize()
