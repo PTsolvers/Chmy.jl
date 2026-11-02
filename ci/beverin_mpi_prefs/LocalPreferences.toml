@@ -1,0 +1,12 @@
+# MPI.jl preferences for the beverin CI jobs (CSCS): the cray-mpich of the uenv (prgenv-gnu) instead of MPICH_jll, launched with srun.
+# Stacked on the load path (JULIA_LOAD_PATH=:$CI_PROJECT_DIR/ci/beverin_mpi_prefs) inside the uenv with its default view (which sets
+# FI_PROVIDER=cxi). GPU support is enabled at run time with MPICH_GPU_SUPPORT_ENABLED=1 and HSA_ENABLE_IPC_MODE_LEGACY=1; it needs
+# exportable device memory (AMDGPU.jl >= 2.11).
+[MPIPreferences]
+_format = "1.1"
+abi = "MPICH"
+binary = "system"
+cclibs = []
+libmpi = "/user-environment/env/default/lib/libmpi.so"
+mpiexec = ["srun"]
+preloads = []
