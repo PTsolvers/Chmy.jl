@@ -152,15 +152,23 @@ end
     # initial conditions
     init_incl(x, y, z, x0, y0, z0, r, in, out) = ifelse((x - x0)^2 + (y - y0)^2 + (z - z0)^2 < r^2, in, out)
     ρgz = FunctionField(init_incl, grid, (Center(), Center(), Vertex()); parameters=(x0=0.0, y0=0.0, z0=0.0, r=0.1lx, in=ρg.z, out=0.0))
-    set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, z0=0.0, r=0.1lx, in=T0, out=Ta))
     η_ve = 0.0
     # boundary conditions
     bc_V = (V.x => (x=Dirichlet(), y=Neumann(), z=Neumann()),
             V.y => (x=Neumann(), y=Dirichlet(), z=Neumann()),
             V.z => (x=Neumann(), y=Neumann(), z=Dirichlet()))
     bc_T = (T => Neumann(),)
-    bc!(arch, grid, bc_V...; exchange=(V.x, V.y, V.z))
-    bc!(arch, grid, bc_T...; exchange=T)
+    # initial state, restored before the time loop of each launcher: the throughput depends on the state (on MI300A it drops by
+    # about 20% over the time steps), so the launchers are compared on the same steps
+    function init!()
+        zero!(f) = fill!(parent(f), 0.0)
+        foreach(zero!, (Pr, ∇V, T, T_old, V.x, V.y, V.z, r_V.x, r_V.y, r_V.z, qT.x, qT.y, qT.z))
+        foreach(t -> foreach(zero!, (t.xx, t.yy, t.zz, t.xy, t.xz, t.yz)), (τ, τ_old))
+        set!(T, grid, init_incl; parameters=(x0=0.0, y0=0.0, z0=0.0, r=0.1lx, in=T0, out=Ta))
+        bc!(arch, grid, bc_V...; exchange=(V.x, V.y, V.z))
+        bc!(arch, grid, bc_T...; exchange=T)
+        return
+    end
     # visualisation
     # fig = Figure(; size=(800, 600))
     # axs = (Pr = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel="x", title="Pr"),
@@ -182,6 +190,7 @@ end
     teff = Dict(name => Float64[] for name in keys(launchers))
     # GC.gc(); GC.gc(false)
     for (name, launch) in pairs(launchers), it in 1:nt
+        (it == 1) && init!()
         (me==0) && (sleep(2); @printf("%s: it = %d/%d \n", name, it, nt))
         MPI.Barrier(cart_comm(topo))
         launch(arch, grid, update_old! => (T, τ, T_old, τ_old))
