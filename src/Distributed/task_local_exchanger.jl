@@ -4,6 +4,7 @@ struct TaskLocalExchanger
     recv_reqs::Vector{MPI.Request}
     send_bufs::Vector{AbstractArray}
     recv_bufs::Vector{AbstractArray}
+    recv_done::Vector{Bool}
 
     function TaskLocalExchanger()
         storage   = Dict{Backend,StackAllocator}()
@@ -11,12 +12,14 @@ struct TaskLocalExchanger
         recv_reqs = MPI.Request[]
         send_bufs = AbstractArray[]
         recv_bufs = AbstractArray[]
-        return new(storage, send_reqs, recv_reqs, send_bufs, recv_bufs)
+        recv_done = Bool[]
+        return new(storage, send_reqs, recv_reqs, send_bufs, recv_bufs, recv_done)
     end
 end
 
-function task_local_exchanger()
-    return get!(() -> TaskLocalExchanger(), task_local_storage(), :chmy_comm_storage)
+# one per side: the exchanges of both sides of a dimension are in flight at the same time
+function task_local_exchanger(::Side{S}) where {S}
+    return get!(() -> TaskLocalExchanger(), task_local_storage(), (:chmy_comm_storage, S))
 end
 
 function get_allocator(tle::TaskLocalExchanger, backend::Backend)
@@ -28,12 +31,14 @@ function Base.resize!(tle::TaskLocalExchanger, count::Integer)
     resize!(tle.recv_reqs, count)
     resize!(tle.send_bufs, count)
     resize!(tle.recv_bufs, count)
+    resize!(tle.recv_done, count)
     return
 end
 
 function reset_reqs!(tle::TaskLocalExchanger)
     fill!(tle.send_reqs, MPI.REQUEST_NULL)
     fill!(tle.recv_reqs, MPI.REQUEST_NULL)
+    fill!(tle.recv_done, false)
     return
 end
 

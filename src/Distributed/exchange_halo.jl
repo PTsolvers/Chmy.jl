@@ -10,6 +10,78 @@ end
 copy_halo!(backend::Backend, dst, src) = (copy_halo_kernel!(backend, 256, length(dst))(dst, src); return)
 copy_halo!(::CPU, dst, src) = (copyto!(dst, src); return)
 
+exchange_backend(arch::DistributedArchitecture) = is_gpu_aware(arch) ? Architectures.get_backend(arch) : CPU()
+
+# post the receives of one side and pack its send buffers
+function post_receives!(side::Side{S}, dim::Dim{D}, arch::DistributedArchitecture, fields::Tuple{Vararg{Field}}) where {S,D}
+    isempty(fields) && return
+    nbrank = neighbor(topology(arch), D, S)
+    @assert nbrank != MPI.PROC_NULL "no neighbor to communicate"
+    tle = task_local_exchanger(side)
+    reset_allocators!(tle)
+    init!(tle, exchange_backend(arch), dim, side, fields)
+    for idx in eachindex(fields)
+        tle.recv_reqs[idx] = MPI.Irecv!(tle.recv_bufs[idx], cart_comm(topology(arch)); source=nbrank)
+        copy_halo!(exchange_backend(arch), tle.send_bufs[idx], get_send_view(side, dim, fields[idx]))
+    end
+    return
+end
+
+# post the sends of one side, once its send buffers are packed
+function post_sends!(side::Side{S}, dim::Dim{D}, arch::DistributedArchitecture, fields::Tuple{Vararg{Field}}) where {S,D}
+    isempty(fields) && return
+    tle = task_local_exchanger(side)
+    for idx in eachindex(fields)
+        tle.send_reqs[idx] = MPI.Isend(tle.send_bufs[idx], cart_comm(topology(arch)); dest=neighbor(topology(arch), D, S))
+    end
+    return
+end
+
+# unpack the messages of one side that have arrived; true once all its receives and sends are complete
+function test_exchange!(side::Side, dim::Dim, arch::DistributedArchitecture, fields::Tuple{Vararg{Field}})
+    isempty(fields) && return true
+    tle  = task_local_exchanger(side)
+    done = true
+    for idx in eachindex(fields)
+        if !tle.recv_done[idx] && MPI.Test(tle.recv_reqs[idx])
+            copy_halo!(exchange_backend(arch), get_recv_view(side, dim, fields[idx]), tle.recv_bufs[idx])
+            tle.recv_done[idx] = true
+        end
+        done &= tle.recv_done[idx] & MPI.Test(tle.send_reqs[idx])
+    end
+    return done
+end
+
+"""
+    exchange_halo!(dim::Dim, arch, grid, fields1::Tuple, fields2::Tuple)
+
+Perform the halo exchange of both sides of dimension `dim` at once: `fields1` on side 1 and `fields2` on side 2 (an empty tuple for
+a side without exchange). The receives and sends of both sides are in flight together.
+"""
+function exchange_halo!(dim::Dim, arch::DistributedArchitecture, ::StructuredGrid,
+                        fields1::Tuple{Vararg{Field}}, fields2::Tuple{Vararg{Field}})
+    isempty(fields1) && isempty(fields2) && return
+    backend = Architectures.get_backend(arch)
+
+    # initiate non-blocking MPI receives and device-to-device copies to the send buffers
+    post_receives!(Side(1), dim, arch, fields1)
+    post_receives!(Side(2), dim, arch, fields2)
+    KernelAbstractions.synchronize(backend)
+
+    # initiate non-blocking MPI sends
+    post_sends!(Side(1), dim, arch, fields1)
+    post_sends!(Side(2), dim, arch, fields2)
+
+    # test send and receive requests, initiating device-to-device copies from the receive buffers as receives complete
+    while !(test_exchange!(Side(1), dim, arch, fields1) & test_exchange!(Side(2), dim, arch, fields2))
+        yield()
+    end
+
+    KernelAbstractions.synchronize(backend)
+
+    return
+end
+
 """
     exchange_halo!(side::Side, dim::Dim, arch, grid, fields...)
 
@@ -22,53 +94,9 @@ Perform halo exchange communication between neighboring processes in a distribut
 - `grid`: The structured grid on which the halo exchange is performed.
 - `fields...`: The fields to be exchanged.
 """
-function exchange_halo!(side::Side{S}, dim::Dim{D},
-                        arch::DistributedArchitecture,
-                        ::StructuredGrid,
-                        fields::Vararg{Field,K}) where {S,D,K}
-    comm = cart_comm(topology(arch))
-    nbrank = neighbor(topology(arch), D, S)
-    @assert nbrank != MPI.PROC_NULL "no neighbor to communicate"
-
-    tle = task_local_exchanger()
-
-    reset_allocators!(tle)
-
-    distributed_arch = is_gpu_aware(arch) ? Architectures.get_backend(arch) : CPU()
-    init!(tle, distributed_arch, dim, side, fields)
-
-    # initiate non-blocking MPI receive and device-to-device copy to the send buffer
-    for idx in eachindex(fields)
-        tle.recv_reqs[idx] = MPI.Irecv!(tle.recv_bufs[idx], comm; source=nbrank)
-        send_view = get_send_view(Side(S), Dim(D), fields[idx])
-        copy_halo!(distributed_arch, tle.send_bufs[idx], send_view)
-    end
-    KernelAbstractions.synchronize(Architectures.get_backend(arch))
-
-    # initiate non-blocking MPI send
-    for idx in eachindex(fields)
-        tle.send_reqs[idx] = MPI.Isend(tle.send_bufs[idx], comm; dest=nbrank)
-    end
-
-    recv_ready = falses(K)
-    send_ready = falses(K)
-
-    # test send and receive requests, initiating device-to-device copy
-    # to the receive buffer if the receive is complete
-    while !(all(recv_ready) && all(send_ready))
-        for idx in eachindex(fields)
-            if MPI.Test(tle.recv_reqs[idx]) && !recv_ready[idx]
-                recv_view = get_recv_view(Side(S), Dim(D), fields[idx])
-                copy_halo!(distributed_arch, recv_view, tle.recv_bufs[idx])
-                recv_ready[idx] = true
-            end
-            send_ready[idx] = MPI.Test(tle.send_reqs[idx])
-        end
-        yield()
-    end
-
-    KernelAbstractions.synchronize(Architectures.get_backend(arch))
-
+function exchange_halo!(::Side{S}, dim::Dim, arch::DistributedArchitecture, grid::StructuredGrid,
+                        fields::Vararg{Field,K}) where {S,K}
+    S == 1 ? exchange_halo!(dim, arch, grid, fields, ()) : exchange_halo!(dim, arch, grid, (), fields)
     return
 end
 
@@ -116,5 +144,23 @@ function BoundaryConditions.bc!(side::Side,
                                 grid::StructuredGrid,
                                 batch::ExchangeBatch)
     exchange_halo!(side, dim, arch, grid, batch.fields...)
+    return
+end
+
+exchange_fields(batch::ExchangeBatch) = batch.fields
+exchange_fields(::AbstractBatch)      = ()
+
+"""
+    BoundaryConditions.bc!(dim::Dim, arch::DistributedArchitecture, grid::StructuredGrid,
+                           batch::Tuple{AbstractBatch,AbstractBatch})
+
+Apply the boundary conditions of both sides of dimension `dim` on a distributed grid: the boundary condition kernels of the sides
+without neighbor, then the halo exchanges of both sides at once.
+"""
+function BoundaryConditions.bc!(dim::Dim, arch::DistributedArchitecture, grid::StructuredGrid,
+                                batch::Tuple{AbstractBatch,AbstractBatch})
+    batch[1] isa ExchangeBatch || bc!(Side(1), dim, arch, grid, batch[1])
+    batch[2] isa ExchangeBatch || bc!(Side(2), dim, arch, grid, batch[2])
+    exchange_halo!(dim, arch, grid, exchange_fields(batch[1]), exchange_fields(batch[2]))
     return
 end

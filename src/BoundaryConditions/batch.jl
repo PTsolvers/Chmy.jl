@@ -29,6 +29,17 @@ Apply boundary conditions using a batch set `batch` containing an `AbstractBatch
 end
 
 """
+    bc!(dim::Dim, arch::Architecture, grid::StructuredGrid, batch::Tuple{AbstractBatch,AbstractBatch})
+
+Apply the boundary conditions of both sides of dimension `dim`, given as a pair of batches (side 1, side 2).
+"""
+function bc!(dim::Dim, arch::Architecture, grid::SG, batch::Tuple{AbstractBatch,AbstractBatch})
+    bc!(Side(1), dim, arch, grid, batch[1])
+    bc!(Side(2), dim, arch, grid, batch[2])
+    return
+end
+
+"""
     EmptyBatch <: AbstractBatch
 
 EmptyBatch represents no boundary conditions.

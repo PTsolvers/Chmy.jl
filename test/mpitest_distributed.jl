@@ -77,7 +77,7 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             end
         end
 
-        # the overlapped launch (inner kernel, outer kernels, boundary conditions and halo exchange on worker tasks)
+        # the overlapped launch (outer and inner kernels, boundary conditions and halo exchange of both sides at once on a worker task)
         # must match the plain launch of the same kernel
         @testset "overlapped launch with exchange matches plain launch" begin
             dt = minimum(spacing(grid))^2 / 2 / T(2.1)

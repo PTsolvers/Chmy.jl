@@ -43,10 +43,7 @@ function Launcher(arch, grid; outer_width=nothing)
 
     if !isnothing(outer_width)
         setup() = activate!(arch; priority=:high)
-        workers = ntuple(Val(ndims(grid))) do _
-            Base.@_inline_meta
-            ntuple(_ -> Worker(; setup), Val(2))
-        end
+        workers = Worker(; setup)
     else
         workers = nothing
     end
@@ -176,36 +173,35 @@ end
         bc!(arch, grid, bc)
     else
         with_no_task_sync!(backend, args) do
+            # boundary conditions and halo exchange of all dimensions on the worker, one dimension after the other (the
+            # exchanged faces include the corners received in the dimensions before), each after the outer points it reads
+            N = ndims(grid)
+            events = Channel{Any}(N)
+            put!(launcher.workers) do
+                ntuple(Val(ndims(grid))) do J   # ndims(grid), not N: known when compiling the closure
+                    Base.@_inline_meta
+                    D = ndims(grid) - J + 1
+                    wait_event(backend, take!(events))
+                    bc!(Dim(D), arch, grid, bc[D])
+                end
+                KernelAbstractions.synchronize(backend)
+            end
+
             # outer points first, last dimension first, with an event after both sides of each dimension: the boundary
             # conditions of a dimension read its outer points and those of the dimensions before it
-            N = ndims(grid)
-            events = ntuple(Val(N)) do J
+            ntuple(Val(N)) do J
                 Base.@_inline_meta
                 D = N - J + 1
                 outer_fun = kernel(backend, groupsize, StaticSize(outer_worksize(launcher, Dim(D))))
                 outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(1))...))
                 outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(2))...))
-                record_event(backend)
+                put!(events, record_event(backend))
             end
 
             inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
             inner_fun(args..., offset + Offset(inner_offset(launcher)...))
 
-            # boundary conditions and halo exchange on the workers, one dimension after the other (the exchanged faces
-            # include the corners received in the dimensions before), each after the outer points it reads
-            ntuple(Val(N)) do J
-                Base.@_inline_meta
-                D = N - J + 1
-                ntuple(Val(2)) do S
-                    put!(launcher.workers[D][S]) do
-                        wait_event(backend, events[J])
-                        bc!(Side(S), Dim(D), arch, grid, bc[D][S])
-                        KernelAbstractions.synchronize(backend)
-                    end
-                end
-                wait(launcher.workers[D][1])
-                wait(launcher.workers[D][2])
-            end
+            wait(launcher.workers)
         end
     end
     return
