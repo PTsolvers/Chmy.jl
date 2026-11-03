@@ -22,10 +22,10 @@ export AnyNormal, AnyTangent, 𝐧, 𝐭
 include("types.jl")
 
 export isexpr, iscall
-export isliteral, isindex, iscoordinate, istensor, iscomp, islocs, isinds, ispack, isuniform
+export isliteral, isindex, iscoordinate, istensor, iscomp, isinds, ispack, isuniform
 export head, children, operation, arguments
 export value, argument, arity, isunary, isbinary
-export components, entries, locations, indices
+export components, entries, indices
 export tensorrank, tensorname, tensorkind
 export ==ₛ, !=ₛ, <ₛ, isnegof, isstaticzero, isstaticone, isunaryminus
 export 𝒪, ℐ
@@ -70,7 +70,7 @@ include("calculus.jl")
 
 include("topology.jl")
 
-export lower_rule, lower
+export lower_rule, lower, At
 include("lowering.jl")
 
 export canonicalize, simplify
@@ -91,7 +91,7 @@ export subs
 include("subs.jl")
 
 export Binding
-export findkey, push, pairstuple
+export findkey, push, pairstuple, bindings
 include("binding.jl")
 
 export compile

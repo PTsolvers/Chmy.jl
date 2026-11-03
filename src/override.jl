@@ -189,6 +189,9 @@ matches(e::EitherRegion, ξ::Rational) = matches(e.p, ξ) || matches(e.q, ξ)
 matches(b::BothRegions, ξ::Rational) = matches(b.p, ξ) && matches(b.q, ξ)
 matches(neg::NotRegion, ξ::Rational) = !matches(neg.p, ξ)
 
+# samples at global positions have no distance from the wall, and match no region
+matches(::RegionPattern, ::Nothing) = false
+
 const DefaultRegion = Ghost | Boundary
 
 # tensor patterns hold one index pattern per tensor index: `:` matches every component, `𝐧` the component normal to
@@ -222,9 +225,10 @@ end
 # predicates and matches
 
 """
-Abstract supertype for the predicates of overrides. A predicate implements `Chmy.match(predicate, face, comps, coord,
-ctx)`, which returns `nothing`, or an [`OverrideMatch`](@ref) if the component `comps` of the sample at `coord` in the
-lowering context `ctx` is overridden at the `face`, a face adjacent to the face of the context. A predicate selecting
+Abstract supertype for the predicates of overrides. A predicate implements `Chmy.match(predicate, face, comps, x)`,
+which returns `nothing`, or an [`OverrideMatch`](@ref) if the component `comps` of the sample at the position `x` is
+overridden at the `face`, a face adjacent to the face of the kernel. The outward distance of the sample from the wall
+on the side `face[a]` is `Chmy.distance(face[a], x[a])`, which is `nothing` at global positions. A predicate selecting
 tensor components also implements `Chmy.freecomps(predicate, comps)`, the components indexing the tensor data of the
 rule, and `Chmy.tangentcomps(predicate, comps)`, the components resolving `𝐭`.
 """
@@ -285,10 +289,10 @@ struct WallPredicate{W <: WallPattern, R <: RegionPattern, T <: TensorPattern} <
     comps::T
 end
 
-function match(p::WallPredicate, face, comps, coord, ctx)
+function match(p::WallPredicate, face, comps, x)
     matches(p.wall, face) || return nothing
     axis = findfirst(!=(:), face)::Int
-    ξ = distance(ctx, coord, axis)
+    ξ = distance(face[axis], x[axis])
     (matches(p.region, ξ) && matches(p.comps, comps, axis)) || return nothing
     return FaceMatch((signed_axis(axis, face[axis]),), (ξ,))
 end
@@ -313,10 +317,10 @@ struct FacePredicate{F <: FacePattern, R <: RegionPattern} <: OverridePredicate
     region::R
 end
 
-function match(p::FacePredicate, face, comps, coord, ctx)
+function match(p::FacePredicate, face, comps, x)
     matches(p.face, face) || return nothing
     axes = Tuple(a for a in eachindex(face) if face[a] != (:))
-    ξs = map(a -> distance(ctx, coord, a), axes)
+    ξs = map(a -> distance(face[a], x[a]), axes)
     all(ξ -> matches(p.region, ξ), ξs) || return nothing
     return FaceMatch(map(a -> signed_axis(a, face[a]), axes), ξs)
 end
@@ -334,11 +338,12 @@ struct Override <: Operator
     predicates::Tuple{Vararg{OverridePredicate}}
 end
 
-# an override of the component `comps` sampled at `coord`, with the matches of the faces that are still to be applied
+# an override of the component `comps` sampled at the position `x`, with the matches of the faces that are still to be
+# applied
 struct OverrideSample <: Operator
     override::Override
     comps::Tuple{Vararg{Int}}
-    coord::Tuple{Vararg{Rational{Int}}}
+    x::Tuple{Vararg{Position}}
     candidates::Tuple{Vararg{Pair{Int, OverrideMatch}}}
 end
 
@@ -363,19 +368,19 @@ checkranks(::OverrideSample, ::Tuple{Vararg{DTerm}}) = nothing
 printop(io, ::Union{Override, OverrideSample}, args) = printstyled(io, first(args); color = :red)
 printprec(::Union{Override, OverrideSample}, args) = printprec(first(args))
 
-# the first matching predicate of every face adjacent to the face of the context, faces of lower codimension and lower
+# the first matching predicate of every face adjacent to the face of the kernel, faces of lower codimension and lower
 # axes first, ordered by the predicate
-function candidates(predicates, comps, coord, ctx::LoweringContext{N}) where {N}
-    sides = Tuple(a for a in 1:N if ctx.face[a] != (:))
+function candidates(predicates, comps, face::Face{N}, x) where {N}
+    sides = Tuple(a for a in 1:N if face[a] != (:))
     result = Pair{Int, OverrideMatch}[]
     # bit k of the mask selects the k-th side
     for mask in sort!(collect(1:(2^length(sides) - 1)); by = m -> (count_ones(m), m))
-        face = ntuple(Val(N)) do a
+        adjacent = ntuple(Val(N)) do a
             k = findfirst(==(a), sides)
-            isnothing(k) || iszero(mask & 1 << (k - 1)) ? (:) : ctx.face[a]
+            isnothing(k) || iszero(mask & 1 << (k - 1)) ? (:) : face[a]
         end
         for (i, p) in enumerate(predicates)
-            m = match(p, face, comps, coord, ctx)
+            m = match(p, adjacent, comps, x)
             isnothing(m) && continue
             push!(result, i => m)
             break
@@ -384,25 +389,25 @@ function candidates(predicates, comps, coord, ctx::LoweringContext{N}) where {N}
     return Tuple(sort!(result; by = first))
 end
 
-function lower_rule(o::Override, args, comps, coord, ctx)
-    sample = OverrideSample(o, comps, coord, candidates(o.predicates, comps, coord, ctx))
-    return lower_rule(sample, args, comps, coord, ctx)
+function lower_rule(o::Override, args, comps, face, x)
+    sample = OverrideSample(o, comps, x, candidates(o.predicates, comps, face, x))
+    return lower_rule(sample, args, comps, face, x)
 end
 
-function lower_rule(s::OverrideSample, args, comps, coord, ctx)
+function lower_rule(s::OverrideSample, args, comps, face, x)
     # a sample read elsewhere, e.g. by a mirror rule, is matched again
-    (comps == s.comps && coord == s.coord) || return lower_rule(s.override, args, comps, coord, ctx)
-    isempty(s.candidates) && return here(first(args)[comps...], coord)
+    (comps == s.comps && x == s.x) || return lower_rule(s.override, args, comps, face, x)
+    isempty(s.candidates) && return here(first(args)[comps...], x)
     i, m = first(s.candidates)
-    rest = OverrideSample(s.override, s.comps, s.coord, Base.tail(s.candidates))(args...)[comps...]
+    rest = OverrideSample(s.override, s.comps, s.x, Base.tail(s.candidates))(args...)[comps...]
     rule = args[1 + i]
     pred = s.override.predicates[i]
     axes = signed_axes(m)
-    face = (; axes, tangents = tangentcomps(pred, comps), dims = length(coord))
-    data = map(g -> slicedata(resolve_face(g, face), pred, comps, axes), arguments(rule))
+    matched = (; axes, tangents = tangentcomps(pred, comps), dims = length(x))
+    data = map(g -> slicedata(resolve_face(g, matched), pred, comps, axes), arguments(rule))
     # rules are written in the frame of the outward normal
-    flip(x) = orient(x, comps, axes)
-    return here(flip(boundary_rule(operation(rule), flip(rest), data, m)), coord)
+    oriented(t) = orient(t, comps, axes)
+    return here(oriented(boundary_rule(operation(rule), oriented(rest), data, m)), x)
 end
 
 # a component changes sign with every index along a mirrored axis
@@ -448,9 +453,10 @@ end
 """
     𝒷(g; span = false)
 
-The boundary data `g` stored at the face matched by an override: the stored field is located at the walls of the
-face, e.g. `g[↓, 𝓈][0]` by the left wall, and along the other axes at the sample, or nowhere with `span = true`, e.g.
-`g[↓, :]`, a single value for the left wall. Can only appear in the data of override rules.
+The boundary data `g` at the face matched by an override: `g` is sampled at the traces of the walls of the face, e.g.
+`g[↓, 1//2]` by the left wall, at the position of the overridden sample along the other axes, or independently of
+them with `span = true`, e.g. `g[↓, :]`, a single value for the left wall. Can only appear in the data of override
+rules.
 """
 𝒷(g; span::Bool = false) = OnFace(span)(asterm(g))
 
@@ -458,43 +464,20 @@ tensorrank(::OnFace, args) = tensorrank(only(args))
 checkranks(::OnFace, ::Tuple{Vararg{DTerm}}) = nothing
 print_opname(io, ::OnFace) = print(io, '𝒷')
 
-function lower_rule(::OnFace, args, comps, coord, ctx)
+function lower_rule(::OnFace, args, comps, face, x)
     throw(ArgumentError("boundary data `𝒷` can only appear in the data of override rules"))
 end
 
-# a stored field located at the global locations `frames`, or at the sample where the frame is `nothing`
-struct Stored <: Operator
-    frames::Tuple
-end
-
-tensorrank(::Stored, args) = tensorrank(only(args))
-checkranks(::Stored, ::Tuple{Vararg{DTerm}}) = nothing
-print_opname(io, ::Stored) = print(io, '𝒷')
-
+# the data sampled at the walls of the matched face, and along the other axes at the sample, or at `:` with `span`
 function resolve_face(b::OnFace, term, face)
-    frames = ntuple(a -> face_frame(b, a, face.axes), face.dims)
-    return Stored(frames)(resolve_face(only(arguments(term)), face))
+    positions = ntuple(a -> face_position(b, a, face.axes), face.dims)
+    return At(positions)(resolve_face(only(arguments(term)), face))
 end
 
-function face_frame(b::OnFace, a, signed_axes)
+function face_position(b::OnFace, a, signed_axes)
     k = findfirst(s -> abs(s) == a, signed_axes)
     isnothing(k) || return signed_axes[k] > 0 ? Upper() : Lower()
-    return b.span ? (:) : nothing
-end
-
-function lower_rule(s::Stored, (x,)::Tuple{DTerm}, comps, coord, ctx)
-    y = x[comps...]
-    isuniform(y) || isfield(y) || throw(ArgumentError("boundary data `𝒷` can only be given to fields"))
-    return leaf(y, s.frames, coord, ctx)
-end
-
-# a stored scalar field, or a component of a stored tensor field
-function isfield(term::DTerm)
-    return @match term begin
-        Tensor(_, _, _, _) => true
-        DExpr(Comp(_), (Tensor(_, _, _, _),)) => true
-        _ => false
-    end
+    return b.span ? (:) : 0 // 1
 end
 
 # rules
@@ -578,8 +561,8 @@ function boundary_rule(op::WallRule, u, data, match)
     return Lifted(op, axes)(u, data...)
 end
 
-function lower_rule(op::WallRule, (u, data...)::Tuple{DTerm, Vararg{DTerm}}, coord::NTuple{1}, ctx)
-    return wall_rule(op, u, data, distance(ctx, coord, 1))
+function lower_rule(op::WallRule, (u, data...)::Tuple{DTerm, Vararg{DTerm}}, face::Face{1}, x::NTuple{1, Position})
+    return wall_rule(op, u, data, distance(face[1], x[1]))
 end
 
 function wall_rule(::WallValue, u, (g,), ξ)

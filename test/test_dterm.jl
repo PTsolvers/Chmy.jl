@@ -1,6 +1,6 @@
 using Test
 using Chmy
-using Chmy: DExpr, Call, Comp, Locs, Inds, Pack, Kind, TensorKind, Tensor, ZeroTensor, IdTensor
+using Chmy: DExpr, Call, Comp, Inds, Pack, Kind, TensorKind, Tensor, ZeroTensor, IdTensor
 using Moshi.Data: isa_variant
 
 using Random
@@ -22,7 +22,6 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred istensor(lit)) == false
         @test (@inferred iscomp(lit)) == false
         @test (@inferred isinds(lit)) == false
-        @test (@inferred islocs(lit)) == false
         @test (@inferred isexpr(lit)) == false
         @test (@inferred iscall(lit)) == false
 
@@ -35,7 +34,6 @@ Random.seed!(1234) # deterministic tests
         @test_throws ArgumentError argument(lit)
         @test_throws ArgumentError components(lit)
         @test_throws ArgumentError indices(lit)
-        @test_throws ArgumentError locations(lit)
         @test_throws ArgumentError tensorkind(lit)
         @test_throws ArgumentError tensorname(lit)
 
@@ -69,7 +67,6 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred istensor(ind)) == false
         @test (@inferred iscomp(ind)) == false
         @test (@inferred isinds(ind)) == false
-        @test (@inferred islocs(ind)) == false
         @test (@inferred isexpr(ind)) == false
         @test (@inferred iscall(ind)) == false
 
@@ -80,7 +77,6 @@ Random.seed!(1234) # deterministic tests
         @test_throws ArgumentError argument(ind)
         @test_throws ArgumentError components(ind)
         @test_throws ArgumentError indices(ind)
-        @test_throws ArgumentError locations(ind)
         @test_throws ArgumentError tensorkind(ind)
         @test_throws ArgumentError tensorname(ind)
 
@@ -114,7 +110,6 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred isindex(t)) == false
         @test (@inferred iscomp(t)) == false
         @test (@inferred isinds(t)) == false
-        @test (@inferred islocs(t)) == false
         @test (@inferred isexpr(t)) == false
         @test (@inferred iscall(t)) == false
 
@@ -128,7 +123,6 @@ Random.seed!(1234) # deterministic tests
         @test_throws ArgumentError argument(t)
         @test_throws ArgumentError components(t)
         @test_throws ArgumentError indices(t)
-        @test_throws ArgumentError locations(t)
         @test_throws ArgumentError t[]
 
         for rank in 1:4, kind in KINDS, uniform in (true, false)
@@ -224,7 +218,6 @@ Random.seed!(1234) # deterministic tests
             @test (@inferred isindex(expr)) == false
             @test (@inferred istensor(expr)) == false
             @test (@inferred iscall(expr)) == false
-            @test (@inferred islocs(expr)) == false
             @test (@inferred isinds(expr)) == false
 
             @test (@inferred tensorrank(expr)) == 0
@@ -233,41 +226,6 @@ Random.seed!(1234) # deterministic tests
 
             @test_throws ArgumentError operation(expr)
             @test_throws ArgumentError arguments(expr)
-            @test_throws ArgumentError indices(expr)
-            @test_throws ArgumentError locations(expr)
-            @test_throws ArgumentError tensorkind(expr)
-            @test_throws ArgumentError tensorname(expr)
-        end
-
-        @testset "Locs" begin
-            @scalars a @uniform(b)
-            expr = @inferred DExpr(Locs((𝓅, 𝓈)), (a,))
-
-            @test expr isa DTerm
-            @test (@inferred isa_variant(expr, DExpr))
-
-            @test (@inferred isexpr(expr)) == true
-            @test (@inferred islocs(expr)) == true
-
-            @test (@inferred head(expr)) == Locs((𝓅, 𝓈))
-            @test isequal(children(expr), (a,))
-            @test (@inferred argument(expr)) ==ₛ a
-            @test locations(expr) == (𝓅, 𝓈)
-
-            @test (@inferred isliteral(expr)) == false
-            @test (@inferred isindex(expr)) == false
-            @test (@inferred istensor(expr)) == false
-            @test (@inferred iscall(expr)) == false
-            @test (@inferred iscomp(expr)) == false
-            @test (@inferred isinds(expr)) == false
-
-            @test (@inferred tensorrank(expr)) == 0
-            @test (@inferred isuniform(expr)) == false
-            @test (@inferred isuniform(DExpr(Locs((𝓅, 𝓈)), (b,)))) == true
-
-            @test_throws ArgumentError operation(expr)
-            @test_throws ArgumentError arguments(expr)
-            @test_throws ArgumentError components(expr)
             @test_throws ArgumentError indices(expr)
             @test_throws ArgumentError tensorkind(expr)
             @test_throws ArgumentError tensorname(expr)
@@ -294,7 +252,6 @@ Random.seed!(1234) # deterministic tests
             @test (@inferred istensor(expr)) == false
             @test (@inferred iscall(expr)) == false
             @test (@inferred iscomp(expr)) == false
-            @test (@inferred islocs(expr)) == false
 
             @test (@inferred tensorrank(expr)) == 0
             @test (@inferred isuniform(expr)) == false
@@ -307,11 +264,17 @@ Random.seed!(1234) # deterministic tests
             @test indices(v[1][1, 2]) === (1 // 1, 2 // 1)
             @test_throws ArgumentError a[1 // 3]
             @test_throws ArgumentError v[1 // 2]
+            # global positions: traces on the walls, and values independent of the axis
+            @test indices(@inferred a[↓, 1 // 2]) === (↓, 1 // 2)
+            @test indices(@inferred a[↓, :]) === (↓, :)
+            @test a[↓, 0] !=ₛ a[0, 0]
+            @test a[↓, 0] !=ₛ a[↑, 0]
+            @test sprint(show, a[↓, -1 // 2]) == "a[↓, -1//2]"
+            @test sprint(show, a[:, 1]) == "a[:, 1]"
 
             @test_throws ArgumentError operation(expr)
             @test_throws ArgumentError arguments(expr)
             @test_throws ArgumentError components(expr)
-            @test_throws ArgumentError locations(expr)
             @test_throws ArgumentError tensorkind(expr)
             @test_throws ArgumentError tensorname(expr)
         end
@@ -423,7 +386,8 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred a + b <ₛ a + b + b)
         @test (@inferred v[1] <ₛ v[2])
         @test (@inferred u[2] <ₛ v[1])
-        @test (@inferred a[𝓅] <ₛ a[𝓈])
+        @test (@inferred a[1] <ₛ a[↓])
+        @test (@inferred a[↓] <ₛ a[↑])
         @test (@inferred a[0] <ₛ a[1])
 
         terms = DTerm[sin(b), sin(a), cos(a), Literal(2), a]

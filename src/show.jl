@@ -16,8 +16,7 @@ function Base.show(io::IO, v::DTerm)
         IdTensor(_) => print(io, 'ℐ')
         DExpr(Call(op), args) => printop(io, op, args)
         DExpr(Comp(comp), (arg,)) => print_indexed(io, arg, comp)
-        DExpr(Locs(locs), (arg,)) => print_indexed(io, arg, map(LocationName, locs))
-        DExpr(Inds(offsets), (arg,)) => print_indexed(io, arg, map(stencil_constant, offsets))
+        DExpr(Inds(positions), (arg,)) => print_indexed(io, arg, map(position_name, positions))
         DExpr(Pack(_, dims, _), _) => print_pack(io, v, dims, ())
     end
 end
@@ -219,6 +218,11 @@ struct LocationName{L}
 end
 Base.show(io::IO, l::LocationName) = show(io, l.loc)
 Base.show(io::IO, ::LocationName{Colon}) = print(io, ':')
+
+Base.show(io::IO, l::Located) = print_indexed(io, l.term, map(LocationName, l.locations))
+
+position_name(p::Rational) = stencil_constant(p)
+position_name(p::Global) = LocationName(p)
 
 function print_pack_table(io, t, rank, dims, kind)
     print(io, dims, "-D ")

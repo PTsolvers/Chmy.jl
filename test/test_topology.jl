@@ -1,6 +1,6 @@
 using Test
 using Chmy
-using Chmy: matches, dim, codim, LoweringContext
+using Chmy: matches, dim, codim, distance, shift, mirror
 
 @testset "faces" begin
     @test dim((↓, :)) == 1
@@ -12,14 +12,22 @@ using Chmy: matches, dim, codim, LoweringContext
     @test Chmy.isinterior((:, :))
 end
 
-@testset "context" begin
-    # along the sides the origin is the outward distance, and positive coordinates point along the axis
-    ctx = LoweringContext((↓, ↑, :), (-1 // 2, -1 // 2, 1 // 2))
-    @test Chmy.position(ctx, (0 // 1, 0 // 1, 0 // 1), 1) == 1 // 2
-    @test Chmy.position(ctx, (0 // 1, 0 // 1, 0 // 1), 2) == -1 // 2
-    @test Chmy.position(ctx, (0 // 1, 0 // 1, -1 // 1), 3) == -1 // 2
-    @test Chmy.distance(ctx, (-1 // 1, 0 // 1, 0 // 1), 1) == 1 // 2
-    @test Chmy.distance(ctx, (0 // 1, 1 // 1, 0 // 1), 2) == 1 // 2
+@testset "positions" begin
+    # the outward distance from the wall, positive in the ghost region, positions point along the axis
+    @test distance(↓, 1 // 2) == -1 // 2
+    @test distance(↓, -1 // 2) == 1 // 2
+    @test distance(↑, 1 // 2) == 1 // 2
+    @test isnothing(distance(:, 1 // 2))
+    @test isnothing(distance(↓, ↓))
+    # offsets add up, a global position absorbs offsets, and the innermost global position wins
+    @test shift(1 // 2, 1 // 1) == 3 // 2
+    @test shift(1 // 2, ↓) == ↓
+    @test shift(↑, 1 // 2) == ↑
+    @test shift(↑, ↓) == ↓
+    @test shift(↓, (:)) == (:)
+    @test mirror(1 // 2) == -1 // 2
+    @test mirror(↓) == ↑
+    @test mirror(:) == (:)
 end
 
 @testset "wall patterns" begin

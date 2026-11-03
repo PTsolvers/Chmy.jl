@@ -75,6 +75,8 @@ end
 (<ₛ)(::Operator, ::Fun) = false
 (<ₛ)(x::Operator, y::Operator) = isless(objectid(x), objectid(y))
 (<ₛ)(x::Location, y::Location) = locrank(x) < locrank(y)
+(<ₛ)(::Rational, ::Global) = true
+(<ₛ)(::Global, ::Rational) = false
 
 locrank(::Point) = 0
 locrank(::Segment) = 1
@@ -174,13 +176,6 @@ iscall(term::DTerm) = isa_variant(term, DExpr) && isa_variant(term.head, Call)
 Return `true` if `term` is a tensor component expression.
 """
 iscomp(term::DTerm) = isa_variant(term, DExpr) && isa_variant(term.head, Comp)
-
-"""
-    islocs(term)
-
-Return `true` if `term` is an expression evaluated at staggered grid locations.
-"""
-islocs(term::DTerm) = isa_variant(term, DExpr) && isa_variant(term.head, Locs)
 
 """
     isinds(term)
@@ -369,7 +364,6 @@ Return the term being indexed by a component, location, or grid indexing express
 function argument(term::DTerm)
     return @match term begin
         DExpr(Comp(_), (arg,)) => arg
-        DExpr(Locs(_), (arg,)) => arg
         DExpr(Inds(_), (arg,)) => arg
         _ => throw(ArgumentError("only indexing expressions can have a single argument"))
     end
@@ -408,25 +402,13 @@ function packdims(term::DTerm)
 end
 
 """
-    locations(term)
-
-Return the location tuple of a location expression.
-"""
-function locations(term::DTerm)
-    return @match term begin
-        DExpr(Locs(locs), _) => locs
-        _ => throw(ArgumentError("only location expression can have locations"))
-    end
-end
-
-"""
     indices(term)
 
-Return the offset tuple of a grid indexing expression.
+Return the position tuple of a sample.
 """
 function indices(term::DTerm)
     return @match term begin
-        DExpr(Inds(offsets), _) => offsets
+        DExpr(Inds(positions), _) => positions
         _ => throw(ArgumentError("only indexing expression can have indices"))
     end
 end
@@ -473,13 +455,14 @@ end
 """
     getindex(term::DTerm)
     getindex(term::DTerm, I::Integer...)
-    getindex(term::DTerm, offsets::Union{Integer, Rational}...)
+    getindex(term::DTerm, positions::Union{Integer, Rational, Lower, Upper, Colon}...)
 
 Without indices, return the scalar `term` itself. Otherwise, construct a symbolic tensor component if `term` is not a scalar, respecting symmetric, alternating,
 and diagonal tensor structure. Zero and identity tensors return literal component values, and packed
 tensors return the stored entry.
-If `term` is a scalar, construct a sample of `term` at `offsets` from the evaluation point,
-which must be multiples of `1//2`.
+If `term` is a scalar, construct a sample of `term` at `positions` relative to the evaluation point: offsets, which
+must be multiples of `1//2`, or the global positions `↓`, `↑` and `:`. The global positions `↓` and `↑` sample the
+traces of `term` on the lower and upper walls, and `:` its value independent of the axis, e.g. `g[↓, 1//2]`.
 """
 function Base.getindex(term::DTerm)
     tensorrank(term) == 0 || throw(ArgumentError("number of subscripts not matching tensor rank"))
@@ -522,7 +505,9 @@ function Base.getindex(term::DTerm, I::Vararg{Integer, N}) where {N}
         _ => makecomp(term, I)
     end
 end
-Base.getindex(term::DTerm, offsets::Vararg{Union{Integer, Rational}, N}) where {N} = makeinds(term, offsets)
+Base.getindex(term::DTerm, positions::Vararg{PositionLike, N}) where {N} = makeinds(term, positions)
+# samples at global positions only, which are their own binding keys
+Base.getindex(term::DTerm, p::Global, ps::Vararg{Global, N}) where {N} = makeinds(term, (p, ps...))
 
 # hashing DTerms
 # DExpr caches the hash, other variants need to compute explicitly
@@ -568,10 +553,9 @@ end
 function headrank(head)
     return @match head begin
         Comp(_) => 0
-        Locs(_) => 1
-        Inds(_) => 2
-        Call(_) => 3
-        Pack(_, _, _) => 4
+        Inds(_) => 1
+        Call(_) => 2
+        Pack(_, _, _) => 3
     end
 end
 
@@ -586,7 +570,7 @@ function isless_expr(x, y)::Bool
             opx == opy || return (opx <ₛ opy)::Bool
             isless_args(ax, ay)
         end
-        (Comp(ix), Comp(iy)) || (Locs(ix), Locs(iy)) || (Inds(ix), Inds(iy)) => begin
+        (Comp(ix), Comp(iy)) || (Inds(ix), Inds(iy)) => begin
             ax[1] ==ₛ ay[1] || return ax[1] <ₛ ay[1]
             isless_args(ix, iy)
         end

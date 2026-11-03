@@ -18,23 +18,20 @@ flip(::Colon) = (:)
 flip(::Lower) = Upper()
 flip(::Upper) = Lower()
 
-const Coord{N} = NTuple{N, Rational{Int}}
+# the outward distance of the position `p` from the wall on the side of a face, positive in the ghost region, and
+# `nothing` along the spanning axes of the face and at global positions, which have no distance from the wall
+distance(::Colon, p) = nothing
+distance(side::Side, p::Rational{Int}) = outward(side) * p
+distance(::Side, ::Global) = nothing
 
-# the lowering context: the face next to which the expression is lowered, and the origin of the evaluation point,
-# i.e. the outward distance from the wall on the sides of the face, and the lattice coordinate on its spanning axes
-struct LoweringContext{N}
-    face::Face{N}
-    origin::Coord{N}
-end
+# the position `p` sampled at `s`: offsets add up, a global position absorbs offsets, and the innermost global
+# position wins
+shift(p::Rational{Int}, s::Rational{Int}) = p + s
+shift(p::Position, s::Global) = s
+shift(p::Global, s::Rational{Int}) = p
 
-Base.ndims(::LoweringContext{N}) where {N} = N
-
-# the coordinate of the sample at `coord` from the evaluation point along the axis `a`, relative to the grid point of
-# the kernel, which is the wall point on the sides of the face
-position(ctx::LoweringContext, coord, a) = position(ctx.face[a], ctx.origin[a], coord[a])
-position(::Colon, origin, c) = origin + c
-position(side::Side, origin, c) = outward(side) * origin + c
-
-# the outward distance of the sample at `coord` from the wall on the side `a` of the face, positive in the ghost region
-distance(ctx::LoweringContext, coord, a) = distance(ctx.face[a], ctx.origin[a], coord[a])
-distance(side::Side, origin, c) = origin + outward(side) * c
+# the position in the frame of the reflected axis, and the position, or the side of a face, along the signed axis `a`,
+# reflected if `a` is negative
+mirror(p::Rational{Int}) = -p
+mirror(p::Global) = flip(p)
+mirror(p, a::Int) = a > 0 ? p : mirror(p)

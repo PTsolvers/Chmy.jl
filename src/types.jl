@@ -43,14 +43,22 @@ Location on a staggered grid.
 """
 const Location = Union{Point, Segment, Lower, Upper, Colon}
 
+# global positions along an axis: the traces on the lower and upper walls, and values independent of the axis
+const Global = Union{Lower, Upper, Colon}
+
+# a position along an axis: a lattice coordinate, or a global position
+const Position = Union{Rational{Int}, Global}
+
+# a position as given by users, offsets are converted to `Rational{Int}`
+const PositionLike = Union{Integer, Rational, Global}
+
 # head of a Chmy expression
 @data HeadImpl begin
-    export Call, Comp, Locs, Inds, Pack
+    export Call, Comp, Inds, Pack
 
     Call(Operator)
     Comp(Tuple{Vararg{Int}})
-    Locs(Tuple{Vararg{Location}})
-    Inds(Tuple{Vararg{Rational{Int}}})
+    Inds(Tuple{Vararg{Position}})
     # a tensor in component form, the children are the stored entries
     struct Pack
         rank::Int

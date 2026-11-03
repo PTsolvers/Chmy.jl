@@ -14,19 +14,18 @@ end
 makecomp(arg::DTerm, comp::Vararg{Int, N}) where {N} = makecomp(arg, comp)
 makecomp_unchecked(arg::DTerm, comp::NTuple{N, Int}) where {N} = DExpr(Comp(comp), (arg,))
 
-function makelocs(arg::DTerm, locs::NTuple{N, Location}) where {N}
-    tensorrank(arg) == 0 || throw(ArgumentError("only scalars can be arguments to location expression"))
-    return makelocs_unchecked(arg, locs)
-end
-makelocs(arg::DTerm, locs::Vararg{Location, N}) where {N} = makelocs(arg, locs)
-makelocs_unchecked(arg::DTerm, locs::NTuple{N, Location}) where {N} = DExpr(Locs(locs), (arg,))
-
-function makeinds(arg::DTerm, offsets::NTuple{N, Union{Integer, Rational}}) where {N}
+function makeinds(arg::DTerm, positions::NTuple{N, PositionLike}) where {N}
     tensorrank(arg) == 0 || throw(ArgumentError("only scalars can be arguments to indexing expression"))
-    all(x -> denominator(x) <= 2, offsets) || throw(ArgumentError("offsets must be multiples of 1//2"))
-    return makeinds_unchecked(arg, map(Rational{Int}, offsets))
+    return makeinds_unchecked(arg, map(asposition, positions))
 end
-makeinds_unchecked(arg::DTerm, offsets::NTuple{N, Rational{Int}}) where {N} = DExpr(Inds(offsets), (arg,))
+
+asposition(p::Global) = p
+function asposition(p::Union{Integer, Rational})
+    denominator(p) <= 2 || throw(ArgumentError("offsets must be multiples of 1//2"))
+    return Rational{Int}(p)
+end
+
+makeinds_unchecked(arg::DTerm, positions::NTuple{N, Position}) where {N} = DExpr(Inds(positions), (arg,))
 
 function makepack(rank::Integer, dims::Integer, kind::TensorKind, data::Tuple{Vararg{DTerm}})
     rank > 0 || throw(ArgumentError("tensors in component form must have a positive rank"))
@@ -330,6 +329,3 @@ Base.ifelse(cond::DTerm, x::DTerm, y::DTerm) = makecall(Fun(ifelse), cond, x, y)
 Base.ifelse(cond::DTerm, x::Number, y::DTerm) = ifelse(cond, Literal(x), y)
 Base.ifelse(cond::DTerm, x::DTerm, y::Number) = ifelse(cond, x, Literal(y))
 Base.ifelse(cond::DTerm, x::Number, y::Number) = ifelse(cond, Literal(x), Literal(y))
-
-# location
-Base.getindex(arg::DTerm, locs::Vararg{Location, N}) where {N} = makelocs(arg, locs...)

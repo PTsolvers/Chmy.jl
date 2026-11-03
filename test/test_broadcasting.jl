@@ -25,10 +25,10 @@ using Chmy: BroadcastedFun, Kind
         @test input[1, 2] ==ₛ expected
     end
     # broadcasting over scalars, or mixing component and coordinate-free forms, is evaluated while lowering
-    @test (@inferred lower(a .+ b, (:, :), (0, 0))) ==ₛ a[𝓅, 𝓅][0, 0] + b[𝓅, 𝓅][0, 0]
+    @test (@inferred lower(a .+ b, (:, :), (0, 0))) ==ₛ a[0, 0] + b[0, 0]
     mixed = ac .+ B
     @test !ispack(mixed)
-    @test (@inferred lower(mixed[1, 2], (:, :), (0, 0))) ==ₛ A[1, 2][𝓅, 𝓅][0, 0] + B[1, 2][𝓅, 𝓅][0, 0]
+    @test (@inferred lower(mixed[1, 2], (:, :), (0, 0))) ==ₛ A[1, 2][0, 0] + B[1, 2][0, 0]
 
     Sc, Dc, Kc = components(S, 2), components(D, 2), components(K, 2)
     @test tensorkind(sin.(Sc) .+ Dc) == Kind.Sym()

@@ -1,3 +1,51 @@
+# the key binding the samples of a scalar field at the `locations` to data, e.g. `u[𝓈, 𝓈]` for all samples at
+# half-integer positions, or `g[↓, 𝓈]` for the samples of the trace on the lower wall of the first axis
+struct Located
+    term::DTerm
+    locations::Tuple{Vararg{Location}}
+    function Located(term::DTerm, locations::Tuple{Vararg{Location}})
+        tensorrank(term) == 0 || throw(ArgumentError("only scalars can be located"))
+        return new(term, locations)
+    end
+end
+
+# keys compare by content, never with the symbolic `==` of DTerms
+Base.isequal(a::Located, b::Located) = isequal(a.term, b.term) && a.locations === b.locations
+Base.hash(l::Located, h::UInt) = hash(l.locations, hash(l.term, hash(:Located, h)))
+
+# a binding key, at least one location is a point or a segment, otherwise the sample is the key itself
+Base.getindex(term::DTerm, locs::Vararg{Location, N}) where {N} = Located(term, locs)
+
+# the location of a position: integer positions are points and half-integer ones segments
+location(p::Rational{Int}) = isinteger(p) ? Point() : Segment()
+location(p::Global) = p
+
+# the key of the sample of `term` at `positions`: samples at global positions only are their own keys
+bindkey(term::DTerm, positions) = all(p -> p isa Global, positions) ? makeinds_unchecked(term, positions) : Located(term, map(location, positions))
+
+"""
+    bindings(term)
+
+Returns the tuple of keys of the data that a lowered `term` reads, in the order of their first appearance: the
+locations of the sampled fields, e.g. `u[𝓈, 𝓈]` for `u[1//2, 3//2]`, samples at global positions only, e.g. `g[↓, :]`,
+and uniform terms.
+"""
+function bindings(term::DTerm)
+    keys = Union{DTerm, Located}[]
+    collect_bindings!(keys, term)
+    return Tuple(unique(keys))
+end
+
+function collect_bindings!(keys, term::DTerm)
+    @match term begin
+        DExpr(Inds(positions), (arg,)) => push!(keys, bindkey(arg, positions))
+        DExpr(Call(_), args) => foreach(t -> collect_bindings!(keys, t), args)
+        Tensor(_, _, _, _) || DExpr(Comp(_), _) => push!(keys, term)
+        _ => nothing
+    end
+    return keys
+end
+
 struct Binding{K, D}
     keys::K
     data::D

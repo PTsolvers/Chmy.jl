@@ -24,28 +24,21 @@ Lifted(op::Operator, axes::Vararg{Integer, N}) where {N} = Lifted(op, axes)
 tensorrank(lf::Lifted, args) = tensorrank(lf.op, args)
 checkranks(lf::Lifted, args::NTuple{N, DTerm}) where {N} = checkranks(lf.op, args)
 
-# the context of a negative axis is mirrored: the side of the face flips, the outward distance from the wall is kept,
-# and the lattice coordinate changes sign
-mirror(a, face, origin) = a > 0 ? (face[a], origin[a]) : (flip(face[-a]), mirror_origin(face[-a], origin[-a]))
-mirror_origin(::Colon, o) = -o
-mirror_origin(::Side, o) = o
-
-function lower_rule(lf::Lifted{O, K}, args, comps, coord::Coord{N}, ctx::LoweringContext{N}) where {O, K, N}
+function lower_rule(lf::Lifted{O, K}, args, comps, face::Face{N}, x::NTuple{N, Position}) where {O, K, N}
     maximum(abs, lf.axes) <= N || throw(ArgumentError("the lifted axes exceed the number of dimensions"))
     # tensor components are not mapped to the lifted axes yet, so only scalar calls of scalars can be lifted
     isempty(comps) || expansion_error(lf)
     checkscalar(lf, args)
-    # the coordinate and the context restricted to the lifted axes, negating the coordinate and mirroring the context
-    # for negative axes
-    lcoord = map(a -> flipsign(coord[abs(a)], a), lf.axes)
-    lfaces = map(a -> mirror(a, ctx.face, ctx.origin), lf.axes)
-    lctx = LoweringContext(map(first, lfaces), map(last, lfaces))
-    term = lower_rule(lf.op, args, comps, lcoord, lctx)::DTerm
+    # mirrored along negative axes: the side of the face flips, and the position changes sign, so that the outward
+    # distance from the wall is kept
+    lface = map(a -> mirror(face[abs(a)], a), lf.axes)
+    lx = map(a -> mirror(x[abs(a)], a), lf.axes)
+    term = lower_rule(lf.op, args, comps, lface, lx)::DTerm
     lf.axes == ntuple(identity, Val(N)) && return term
     return insert_stencil(term, Val(N), lf.axes)
 end
 
-# replace kD samples `f[o₁, …, oₖ]` with nD samples where the offset along `|axes[j]|` is `sign(axes[j]) * oⱼ` and zero otherwise
+# replace kD samples `f[p₁, …, pₖ]` with nD samples at `pⱼ` along `axes[j]`, mirrored for negative axes, and zero otherwise
 @inline function insert_stencil(term, dims, axes)
     return @match term begin
         DExpr(Inds(offsets), (arg,)) && if length(offsets) == length(axes) end => makeinds_unchecked(arg, insert_offsets(dims, axes, offsets))
@@ -55,12 +48,11 @@ end
 end
 
 @inline function insert_offsets(dims, axes, offsets)
-    result = zero_offsets(dims)
-    for j in eachindex(axes)
-        axis = @inbounds axes[j]
-        result = @inbounds Base.setindex(result, flipsign(offsets[j], axis), abs(axis))
+    return ntuple(dims) do a
+        j = findfirst(b -> abs(b) == a, axes)
+        isnothing(j) && return (0 // 1)::Position
+        return mirror(offsets[j], axes[j])::Position
     end
-    return result
 end
 
 @inline function insert_args(head, args, dims, axes)
