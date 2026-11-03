@@ -89,4 +89,14 @@ task_sync_enabled(::Any)  = nothing
 
 gpu_aware_compat(::CPU) = false
 
+# order work queued by one task after work queued by another, without blocking the host (KernelAbstractions ≥ 0.10);
+# earlier versions synchronize when recording
+if isdefined(KernelAbstractions, :record_event)
+    record_event(backend::Backend) = KernelAbstractions.record_event(backend)
+    wait_event(backend::Backend, event) = KernelAbstractions.wait_event(backend, event)
+else
+    record_event(backend::Backend) = (KernelAbstractions.synchronize(backend); nothing)
+    wait_event(::Backend, ::Nothing) = nothing
+end
+
 end

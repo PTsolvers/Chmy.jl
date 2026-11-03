@@ -10,7 +10,7 @@ using Chmy.Fields
 using Chmy.BoundaryConditions
 using Chmy.Workers
 
-import Chmy.Architectures: enable_task_sync!, disable_task_sync!
+import Chmy.Architectures: enable_task_sync!, disable_task_sync!, record_event, wait_event
 
 using KernelAbstractions
 
@@ -176,17 +176,29 @@ end
         bc!(arch, grid, bc)
     else
         with_no_task_sync!(backend, args) do
-            inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
-            inner_fun(args..., offset + Offset(inner_offset(launcher)...))
-
+            # outer points first, last dimension first, with an event after both sides of each dimension: the boundary
+            # conditions of a dimension read its outer points and those of the dimensions before it
             N = ndims(grid)
-            ntuple(Val(N)) do J
+            events = ntuple(Val(N)) do J
                 Base.@_inline_meta
                 D = N - J + 1
                 outer_fun = kernel(backend, groupsize, StaticSize(outer_worksize(launcher, Dim(D))))
+                outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(1))...))
+                outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(2))...))
+                record_event(backend)
+            end
+
+            inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
+            inner_fun(args..., offset + Offset(inner_offset(launcher)...))
+
+            # boundary conditions and halo exchange on the workers, one dimension after the other (the exchanged faces
+            # include the corners received in the dimensions before), each after the outer points it reads
+            ntuple(Val(N)) do J
+                Base.@_inline_meta
+                D = N - J + 1
                 ntuple(Val(2)) do S
                     put!(launcher.workers[D][S]) do
-                        outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(S))...))
+                        wait_event(backend, events[J])
                         bc!(Side(S), Dim(D), arch, grid, bc[D][S])
                         KernelAbstractions.synchronize(backend)
                     end
