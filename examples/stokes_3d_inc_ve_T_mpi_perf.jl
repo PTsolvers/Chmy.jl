@@ -120,7 +120,10 @@ end
     grid   = UniformGrid(arch; origin=(-lx/2, -ly/2, -lz/2), extent=(lx, ly, lz), dims=dims_g)
     # the time loop runs once per launcher, to report the throughput with and without the overlap of
     # boundary conditions and halo exchange with the computation
-    launchers = (overlapped=Launcher(arch, grid; outer_width=(128, 8, 4)), plain=Launcher(arch, grid))
+    # no boundary kernels in x on MI250X (gfx90a), where they are slow (see the docs, "Overlap on AMD GPUs")
+    mi250x      = PERF_BACKEND == "AMDGPU" && startswith(AMDGPU.HIP.gcn_arch(AMDGPU.device()), "gfx90a")
+    outer_width = mi250x ? (0, 8, 4) : (128, 8, 4)
+    launchers = (overlapped=Launcher(arch, grid; outer_width), plain=Launcher(arch, grid))
     nx, ny, nz = dims_g
     dx, dy, dz = spacing(grid)
     nt     = 8
@@ -202,8 +205,12 @@ end
         η_ve = 1.0 / (1.0 / η + 1.0 / (G * dt))
         (it > 2) && (ncheck = ceil(Int, 0.5nx))
 
+        # garbage collection on all ranks at the same iterations (see the docs, "Using Chmy.jl with MPI"). The collector stays
+        # enabled during the warmup: the first launches compile, and what disabling defers (the collection of their garbage,
+        # code that first runs after a collection) would fall into the timed iterations
         for iter in 1:niter
-            (iter == warmup) && (MPI.Barrier(cart_comm(topo)); tic = time_ns())
+            (iter == warmup) && (GC.gc(); GC.enable(false); MPI.Barrier(cart_comm(topo)); tic = time_ns())
+            (iter % 50 == 0) && (GC.enable(true); GC.gc(false); GC.enable(false))
             launch(arch, grid, update_stress! => (τ, Pr, ∇V, V, τ_old, η, η_ve, G, dt, dτ_Pr, dτ_r, grid))
             launch(arch, grid, update_velocity! => (V, r_V, Pr, τ, ρgz, η_ve, νdτ, grid); bc=batch(grid, bc_V...; exchange=(V.x, V.y, V.z)))
             # if it > 1
@@ -223,6 +230,7 @@ end
             # end
         end
         wtime_it = (time_ns() - tic)
+        GC.enable(true)
         wtime_it /= (niter - warmup)
         MPI.Barrier(cart_comm(topo))
         wtime_min = MPI.Allreduce(wtime_it, MPI.MIN, cart_comm(topo))

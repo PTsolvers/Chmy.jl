@@ -75,6 +75,20 @@ main(; nxy_l=(128, 128) .- 2)
 Here, `dims_g` represents the global dimensions of the grid, which is obtained by multiplying the local grid dimensions `dims_l` by the MPI topology dimensions. The `outer_width` parameter specifies the number of grid points that constitute the boundary region of each local grid. This approach is used to perform asynchronous computations on each local domain and to overlap boundary conditions computations (including MPI communication) with inner point computations. This allows to hide MPI communication latency overlapping communication and computations.
 
 
+## Garbage Collection
+
+Julia's garbage collector stops a process for up to tens of milliseconds. With halo exchanges, the neighbours of that process wait for it, and on many GPUs the pauses of all processes add up. Collecting on all processes at the same iterations avoids this. The collector is disabled after the first iteration, which compiles (disabling it earlier defers the collection of the compilation's garbage into later iterations), and `GC.gc` does nothing while the collector is disabled, hence the enabling around it:
+
+```julia
+for iter in 1:niter
+    (iter == 2) && (GC.gc(); GC.enable(false))
+    (iter % 50 == 0) && (GC.enable(true); GC.gc(false); GC.enable(false))
+    launch(arch, grid, update_C! => (C, q, Δt, grid); bc=batch(grid, C => Neumann(); exchange=C))
+    # ...
+end
+GC.enable(true)
+```
+
 ## Avoid Redundant I/O Operations
 
 Previously, for a single process, we can simply print out any information during the code execution, whether it is the value of some physical properties that we want to monitor about or the current number of iterations during the simulation.
