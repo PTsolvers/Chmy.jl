@@ -1,3 +1,15 @@
+# copy between a halo buffer and a view on the device with a kernel on the task's stream: it does not block the host (copyto! of
+# a contiguous view waits for the copy on AMDGPU), and its small workgroups run next to the kernels of the inner points (the copy
+# kernels of AMDGPU and GPUArrays use workgroups of 512 and 1024 work-items, which wait until those end); host buffers (MPI
+# without GPU support) are copied with copyto!
+@kernel function copy_halo_kernel!(dst, src)
+    I = @index(Global, Linear)
+    @inbounds dst[I] = src[I]
+end
+
+copy_halo!(backend::Backend, dst, src) = (copy_halo_kernel!(backend, 256, length(dst))(dst, src); return)
+copy_halo!(::CPU, dst, src) = (copyto!(dst, src); return)
+
 """
     exchange_halo!(side::Side, dim::Dim, arch, grid, fields...)
 
@@ -29,7 +41,7 @@ function exchange_halo!(side::Side{S}, dim::Dim{D},
     for idx in eachindex(fields)
         tle.recv_reqs[idx] = MPI.Irecv!(tle.recv_bufs[idx], comm; source=nbrank)
         send_view = get_send_view(Side(S), Dim(D), fields[idx])
-        copyto!(tle.send_bufs[idx], send_view)
+        copy_halo!(distributed_arch, tle.send_bufs[idx], send_view)
     end
     KernelAbstractions.synchronize(Architectures.get_backend(arch))
 
@@ -47,7 +59,7 @@ function exchange_halo!(side::Side{S}, dim::Dim{D},
         for idx in eachindex(fields)
             if MPI.Test(tle.recv_reqs[idx]) && !recv_ready[idx]
                 recv_view = get_recv_view(Side(S), Dim(D), fields[idx])
-                copyto!(recv_view, tle.recv_bufs[idx])
+                copy_halo!(distributed_arch, recv_view, tle.recv_bufs[idx])
                 recv_ready[idx] = true
             end
             send_ready[idx] = MPI.Test(tle.send_reqs[idx])
