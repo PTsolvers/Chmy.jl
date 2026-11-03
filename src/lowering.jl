@@ -33,9 +33,7 @@ lower_rule(op::Operator, args) = no_rule_error(op, args, 1)
 # result to read its component `comps`; a scalar function of scalars is the call itself, which is kept, and its
 # arguments are lowered at the evaluation point
 function lower_rule(op::Union{Fun, BroadcastedFun}, args, comps, face, x)
-    result = makecall(op, map(t -> components(t, length(x)), args))
-    isempty(comps) || !iscall(result) || expansion_error(op)
-    return component(result, comps)
+    return component(makecall(op, map(t -> components(t, length(x)), args)), comps)
 end
 
 """
@@ -99,6 +97,8 @@ end
 function lower_call(op, args, comps, face, x)
     term = lower_rule(op, args, comps, face, x)::DTerm
     tensorrank(term) == 0 || rule_rank_error(op)
+    # the component of its own call would be expanded by the same rule again
+    iscomp(term) && argument(term) ==ₛ makecall_unchecked(op, args) && expansion_error(op)
     iscall(term) && operation(term) == op && return walkargs(t -> lowerat(t, face, x), term)
     return lowerat(term, face, x)
 end

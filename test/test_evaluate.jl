@@ -86,6 +86,10 @@ subterms(t) = isexpr(t) ? DTerm[t; mapreduce(subterms, vcat, children(t); init =
                 (c * (b - a), -(c * (a - b))),
                 ((a - b) / (b - a), Literal(-1)),
                 (a + Literal(2.0), a + 2),
+                # real literals are collected into the coefficients
+                (2.5a + 0.5a, 3a),
+                (0.25 * (4a), a),
+                (0.5a - a / 2, Literal(0)),
                 (a + 𝒪(0), a),
                 (a * ℐ(0), a),
             )

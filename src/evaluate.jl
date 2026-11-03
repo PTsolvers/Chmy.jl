@@ -205,22 +205,25 @@ end
 
 # the polynomial is reconstructed with raw calls, which are canonical by construction
 
-const Polynomial = Dict{Dict{DTerm, DTerm}, Rational{Int}}
+# coefficients are exact rationals, or floating-point numbers once a float literal is collected
+const Polynomial = Dict{Dict{DTerm, DTerm}, Real}
 
 rawcall(f, args...) = makecall_unchecked(Fun(f), args)
 
-function rational_value(term)
+# real literals are collected into the coefficients, exactly as `Rational{Int}` if possible
+function literal_number(term)
     return @match term begin
-        Literal(x) => @match canonical_number(x) begin
-            y::Union{Integer, Rational} => Rational{Int}(y)
-            _ => nothing
-        end
+        Literal(x) => real_coefficient(canonical_number(x))
         _ => nothing
     end
 end
 
+real_coefficient(x::Union{Integer, Rational}) = Rational{Int}(x)
+real_coefficient(x::Real) = x
+real_coefficient(x) = nothing
+
 function integer_power(term)
-    c = rational_value(term)
+    c = literal_number(term)
     return !isnothing(c) && isinteger(c) ? Int(c) : nothing
 end
 
@@ -235,7 +238,7 @@ function negate_power(power)
 end
 
 function add_exponents(x, y)
-    cx, cy = rational_value(x), rational_value(y)
+    cx, cy = literal_number(x), literal_number(y)
     !isnothing(cx) && !isnothing(cy) && return canonical_literal(cx + cy)
     isliteral(x) && isliteral(y) && return canonical_literal(value(x) + value(y))
     return sum_rule((x, y), 0)
@@ -244,7 +247,7 @@ end
 function multiply_exponents(x, y)
     x ==ₛ ONE && return y
     y ==ₛ ONE && return x
-    cx, cy = rational_value(x), rational_value(y)
+    cx, cy = literal_number(x), literal_number(y)
     !isnothing(cx) && !isnothing(cy) && return canonical_literal(cx * cy)
     isliteral(x) && isliteral(y) && return canonical_literal(value(x) * value(y))
     return product_rule((x, y), 0)
@@ -262,53 +265,76 @@ function addpower!(powers, factor, power)
     return
 end
 
+# `addends(f, args, scale)` returns the terms of the sum `f(args...)` with their scales, or `nothing` for other calls
+addends(op::Fun, args, scale) = addends(op.f, args, scale)
+addends(op, args, scale) = nothing
+addends(::typeof(+), args, scale) = map(a -> (a, scale), args)
+addends(::typeof(-), (a,)::Tuple{DTerm}, scale) = ((a, -scale),)
+addends(::typeof(-), (a, b)::Tuple{DTerm, DTerm}, scale) = ((a, scale), (b, -scale))
+
+addends(term::DTerm, scale) = iscall(term) ? addends(operation(term), arguments(term), scale) : nothing
+
 # additive children are canonical, so their terms are already ordered
 # inspect the first coefficient without rebuilding the factor
 function factor_leading_sign(term::DTerm)::Int
-    c = rational_value(term)
+    c = literal_number(term)
     !isnothing(c) && return c < 0 ? -1 : 1
-    @match term begin
-        DExpr(Call(op), args) => begin
-            if op isa Fun{typeof(-)} && length(args) == 1
-                return -factor_leading_sign(first(args))
-            elseif op isa Union{Fun{typeof(+)}, Fun{typeof(-)}}
-                return factor_leading_sign(first(args))
-            end
-        end
-        _ => nothing
+    parts = addends(term, 1)
+    isnothing(parts) && return 1
+    first_term, scale = first(parts)
+    return scale * factor_leading_sign(first_term)
+end
+
+# `factor!(f, args, factor, powers, coef, power, p)` collects the factors of the call `factor = f(args...)` raised to
+# `power`, whose integer value is `p` or `nothing`, and returns the coefficient, or `nothing` if the call is a factor
+factor!(op::Fun, args, factor, powers, coef, power, p) = factor!(op.f, args, factor, powers, coef, power, p)
+factor!(op, args, factor, powers, coef, power, p) = nothing
+
+function factor!(::typeof(*), args, factor, powers, coef, power, p)
+    for arg in args
+        coef = collect_monomial!(powers, coef, arg, power)
     end
-    return 1
+    return coef
+end
+
+function factor!(::typeof(/), (a, b), factor, powers, coef, power, p)
+    coef = collect_monomial!(powers, coef, a, power)
+    return collect_monomial!(powers, coef, b, negate_power(power))
+end
+
+function factor!(::typeof(inv), (a,), factor, powers, coef, power, p)
+    # scalar inverses are powers
+    tensorrank(a) == 0 || return nothing
+    return collect_monomial!(powers, coef, a, negate_power(power))
+end
+
+factor!(::typeof(^), (a, e), factor, powers, coef, power, p) = collect_monomial!(powers, coef, a, multiply_exponents(power, e))
+
+# integer powers of negations and of sums with a negative leading term are powers of the positive term
+function factor!(::typeof(-), args, factor, powers, coef, power, p)
+    isnothing(p) && return nothing
+    length(args) == 1 && return collect_monomial!(powers, isodd(p) ? -coef : coef, only(args), power)
+    return positive_sum!(factor, powers, coef, power, p)
+end
+factor!(::typeof(+), args, factor, powers, coef, power, p) = isnothing(p) ? nothing : positive_sum!(factor, powers, coef, power, p)
+
+function positive_sum!(factor, powers, coef, power, p)
+    factor_leading_sign(factor) < 0 || return nothing
+    positive = sum_rule((factor,), tensorrank(factor), -1 // 1)
+    return collect_monomial!(powers, isodd(p) ? -coef : coef, positive, power)
 end
 
 function collect_monomial!(powers, coef, factor, power)
     p = integer_power(power)
     p == 0 && return coef
-    c = rational_value(factor)
+    c = literal_number(factor)
     !isnothing(c) && !isnothing(p) && return coef * c^p
 
     @match factor begin
-        ZeroTensor(_) => !isnothing(p) && p > 0 && (coef = 0 // 1)
+        ZeroTensor(_) => !isnothing(p) && p > 0 && (coef = zero(coef))
         DExpr(Call(op), args) => begin
-            if op isa Fun{typeof(*)}
-                for arg in args
-                    coef = collect_monomial!(powers, coef, arg, power)
-                end
-                return coef
-            elseif op isa Fun{typeof(/)}
-                coef = collect_monomial!(powers, coef, args[1], power)
-                return collect_monomial!(powers, coef, args[2], negate_power(power))
-            elseif op isa Fun{typeof(inv)} && tensorrank(args[1]) == 0
-                return collect_monomial!(powers, coef, args[1], negate_power(power))
-            elseif op isa Fun{typeof(-)} && length(args) == 1 && !isnothing(p)
-                isodd(p) && (coef = -coef)
-                return collect_monomial!(powers, coef, args[1], power)
-            elseif op isa Union{Fun{typeof(+)}, Fun{typeof(-)}} && !isnothing(p) && factor_leading_sign(factor) < 0
-                positive = sum_rule((factor,), tensorrank(factor), -1 // 1)
-                isodd(p) && (coef = -coef)
-                return collect_monomial!(powers, coef, positive, power)
-            elseif op isa Fun{typeof(^)}
-                return collect_monomial!(powers, coef, args[1], multiply_exponents(power, args[2]))
-            end
+            result = factor!(op, args, factor, powers, coef, power, p)
+            isnothing(result) || return result
         end
         _ => nothing
     end
@@ -318,22 +344,12 @@ function collect_monomial!(powers, coef, factor, power)
 end
 
 function collect_terms!(terms, scratch, term, scale)
-    @match term begin
-        DExpr(Call(op), args) => begin
-            if op isa Fun{typeof(+)}
-                for arg in args
-                    scratch = collect_terms!(terms, scratch, arg, scale)
-                end
-                return scratch
-            elseif op isa Fun{typeof(-)}
-                if length(args) == 1
-                    return collect_terms!(terms, scratch, args[1], -scale)
-                end
-                scratch = collect_terms!(terms, scratch, args[1], scale)
-                return collect_terms!(terms, scratch, args[2], -scale)
-            end
+    parts = addends(term, scale)
+    if !isnothing(parts)
+        for (part, s) in parts
+            scratch = collect_terms!(terms, scratch, part, s)
         end
-        _ => nothing
+        return scratch
     end
 
     powers = isnothing(scratch) ? Dict{DTerm, DTerm}() : scratch
@@ -362,7 +378,7 @@ function degree(factors)
     length(factors) == 1 && return last(factors[1])
     numeric = 0 // 1
     for (_, power) in factors
-        p = rational_value(power)
+        p = literal_number(power)
         isnothing(p) && return sum_rule((power for (_, power) in factors), 0)
         numeric += p
     end
@@ -370,7 +386,7 @@ function degree(factors)
 end
 
 struct OrderedMonomial
-    coef::Rational{Int}
+    coef::Real
     factors::Vector{Pair{DTerm, DTerm}}
     degree::DTerm
 end

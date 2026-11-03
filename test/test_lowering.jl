@@ -17,6 +17,12 @@ Chmy.lower_rule(::Unindexed, args::Tuple{DTerm}, face, x) = pack([args[1], args[
 struct Unsampled <: Operator end
 Chmy.lower_rule(::Unsampled, args::Tuple{DTerm}, face, x) = 2 * args[1]
 
+# an operator whose rule returns a component of its own call
+struct Unexpanded <: Operator end
+Chmy.tensorrank(::Unexpanded, args) = 1
+Chmy.checkranks(::Unexpanded, ::Tuple{Vararg{DTerm}}) = nothing
+Chmy.lower_rule(op::Unexpanded, args, comps, face, x) = op(args...)[comps...]
+
 @testset "lowering" begin
     @scalars f g
     @uniform @scalars a
@@ -149,6 +155,8 @@ Chmy.lower_rule(::Unsampled, args::Tuple{DTerm}, face, x) = 2 * args[1]
         @test_throws ArgumentError lower(d(f), (:, :), (0, 0))
         # a rule must return a scalar of samples
         @test_throws ArgumentError lower(Unindexed()(f), (:, :), (0, 0))
+        # a rule must expand the components of its call
+        @test_throws ArgumentError lower(Unexpanded()(f)[1], (:, :), (0, 0))
         @test_throws ArgumentError lower(ξ³ * f, (:,), (0,))
     end
 end
