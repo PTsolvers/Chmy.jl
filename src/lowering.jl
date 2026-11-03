@@ -1,24 +1,26 @@
 """
-    lower_rule(op, args, comps, offs, block)
-    lower_rule(op, args, offs, block)
+    lower_rule(op, args, comps, coord, ctx)
+    lower_rule(op, args, coord, ctx)
     lower_rule(op, args)
 
-Expand the component `comps` of the call `op(args...)`, sampled at the offsets `offs` from the evaluation point in
-the `block` of the domain, into an expression of terms sampled at offsets relative to this sample, e.g. `f[1//2, 0]`.
-The calls combining the samples are kept, while the samples are lowered further. Rules of scalar operators can omit
-`comps`, and rules of 1D operators can also omit `offs` and `block`.
+Expand the component `comps` of the call `op(args...)`, sampled at the coordinate `coord` relative to the evaluation
+point, into an expression of terms sampled at offsets relative to this sample, e.g. `f[1//2, 0]`. The calls combining
+the samples are kept, while the samples are lowered further. Most rules only sample relative to themselves and ignore
+`coord` and `ctx`; the lowering context `ctx` holds the face and the origin given to [`lower`](@ref) for the rules that
+depend on where the sample is relative to the face. Rules of scalar operators can omit `comps`, and rules of 1D
+operators can also omit `coord` and `ctx`.
 """
 function lower_rule end
 
 # scalar operators don't need the component
-function lower_rule(op::Operator, args, comps, offs, block)
+function lower_rule(op::Operator, args, comps, coord, ctx)
     isempty(comps) || expansion_error(op)
-    return lower_rule(op, args, offs, block)
+    return lower_rule(op, args, coord, ctx)
 end
 
-# 1D operators don't need the offsets and the block
-function lower_rule(op::Operator, args, offs, block)
-    length(offs) == 1 || no_rule_error(op, args, length(offs))
+# 1D operators don't need the coordinate and the context
+function lower_rule(op::Operator, args, coord, ctx)
+    length(coord) == 1 || no_rule_error(op, args, length(coord))
     return lower_rule(op, args)
 end
 
@@ -26,140 +28,122 @@ lower_rule(op::Operator, args) = no_rule_error(op, args, 1)
 
 # pointwise functions are evaluated with tensor arguments in component form one level deep,
 # computing the entire result to read its component `comps`
-function lower_rule(op::Union{Fun, BroadcastedFun}, args, comps, offs, block)
-    result = evaluate(op, map(x -> components(x, length(offs)), args))
-    isnothing(result) || return here(result[comps...], offs)
+function lower_rule(op::Union{Fun, BroadcastedFun}, args, comps, coord, ctx)
+    result = evaluate(op, map(x -> components(x, length(coord)), args))
+    isnothing(result) || return here(result[comps...], coord)
     # a scalar function of scalars reads its arguments at the evaluation point
     isempty(comps) || expansion_error(op)
-    return makecall_unchecked(op, map(x -> here(x, offs), args))
+    return makecall_unchecked(op, map(x -> here(x, coord), args))
 end
 
 # the value of `x` at the evaluation point of a rule
-here(x::DTerm, offs) = makeinds(x, map(zero, offs))
+here(x::DTerm, coord) = makeinds(x, map(zero, coord))
 
 """
-    lower(expr, block)
+    lower(expr, face, origin)
 
-Lower the scalar expression `expr`, evaluated in the `block` of the domain, into samples of fields at offsets from the
-evaluation point, e.g. `f[1//2, 0]`, expanding operator calls with their [`lower_rule`](@ref). Uniform terms are kept as
-they are, and explicit locations can only be given to fields. Use [`locate`](@ref) to place the samples on the grid.
+Lower the scalar expression `expr` next to the `face`, e.g. `(:, :)` in the interior or `(↓, :)` by the left wall, into
+located samples of fields, e.g. `f[𝓈, 𝓅][0, 1]`, expanding operator calls with their [`lower_rule`](@ref). The `origin`
+is the position of the evaluation point: the lattice coordinate along the spanning axes `:` (`0` for points and `1//2`
+for segments), and the outward distance from the wall along the sides `↓` and `↑`. Samples at integer coordinates are
+located at points, and at half-integer ones at segments; their indices are relative to the grid point of the kernel,
+which is the wall point along the sides. Uniform terms are kept as they are.
 """
-function lower(expr::DTerm, block::Block{N}) where {N}
-    offs = zero_offsets(Val(N))
-    return lower(makeinds_unchecked(expr, offs), offs, block)
+function lower(expr::DTerm, face::Face{N}, origin::NTuple{N, Union{Integer, Rational}}) where {N}
+    all(x -> denominator(x) <= 2, origin) || origin_error()
+    haslocs(expr) && located_input_error()
+    coord = zero_offsets(Val(N))
+    return lower(makeinds_unchecked(expr, coord), coord, LoweringContext(face, map(Rational{Int}, origin)))
 end
-lower(::DTerm, ::Tuple{}) = lower_nodims_error()
+lower(::DTerm, ::Tuple{}, ::Tuple{}) = lower_nodims_error()
+lower(::DTerm, ::Tuple, ::Tuple) = context_length_error()
 
-# the result of a rule combines uniform terms and samples relative to `offs` with calls, which are kept as they are
-function lower(term::DTerm, offs::NTuple{N, Rational{Int}}, block::Block{N})::DTerm where {N}
+function haslocs(term::DTerm)::Bool
     return @match term begin
-        DExpr(Call(_), _) => walkargs(x -> lower(x, offs, block), term)
-        DExpr(Inds(_), _) => lowerterm(term, offs, block)
+        DExpr(Locs(_), _) => true
+        DExpr(_, args) => any(haslocs, args)
+        _ => false
+    end
+end
+
+# the result of a rule combines uniform terms and samples relative to `coord` with calls, which are kept as they are
+function lower(term::DTerm, coord::Coord{N}, ctx::LoweringContext{N})::DTerm where {N}
+    return @match term begin
+        DExpr(Call(_), _) => walkargs(x -> lower(x, coord, ctx), term)
+        DExpr(Inds(_), _) => lowerterm(term, coord, ctx)
+        # a leaf located only along global axes, e.g. `g[↓, :]`
+        DExpr(Locs(_), _) => term
         _ => isuniform(term) ? term : unsampled_error()
     end
 end
 
 # lower the sample `term` relative to the sample at `base`, accumulating the offsets until the sampled term is a field,
 # or a scalar expression that is expanded with its rule
-function lowerterm(term::DTerm, base::NTuple{N, Rational{Int}}, block::Block{N})::DTerm where {N}
-    shift, inner = @match term begin
-        DExpr(Inds(shift), (inner,)) => (shift, inner)
+function lowerterm(term::DTerm, base::Coord{N}, ctx::LoweringContext{N})::DTerm where {N}
+    return @match term begin
+        # located leaves are produced by rules, e.g. for boundary data, and are kept as they are
+        DExpr(Inds(_), (inner,)) && if islocs(inner) end => term
+        DExpr(Inds(shift), (inner,)) => lowersample(inner, shift, base, ctx)
         _ => unsampled_error()
     end
+end
+
+function lowersample(inner::DTerm, shift, base::Coord{N}, ctx::LoweringContext{N})::DTerm where {N}
     length(shift) == N || lower_dims_error()
     tensorrank(inner) == 0 || lower_rank_error()
-    offs = ntuple(a -> base[a] + shift[a], Val(N))
+    coord = ntuple(a -> base[a] + shift[a], Val(N))
     return @match inner begin
-        DExpr(Inds(_), _) => lowerterm(inner, offs, block)
-        DExpr(Call(op), args) => lower_call(op, args, (), offs, block)
+        DExpr(Inds(_), _) => lowerterm(inner, coord, ctx)
+        DExpr(Call(op), args) => lower_call(op, args, (), coord, ctx)
         DExpr(Comp(comps), (arg,)) => begin
             all(c -> 1 <= c <= N, comps) || throw(BoundsError(arg, comps))
-            iscall(arg) ? lower_call(operation(arg), arguments(arg), comps, offs, block) : sample(inner, offs)
+            iscall(arg) ? lower_call(operation(arg), arguments(arg), comps, coord, ctx) : leaf(inner, coord, ctx)
         end
-        DExpr(Locs(_), (arg,)) => isuniform(arg) ? arg : isfield(arg) ? sample(inner, offs) : locs_field_error()
         ZeroTensor(_) => ZERO
         IdTensor(_) => ONE
         Index(_) => index_input_error()
-        _ => sample(inner, offs)
+        Coordinate(a) => coordinate_value(a, coord, ctx)
+        _ => leaf(inner, coord, ctx)
     end
 end
 
-# the result of the rule is a scalar expression of samples relative to `offs`
-function lower_call(op, args, comps, offs, block)
-    term = lower_rule(op, args, comps, offs, block)::DTerm
+# the result of the rule is a scalar expression of samples relative to `coord`
+function lower_call(op, args, comps, coord, ctx)
+    term = lower_rule(op, args, comps, coord, ctx)::DTerm
     tensorrank(term) == 0 || rule_rank_error(op)
-    return lower(term, offs, block)
-end
-
-# a field sampled at `offs`, uniform fields are not sampled
-sample(field::DTerm, offs) = isuniform(field) ? field : makeinds_unchecked(field, offs)
-
-# a stored scalar field, or a component of a stored tensor field
-function isfield(term::DTerm)
-    return @match term begin
-        Tensor(_, _, _, _) => true
-        DExpr(Comp(_), (Tensor(_, _, _, _),)) => true
-        _ => false
-    end
+    return lower(term, coord, ctx)
 end
 
 zero_offsets(::Val{N}) where {N} = ntuple(_ -> 0 // 1, Val(N))
 
-"""
-    locate(expr, locs)
-    locate(expr, locs...)
-
-Place the samples of the lowered expression `expr` on the staggered grid, evaluated at the locations `locs`: the sample
-`f[o₁, …, oₙ]` becomes the grid sample `f[l₁, …, lₙ][i₁, …, iₙ]`, where the locations and the integer grid index offsets
-follow from the offsets and `locs`. Explicit locations of fields must match the locations of their samples, and sampled
-coordinates become expressions of grid indices.
-"""
-function locate(term::DTerm, locs::NTuple{N, Location})::DTerm where {N}
-    return @match term begin
-        DExpr(Inds(offs), (arg,)) => locate_sample(arg, offs, locs)
-        DExpr(Call(_), _) => walkargs(x -> locate(x, locs), term)
-        _ => isuniform(term) ? term : unlowered_error()
-    end
-end
-locate(::DTerm, ::Tuple{}) = locate_nolocs_error()
-locate(term::DTerm, locs::Vararg{Location, N}) where {N} = locate(term, locs)
-
-function locate_sample(arg::DTerm, shift, locs::NTuple{N, Location}) where {N}
-    length(shift) == N || lower_dims_error()
-    offs = ntuple(a -> shift[a], Val(N))
-    return @match arg begin
-        Coordinate(a) => coordinate_value(offs, a, locs)
-        DExpr(Locs(explicit), (field,)) && if isfield(field) end => begin
-            length(explicit) == N || locs_length_error()
-            explicit == sample_locations(offs, locs) || locs_mismatch_error()
-            grid_sample(field, offs, locs)
-        end
-        _ => isfield(arg) ? grid_sample(arg, offs, locs) : unlowered_error()
-    end
-end
-
-loc_offset(::Point) = 0 // 1
-loc_offset(::Segment) = 1 // 2
-
-# position of the sample relative to the grid index of the evaluation point,
-# point `i` is located at `i`, and segment `i` at `i + 1//2`
-sample_position(off, loc) = loc_offset(loc) + off
-
 sample_location(x::Rational{Int}) = isinteger(x) ? Point() : Segment()
 
-sample_locations(offs, locs) = map(sample_location, map(sample_position, offs, locs))
-
-# the grid sample `f[locs...][inds...]` of the field `f` sampled at `offs` from the evaluation point at `locs`
-function grid_sample(field::DTerm, offs, locs)
-    xs = map(sample_position, offs, locs)
-    return makeinds_unchecked(makelocs_unchecked(field, map(sample_location, xs)), map(floor, xs))
+# the leaf of the scalar `x` sampled at `coord`, located at the point or segment of the sample along the axes where
+# `frames` is `nothing`, with indices relative to the grid point of the kernel, and at the global locations `frames`
+# without indices along the other axes; uniform terms are not located
+leaf(x::DTerm, coord::Coord{N}, ctx::LoweringContext{N}) where {N} = leaf(x, ntuple(_ -> nothing, Val(N)), coord, ctx)
+function leaf(x::DTerm, frames, coord::Coord{N}, ctx::LoweringContext{N}) where {N}
+    isuniform(x) && return x
+    xs = ntuple(a -> position(ctx, coord, a), Val(N))
+    located = makelocs_unchecked(x, map(frame_location, frames, xs))
+    inds = frame_indices(frames, xs)
+    return isempty(inds) ? located : makeinds_unchecked(located, inds)
 end
+
+frame_location(::Nothing, x) = sample_location(x)
+frame_location(loc::Location, x) = loc
+
+frame_indices(::Tuple{}, ::Tuple{}) = ()
+frame_indices(frames, xs) = (frame_index(first(frames), first(xs))..., frame_indices(Base.tail(frames), Base.tail(xs))...)
+
+frame_index(::Nothing, x) = (floor(x),)
+frame_index(::Location, x) = ()
 
 # a free coordinate is the distance of the sample from the lower wall in grid units,
 # point `1` lies on the lower wall, so point `i` is at `i - 1` and segment `i` at `i - 1//2`
-function coordinate_value(offs::NTuple{N, Rational{Int}}, a, locs::NTuple{N, Location}) where {N}
+function coordinate_value(a, coord::Coord{N}, ctx::LoweringContext{N}) where {N}
     1 <= a <= N || coordinate_dims_error(a, N)
-    return offset_term(Index(a), sample_position(offs[a], locs[a]) - 1)
+    return offset_term(Index(a), position(ctx, coord, a) - 1)
 end
 
 # canonical form `term`, `term + x`, or `term - x` of `term` shifted by `x`, with `x` positive
@@ -169,17 +153,15 @@ function offset_term(term::DTerm, x::Rational{Int})
 end
 
 @noinline lower_nodims_error() = throw(ArgumentError("lowering requires at least one dimension"))
-@noinline locate_nolocs_error() = throw(ArgumentError("locating requires at least one grid location"))
+@noinline context_length_error() = throw(ArgumentError("the face and the origin must have the same number of dimensions"))
+@noinline origin_error() = throw(ArgumentError("the origin must be a multiple of 1//2"))
+@noinline located_input_error() = throw(ArgumentError("locations are produced by lowering, use `𝒷` for boundary data"))
 @noinline lower_rank_error() = throw(ArgumentError("lower requires a scalar expression; select a scalar entry, e.g. expr[1, 2]"))
 @noinline lower_dims_error() = throw(ArgumentError("samples must have as many offsets as there are dimensions"))
 @noinline unsampled_error() = throw(ArgumentError("lowering rules must read terms through samples, e.g. `f[0, 0]`"))
-@noinline unlowered_error() = throw(ArgumentError("only lowered expressions can be located, see `lower`"))
-@noinline locs_field_error() = throw(ArgumentError("explicit locations can only be given to fields"))
-@noinline locs_length_error() = throw(ArgumentError("explicit locations must have the same length as the evaluation locations"))
-@noinline locs_mismatch_error() = throw(ArgumentError("explicit locations of a field must match the locations where the field is sampled"))
-@noinline index_input_error() = throw(ArgumentError("grid indices are produced by `locate` and cannot appear in the lowered expression, use coordinates instead"))
+@noinline index_input_error() = throw(ArgumentError("grid indices are produced by lowering and cannot appear in its input, use coordinates instead"))
 @noinline function coordinate_dims_error(a, n)
-    throw(ArgumentError(LazyString("coordinate `", Coordinate(a), "` exceeds the number of evaluation locations ", n)))
+    throw(ArgumentError(LazyString("coordinate `", Coordinate(a), "` exceeds the number of dimensions ", n)))
 end
 @noinline rule_rank_error(op) = throw(ArgumentError(LazyString("the lowering rule of '", op, "' must return a scalar")))
 @noinline function no_rule_error(op, args, n)

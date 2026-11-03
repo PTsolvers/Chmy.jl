@@ -24,22 +24,23 @@ Lifted(op::Operator, axes::Vararg{Integer, N}) where {N} = Lifted(op, axes)
 tensorrank(lf::Lifted, args) = tensorrank(lf.op, args)
 checkranks(lf::Lifted, args::NTuple{N, DTerm}) where {N} = checkranks(lf.op, args)
 
-flip(::Lower) = Upper()
-flip(::Upper) = Lower()
+# the context of a negative axis is mirrored: the side of the face flips, the outward distance from the wall is kept,
+# and the lattice coordinate changes sign
+mirror(a, face, origin) = a > 0 ? (face[a], origin[a]) : (flip(face[-a]), mirror_origin(face[-a], origin[-a]))
+mirror_origin(::Colon, o) = -o
+mirror_origin(::Side, o) = o
 
-flipside(::Far) = Far()
-flipside(n::Near) = Near(flip(n.side), n.ξ)
-
-function lower_rule(lf::Lifted{O, K}, args, comps, offs::NTuple{N, Rational{Int}}, block::Block{N}) where {O, K, N}
+function lower_rule(lf::Lifted{O, K}, args, comps, coord::Coord{N}, ctx::LoweringContext{N}) where {O, K, N}
     maximum(abs, lf.axes) <= N || throw(ArgumentError("the lifted axes exceed the number of dimensions"))
     # tensor components are not mapped to the lifted axes yet, so only scalar calls of scalars can be lifted
     isempty(comps) || expansion_error(lf)
     checkscalar(lf, args)
-    # the offsets and the block restricted to the lifted axes, negating the offsets and flipping the wall sides
+    # the coordinate and the context restricted to the lifted axes, negating the coordinate and mirroring the context
     # for negative axes
-    loffs = map(a -> flipsign(offs[abs(a)], a), lf.axes)
-    lblock = map(a -> a > 0 ? block[a] : flipside(block[-a]), lf.axes)
-    term = lower_rule(lf.op, args, comps, loffs, lblock)::DTerm
+    lcoord = map(a -> flipsign(coord[abs(a)], a), lf.axes)
+    lfaces = map(a -> mirror(a, ctx.face, ctx.origin), lf.axes)
+    lctx = LoweringContext(map(first, lfaces), map(last, lfaces))
+    term = lower_rule(lf.op, args, comps, lcoord, lctx)::DTerm
     lf.axes == ntuple(identity, Val(N)) && return term
     return insert_stencil(term, Val(N), lf.axes)
 end

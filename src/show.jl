@@ -16,7 +16,7 @@ function Base.show(io::IO, v::DTerm)
         IdTensor(_) => print(io, 'ℐ')
         DExpr(Call(op), args) => printop(io, op, args)
         DExpr(Comp(comp), (arg,)) => print_indexed(io, arg, comp)
-        DExpr(Locs(locs), (arg,)) => print_indexed(io, arg, locs)
+        DExpr(Locs(locs), (arg,)) => print_indexed(io, arg, map(LocationName, locs))
         DExpr(Inds(offsets), (arg,)) => print_indexed(io, arg, map(stencil_constant, offsets))
         DExpr(Pack(_, dims, _), _) => print_pack(io, v, dims, ())
     end
@@ -210,6 +210,15 @@ end
 
 Base.show(io::IO, ::Segment) = print(io, "𝓈")
 Base.show(io::IO, ::Point) = print(io, "𝓅")
+Base.show(io::IO, ::Lower) = print(io, "↓")
+Base.show(io::IO, ::Upper) = print(io, "↑")
+
+# locations in a location list, where `:` is printed without piracy of `show(::Colon)`
+struct LocationName{L}
+    loc::L
+end
+Base.show(io::IO, l::LocationName) = show(io, l.loc)
+Base.show(io::IO, ::LocationName{Colon}) = print(io, ':')
 
 function print_pack_table(io, t, rank, dims, kind)
     print(io, dims, "-D ")

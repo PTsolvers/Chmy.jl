@@ -11,10 +11,9 @@ function diffusion(dims)
     grad = Gradient(StaggeredCentralDifference())
     # equation
     r_u = divg(grad(u))
-    # lower in the bulk, locate at cell centres, and simplify
+    # lower in the bulk at cell centres, and simplify
     locs = ntuple(_ -> 𝓈, length(dims))
-    block = ntuple(_ -> Far(), length(dims))
-    r_l = locate(lower(r_u, block), locs) |> simplify
+    r_l = lower(r_u, ntuple(_ -> (:), length(dims)), ntuple(_ -> 1 // 2, length(dims))) |> simplify
     # arrays
     u1 = rand(dims...)
     u2 = copy(u1)

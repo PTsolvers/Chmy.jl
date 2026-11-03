@@ -74,7 +74,13 @@ end
 (<ₛ)(::Fun, ::Operator) = true
 (<ₛ)(::Operator, ::Fun) = false
 (<ₛ)(x::Operator, y::Operator) = isless(objectid(x), objectid(y))
-(<ₛ)(x::Location, y::Location) = x isa Point && y isa Segment
+(<ₛ)(x::Location, y::Location) = locrank(x) < locrank(y)
+
+locrank(::Point) = 0
+locrank(::Segment) = 1
+locrank(::Lower) = 2
+locrank(::Upper) = 3
+locrank(::Colon) = 4
 
 """
     isnegof(x, y)

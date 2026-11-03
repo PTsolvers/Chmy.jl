@@ -29,7 +29,8 @@ function toexpr(expr::DTerm, bnd)
         end
         DExpr(Inds(offsets), (arg,)) => toexpr_inds(arg, offsets, bnd)
         DExpr(Call(op), args) => toexpr_call(op, args, bnd)
-        DExpr(Locs(_), _) => throw(ArgumentError("only uniform tensors can be non-indexed during compilation"))
+        # a leaf located only along global axes, e.g. `g[↓, :]`
+        DExpr(Locs(_), _) => toexpr_inds(expr, (), bnd)
         DExpr(Pack(_, _, _), _) => throw(ArgumentError("tensors in component form should be indexed before compilation"))
         ZeroTensor(_) => throw(ArgumentError("zero tensors should be lowered before compilation"))
         IdTensor(_) => throw(ArgumentError("identity tensors should be lowered before compilation"))
@@ -66,11 +67,23 @@ function toexpr_inds(arg, offsets, b)
     typ = b.data[idx]
     data_expr = Expr(:ref, :data, idx)
     if typ <: AbstractArray
-        return Expr(:ref, data_expr, ntuple(a -> index_expr(a, offsets[a]), length(offsets))...)
+        axes = lattice_axes(arg, length(offsets))
+        return Expr(:ref, data_expr, ntuple(k -> index_expr(axes[k], offsets[k]), length(offsets))...)
     else
         return data_expr
     end
 end
+
+# the axes indexed by the samples of `arg`, which are the axes of the lattice locations 𝓅 and 𝓈 of a located leaf
+function lattice_axes(arg, n)
+    return @match arg begin
+        DExpr(Locs(locs), _) => Tuple(a for a in eachindex(locs) if islattice(locs[a]))
+        _ => ntuple(identity, n)
+    end
+end
+
+islattice(::Union{Point, Segment}) = true
+islattice(::Union{Lower, Upper, Colon}) = false
 
 function index_expr(a, offset)
     isinteger(offset) || throw(ArgumentError("only lowered samples with integer offsets can be compiled"))

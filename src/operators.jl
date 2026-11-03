@@ -196,11 +196,14 @@ for op in (:-, :/, ://, :÷, :^, :<, :<=, :>, :>=, :(==), :!=, :&, :|, :xor)
     @eval Base.$op(a::DTerm, b::DTerm) = makecall(Fun($op), a, b)
 end
 
-# mixed symbolic-numeric binary operations
+# values that are converted to terms in mixed binary operations: numbers, and the wall vectors
+const TermLike = Union{Number, AnyNormal, AnyTangent}
+
+# mixed binary operations of terms and term-like values
 for op in (:+, :-, :*, :max, :min, :/, ://, :÷, :^, :<, :<=, :>, :>=, :(==), :!=, :&, :|, :xor)
     @eval begin
-        Base.$op(a::Number, b::DTerm) = $op(Literal(a), b)
-        Base.$op(a::DTerm, b::Number) = $op(a, Literal(b))
+        Base.$op(a::TermLike, b::DTerm) = $op(asterm(a), b)
+        Base.$op(a::DTerm, b::TermLike) = $op(a, asterm(b))
     end
 end
 
@@ -242,6 +245,13 @@ end
 
 Base.inv(t::DTerm) = makecall(Fun(inv), t)
 ×(a::DTerm, b::DTerm) = makecall(Fun(×), a, b)
+
+for op in (:⋅, :⊡, :⊗, :×)
+    @eval begin
+        $op(a::TermLike, b::DTerm) = $op(asterm(a), b)
+        $op(a::DTerm, b::TermLike) = $op(a, asterm(b))
+    end
+end
 
 """
     cof(t)

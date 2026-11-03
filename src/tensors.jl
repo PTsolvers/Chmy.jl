@@ -49,6 +49,7 @@ end
 
 asterm(x::DTerm) = x
 asterm(x::Number) = Literal(x)
+asterm(v::Union{AnyNormal, AnyTangent}) = v()
 
 ncomponents(::Kind.None, dims, rank) = dims^rank
 ncomponents(::Kind.Sym, dims, rank) = binomial(dims + rank - 1, rank)

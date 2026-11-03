@@ -24,9 +24,24 @@ Segment location on a staggered grid.
 struct Segment end
 
 """
+Location of the lower wall along the axis.
+"""
+struct Lower end
+
+"""
+Location of the upper wall along the axis.
+"""
+struct Upper end
+
+const 𝓅 = Point()
+const 𝓈 = Segment()
+const ↓ = Lower()
+const ↑ = Upper()
+
+"""
 Location on a staggered grid.
 """
-const Location = Union{Point, Segment}
+const Location = Union{Point, Segment, Lower, Upper, Colon}
 
 # head of a Chmy expression
 @data HeadImpl begin
@@ -89,3 +104,25 @@ struct BroadcastedFun{F} <: Operator
         return new{typeof(f)}(f)
     end
 end
+
+"""
+    AnyNormal()
+
+The outward unit normal of the wall, which matches the normal component in a tensor pattern, and is resolved to the
+normal vector of the matched wall in the data of override rules. See also `𝐧`.
+"""
+struct AnyNormal <: Operator end
+
+"""
+    AnyTangent(slot = 1)
+
+The tangential components in a tensor pattern. In the data of override rules, it is resolved to the unit vector along
+the component matched by the `slot`-th tangential index of the pattern. See also `𝐭`.
+"""
+struct AnyTangent <: Operator
+    slot::Int
+end
+AnyTangent() = AnyTangent(1)
+
+const 𝐧 = AnyNormal()
+const 𝐭 = AnyTangent()

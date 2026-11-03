@@ -17,6 +17,8 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 export ⋅, ×, tr, det, diag, transpose
 
 export DTerm, Literal, Index, Coordinate, Operator, Fun
+export 𝓅, 𝓈, ↓, ↑
+export AnyNormal, AnyTangent, 𝐧, 𝐭
 include("types.jl")
 
 export isexpr, iscall
@@ -42,10 +44,6 @@ const ξ¹ = Coordinate(1)
 const ξ² = Coordinate(2)
 const ξ³ = Coordinate(3)
 
-export 𝓅, 𝓈
-const 𝓅 = Point()
-const 𝓈 = Segment()
-
 export ⊡, ⊗, sym, asym, cof, adj, gram, cogram
 include("operators.jl")
 
@@ -70,14 +68,9 @@ export DifferentialOperator
 export Gradient, Divergence, Curl
 include("calculus.jl")
 
-export matches, dim, codim
-export Lower, Upper, Span
-export FacePattern, WallPattern, Face, Wall, AlongAxis, AnyWall, AnyCorner, Left, Right, Bottom, Top, Back, Front
-export Ghost, OnBoundary, NearBoundary
-export Far, Near, At
 include("topology.jl")
 
-export lower_rule, lower, locate
+export lower_rule, lower
 include("lowering.jl")
 
 export canonicalize, simplify
@@ -86,10 +79,13 @@ include("simplify.jl")
 export Lifted
 include("lift.jl")
 
-export BoundaryOperator, Next, Add, Scale, Dirichlet, Neumann
-export Normal, Tangential, AnyNormal, AnyTangent, 𝐧, 𝐭
-export select
-include("selector.jl")
+export FacePattern, WallPattern, RegionPattern
+export Wall, AlongAxis, AnyWall, AnyCorner, LeftWall, RightWall, BottomWall, TopWall, BackWall, FrontWall
+export Ghost, Boundary, Interior, Within
+export OverridePredicate, OverrideMatch, FaceMatch, FacePredicate, WallPredicate, signed_axes, signed_distances
+export Override, override, 𝒷
+export BoundaryRule, WallRule, Add, Scale, WallValue, WallDerivative, boundary_rule, wall_rule
+include("override.jl")
 
 export subs
 include("subs.jl")

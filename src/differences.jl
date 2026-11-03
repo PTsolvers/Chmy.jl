@@ -177,7 +177,7 @@ end
 # build the expression that reads the field `f` at the stencil node `x` relative to the evaluation point
 #
 # for collocated differences `x` is an integer offset, and for staggered differences `x` is
-# a half-integer offset; the grid locations and indices of the samples are inferred by `locate`
+# a half-integer offset; the grid locations and indices of the samples are inferred by `lower`
 field_sample(x) = :(f[$x])
 
 # build the weighted sum of field samples for the stencil with nodes `x` and `weights`
