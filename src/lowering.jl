@@ -3,9 +3,11 @@
     lower_rule(op, args, face, x)
     lower_rule(op, args)
 
-Expand the component `comps` of the call `op(args...)`, evaluated at the position `x` next to the `face`, into an
-expression of terms sampled at offsets relative to `x`, e.g. `f[1//2, 0]`. The calls combining the samples are kept,
-while the samples are lowered further. The position `x` is in the frame of [`lower`](@ref): relative to the grid
+Expand the component `comps` of the call `op(args...)`, evaluated at the position `x` next to the `face`, into a
+scalar expression evaluated at `x`, which is lowered further. Samples in the expression are relative to `x`, e.g.
+`f[1//2, 0]`, and terms that are not sampled are read at `x`, e.g. `f[1//2, 0] - f`. A rule returning a call of its
+own operator, e.g. `op(args...)`, keeps the call and lowers only its arguments. The position `x` is in the frame of
+[`lower`](@ref): relative to the grid
 point of the kernel along the spanning axes `:` of the face, and to the wall along its sides `↓` and `↑`, or a global
 position. Most rules only sample relative to `x` and ignore `face` and `x`; the rules that depend on the boundary
 read them, e.g. overrides. Rules of scalar operators can omit `comps`, and rules of 1D operators can also omit `face`
@@ -31,14 +33,11 @@ lower_rule(op::Operator, args) = no_rule_error(op, args, 1)
 # computing the entire result to read its component `comps`
 function lower_rule(op::Union{Fun, BroadcastedFun}, args, comps, face, x)
     result = evaluate(op, map(t -> components(t, length(x)), args))
-    isnothing(result) || return here(result[comps...], x)
-    # a scalar function of scalars reads its arguments at the evaluation point
+    isnothing(result) || return result[comps...]
+    # a scalar function of scalars is kept, and its arguments are lowered at the evaluation point
     isempty(comps) || expansion_error(op)
-    return makecall_unchecked(op, map(t -> here(t, x), args))
+    return makecall_unchecked(op, args)
 end
-
-# the value of `t` at the evaluation point of a rule
-here(t::DTerm, ::NTuple{N, Position}) where {N} = makeinds_unchecked(t, ntuple(_ -> 0 // 1, Val(N)))
 
 """
     At(positions...)
@@ -98,20 +97,13 @@ function lowerat(term::DTerm, face::Face{N}, x::NTuple{N, Position})::DTerm wher
     end
 end
 
-# the result of a rule combines uniform terms and samples relative to `x` with calls, which are kept as they are
-function lowerrel(term::DTerm, face::Face{N}, x::NTuple{N, Position})::DTerm where {N}
-    return @match term begin
-        DExpr(Call(_), _) => walkargs(t -> lowerrel(t, face, x), term)
-        DExpr(Inds(_), _) => lowerat(term, face, x)
-        _ => isuniform(term) ? term : unsampled_error()
-    end
-end
-
-# the result of the rule is a scalar expression of samples relative to `x`
+# the result of the rule is a scalar expression evaluated at `x`, which is lowered further, unless the rule returns
+# a call of its own operator, which is kept with its arguments lowered
 function lower_call(op, args, comps, face, x)
     term = lower_rule(op, args, comps, face, x)::DTerm
     tensorrank(term) == 0 || rule_rank_error(op)
-    return lowerrel(term, face, x)
+    iscall(term) && operation(term) == op && return walkargs(t -> lowerat(t, face, x), term)
+    return lowerat(term, face, x)
 end
 
 # a field is sampled at its position, uniform terms are not sampled
@@ -137,7 +129,6 @@ end
 @noinline context_length_error() = throw(ArgumentError("the face and the position must have the same number of dimensions"))
 @noinline lower_rank_error() = throw(ArgumentError("lower requires a scalar expression; select a scalar entry, e.g. expr[1, 2]"))
 @noinline lower_dims_error() = throw(ArgumentError("samples must have as many positions as there are dimensions"))
-@noinline unsampled_error() = throw(ArgumentError("lowering rules must read terms through samples, e.g. `f[0, 0]`"))
 @noinline index_input_error() = throw(ArgumentError("grid indices are produced by lowering and cannot appear in its input, use coordinates instead"))
 @noinline function coordinate_dims_error(a, n)
     throw(ArgumentError(LazyString("coordinate `", Coordinate(a), "` exceeds the number of dimensions ", n)))

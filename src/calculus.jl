@@ -51,17 +51,17 @@ end
 # the gradient differentiates the component `tail(comps)` of the argument along the axis `first(comps)`
 function lower_rule(grad::Gradient, args, comps, face, x)
     t = components(only(args), length(x))
-    return here(grad.op[first(comps)](t[Base.tail(comps)...]), x)
+    return grad.op[first(comps)](t[Base.tail(comps)...])
 end
 
 function lower_rule(divg::Divergence, args, comps, face, x)
     t = components(only(args), length(x))
-    return here(component_sum(DTerm[divg.op[i](t[i, comps...]) for i in eachindex(x)]), x)
+    return component_sum(DTerm[divg.op[i](t[i, comps...]) for i in eachindex(x)])
 end
 
 function lower_rule(curl::Curl, args, (i,), face, x)
     length(x) == 3 || throw(ArgumentError(LazyString("curl is only supported for 3D vector fields, got dimension ", length(x))))
     v = components(only(args), 3)
     j, k = mod1(i + 1, 3), mod1(i + 2, 3)
-    return here(curl.op[j](v[k]) - curl.op[k](v[j]), x)
+    return curl.op[j](v[k]) - curl.op[k](v[j])
 end

@@ -3,19 +3,19 @@ using Chmy
 
 # a pointwise operator defined only by its rule, which keeps the call and samples the argument here
 struct Pointwise <: Operator end
-Chmy.lower_rule(op::Pointwise, args::Tuple{DTerm}, face, x) = op(args[1][map(_ -> 0, x)...])
+Chmy.lower_rule(op::Pointwise, args::Tuple{DTerm}, face, x) = op(args[1])
 
 # a scalar operator depending on the number of dimensions
 struct Scaled <: Operator end
-Chmy.lower_rule(::Scaled, args::Tuple{DTerm}, face, x) = (args[1] / length(x))[map(_ -> 0, x)...]
+Chmy.lower_rule(::Scaled, args::Tuple{DTerm}, face, x) = args[1] / length(x)
 
 # an operator whose rule returns a tensor in component form instead of a scalar
 struct Unindexed <: Operator end
 Chmy.lower_rule(::Unindexed, args::Tuple{DTerm}, face, x) = pack([args[1], args[1]])
 
-# an operator whose rule reads its argument without sampling it
+# an operator whose rule reads its argument at the evaluation point without sampling it
 struct Unsampled <: Operator end
-Chmy.lower_rule(::Unsampled, args::Tuple{DTerm}, face, x) = args[1]
+Chmy.lower_rule(::Unsampled, args::Tuple{DTerm}, face, x) = 2 * args[1]
 
 @testset "lowering" begin
     @scalars f g
@@ -82,6 +82,9 @@ Chmy.lower_rule(::Unsampled, args::Tuple{DTerm}, face, x) = args[1]
         @test lower(Pointwise()(Pointwise()(f)), (:,), (0,)) ==ₛ Pointwise()(Pointwise()(f[0]))
         # rules can depend on the number of dimensions
         @test (@inferred lower(Scaled()(f), (:, :), (0, 0))) ==ₛ f[0, 0] / 2
+        # unsampled terms in the result of a rule are read at the evaluation point
+        @test (@inferred lower(Unsampled()(s[1](f)), (:, :), (0, 0))) ==ₛ 2 * (f[1 // 2, 0] - f[-1 // 2, 0])
+        @test (@inferred lower(Unsampled()(f), (:, :), (↓, 1 // 2))) ==ₛ 2 * f[↓, 1 // 2]
     end
 
     @testset "tensor expressions" begin
@@ -146,7 +149,6 @@ Chmy.lower_rule(::Unsampled, args::Tuple{DTerm}, face, x) = args[1]
         @test_throws ArgumentError lower(d(f), (:, :), (0, 0))
         # a rule must return a scalar of samples
         @test_throws ArgumentError lower(Unindexed()(f), (:, :), (0, 0))
-        @test_throws ArgumentError lower(Unsampled()(f), (:, :), (0, 0))
         @test_throws ArgumentError lower(ξ³ * f, (:,), (0,))
     end
 end
