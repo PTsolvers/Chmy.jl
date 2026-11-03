@@ -182,12 +182,9 @@ field_sample(x) = :(f[$x])
 
 # build the weighted sum of field samples for the stencil with nodes `x` and `weights`
 #
-# if the stencil is antisymmetric, i.e. every nonzero weight at `x[k]` has an opposite weight
-# at `-x[k]`, the terms are grouped in pairs `c * (f[x] - f[-x])` for positive `x`,
-# which halves the number of multiplications, e.g. `f[1] - f[-1]` for the central difference
-# otherwise each nonzero weight gives a separate term, with positive weights placed first,
-# so that the expression starts without a leading minus when possible
-# the sign of each weight is absorbed into `+` or `-` between terms, unit coefficients are omitted,
+# if the stencil is antisymmetric, i.e. every nonzero weight at `x[k]` has an opposite weight at `-x[k]`, the terms
+# are grouped in pairs `c * (f[x] - f[-x])` for positive `x`, which halves the number of multiplications, e.g.
+# `f[1] - f[-1]` for the central difference; the order and the signs of the terms are canonicalised on construction,
 # and an all-zero stencil yields `ZERO`
 function difference_expr(x, weights)
     nonzero = findall(!iszero, weights)
@@ -195,26 +192,12 @@ function difference_expr(x, weights)
         opposite = findfirst(==(-x[k]), x)
         return !isnothing(opposite) && weights[opposite] == -weights[k]
     end
-    result = nothing
-    # symmetric pairs are ordered from nearest to farthest
-    points = paired ? sort!(filter(k -> x[k] > 0, nonzero); by = k -> x[k]) : sortperm(collect(weights); by = c -> c < 0)
-    for k in points
-        c = weights[k]
-        iszero(c) && continue
-        term = field_sample(x[k])
-        if paired
-            opposite = field_sample(-x[k])
-            term = :($term - $opposite)
-        end
-        coefficient = abs(c)
-        isone(coefficient) || (term = :($coefficient * $term))
-        result = if isnothing(result)
-            c > 0 ? term : :(-$term)
-        else
-            c > 0 ? :($result + $term) : :($result - $term)
-        end
+    terms = if paired
+        [:($(weights[k]) * ($(field_sample(x[k])) - $(field_sample(-x[k])))) for k in nonzero if x[k] > 0]
+    else
+        [:($(weights[k]) * $(field_sample(x[k]))) for k in nonzero]
     end
-    return something(result, :ZERO)
+    return isempty(terms) ? :ZERO : :(+($(terms...)))
 end
 
 @generated function lower_rule(d::Union{Difference, StaggeredDifference}, args::Tuple{DTerm})

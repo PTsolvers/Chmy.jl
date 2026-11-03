@@ -6,7 +6,8 @@ using Chmy
     @uniform @scalars a
     # samples are bound by the location of their positions, traces by the global positions
     @test isequal(bindings(a * u[1 // 2, 3 // 2] + u[-1 // 2, 1 // 2]), (a, u[𝓈, 𝓈]))
-    @test isequal(bindings(u[0, 1 // 2] * g[↓, 1]), (u[𝓅, 𝓈], g[↓, 𝓅]))
+    # in the order of the canonical form
+    @test isequal(bindings(u[0, 1 // 2] * g[↓, 1]), (g[↓, 𝓅], u[𝓅, 𝓈]))
     # samples at global positions only are their own keys
     @test isequal(bindings(g[↓, :] + u[1, 1]), (g[↓, :], u[𝓅, 𝓅]))
     @test u[𝓈, ↓] isa Chmy.Located
@@ -41,20 +42,20 @@ end
             ((↓,), (3 // 2,), U[1] - 2U[2] + U[3]),
             ((↑,), (-1 // 2,), U[3] - U[4]),
         )
-        f = compile(simplify(lower(Δ, face, x)), face, Binding(u[𝓈] => U))
+        f = compile(lower(Δ, face, x), face, Binding(u[𝓈] => U))
         @test (@inferred f(data, (2,), (4,))) == expected
     end
 
     # boundary data stored along the left wall are indexed along the second axis only
     ã = override(a, LeftWall => WallValue(𝒷(g)))
-    left = simplify(lower(D[1](ã), (↓, :), (0, 1 // 2)))
+    left = lower(D[1](ã), (↓, :), (0, 1 // 2))
     @test isequal(bindings(left), (a[𝓈, 𝓈], g[↓, 𝓈]))
     binding = Binding(a[𝓈, 𝓈] => [1.0 2.0; 3.0 4.0], g[↓, 𝓈] => [5.0, 7.0])
     f = compile(left, (↓, :), binding)
     @test (@inferred f(binding.data, (99, 2), n)) == 2.0 - 2 * 7.0 + 2.0
     # a single value for the whole wall
     ã = override(a, LeftWall => WallValue(𝒷(g; span = true)))
-    left = simplify(lower(D[1](ã), (↓, :), (0, 1 // 2)))
+    left = lower(D[1](ã), (↓, :), (0, 1 // 2))
     f = compile(left, (↓, :), Binding(a[𝓈, 𝓈] => [1.0 2.0; 3.0 4.0], g[↓, :] => 5.0))
     @test f(([1.0 2.0; 3.0 4.0], 5.0), (1, 2), n) == 2.0 - 2 * 5.0 + 2.0
     f = compile(left, (↓, :), Binding(a[𝓈, 𝓈] => [1.0 2.0; 3.0 4.0], g[↓, :] => fill(5.0)))

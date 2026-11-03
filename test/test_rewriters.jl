@@ -24,14 +24,16 @@ struct NoopRule <: AbstractRule end
     @test (@inferred Prewalk(rule)(a[1])) ==ₛ b[1]
     @test (@inferred Postwalk(rule)(a[1])) ==ₛ c
 
-    expr = sin(a + Literal(2.0))
-    literal_rule = t -> isliteral(t) ? Literal(Int(value(t))) : nothing
+    # expressions with rewritten children are rebuilt in canonical form
+    expr = sin(a + b)
     for walk in (Prewalk, Postwalk)
         @test (@inferred walk(NoopRule())(expr)) === expr
-        result = @inferred walk(literal_rule)(expr)
-        @test result ==ₛ expr
-        @test value(arguments(only(arguments(result)))[2]) === 2
+        @test (@inferred walk(t -> t ==ₛ b ? -a : nothing)(expr)) ==ₛ Literal(0)
     end
+    @tensors 2 A B
+    @test (@inferred subs(a + b, a => -b)) ==ₛ Literal(0)
+    @test (@inferred subs(A ⋅ B, A => inv(B))) ==ₛ ℐ(2)
+    @test (@inferred subs(A ⋅ B, A => components(A, 2), B => components(B, 2))) ==ₛ components(A, 2) ⋅ components(B, 2)
 
     successive = t -> t ==ₛ a ? b : (t ==ₛ b ? c : nothing)
     @test (@inferred Fixpoint(successive)(a)) ==ₛ c

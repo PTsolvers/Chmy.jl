@@ -68,6 +68,7 @@ end
 
 Apply `rule` in a bottom-up traversal (children before parent), visiting arguments
 from left to right. Children introduced by the final rewrite are not visited.
+Expressions with rewritten children are rebuilt in canonical form.
 """
 struct Postwalk{R} <: AbstractRule
     rule::R
@@ -81,7 +82,7 @@ function walkargs(walk, term::DTerm)
     for k in eachindex(args)
         arg = walk(args[k])
         arg === args[k] && continue
-        return DExpr(head(term), walkargs(walk, args, arg, k))
+        return maketerm(head(term), walkargs(walk, args, arg, k))
     end
     return term
 end
@@ -110,7 +111,3 @@ function (f::Fixpoint)(term::DTerm)
     end
     return
 end
-
-@inline postwalk(rule, term) = Postwalk(rule)(term)
-@inline prewalk(rule, term) = Prewalk(rule)(term)
-@inline fixpoint(rule, term) = Fixpoint(rule)(term)

@@ -80,5 +80,5 @@ anchor(::Lower, a) = 1
 anchor(::Upper, a) = :(n[$a] + 1)
 
 # the index of the sample along the axis `a`, global positions are not indexed
-index_expr(p::Rational{Int}, a, face, b) = (toexpr(offset_term(Index(a), floor(p)), face, b),)
+index_expr(p::Rational{Int}, a, face, b) = (toexpr(Index(a) + floor(p), face, b),)
 index_expr(::Global, a, face, b) = ()

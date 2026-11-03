@@ -34,7 +34,7 @@ Chmy.lower_rule(::Unsampled, args::Tuple{DTerm}, face, x) = 2 * args[1]
         @test (@inferred lower(sin(f)[-1 // 2], (:,), (0,))) ==ₛ sin(f[-1 // 2])
         @test (@inferred lower(f[1 // 2][1], (:,), (1 // 2,))) ==ₛ f[2]
         # uniform calls are expanded as well
-        @test (@inferred lower(d[1](a), (:,), (0,))) ==ₛ (1 // 2) * (a - a)
+        @test (@inferred lower(d[1](a), (:,), (0,))) ==ₛ Literal(0)
     end
 
     @testset "laws" begin
@@ -55,7 +55,7 @@ Chmy.lower_rule(::Unsampled, args::Tuple{DTerm}, face, x) = 2 * args[1]
         @test (@inferred lower(f[↓, 0][↑, 0], (:, :), (0, 0))) ==ₛ f[↓, 0]
         @test (@inferred lower(f[:, 0][↓, 1], (:, :), (0, 1 // 2))) ==ₛ f[:, 3 // 2]
         # traces are constant along their axis, so their normal derivative vanishes
-        @test lower(s[1](f[↓, 0]), (:, :), (0, 1 // 2)) ==ₛ f[↓, 1 // 2] - f[↓, 1 // 2]
+        @test lower(s[1](f[↓, 0]), (:, :), (0, 1 // 2)) ==ₛ Literal(0)
         @test lower(s[2](f[↓, 0]), (:, :), (0, 1 // 2)) ==ₛ f[↓, 1] - f[↓, 0]
         # lowering at a global position evaluates the expression on the traces
         @test lower(sin(f) * g[1 // 2, 0], (:, :), (0, :)) ==ₛ sin(f[0, :]) * g[1 // 2, :]
@@ -64,12 +64,12 @@ Chmy.lower_rule(::Unsampled, args::Tuple{DTerm}, face, x) = 2 * args[1]
     @testset "laplacian" begin
         Δ = divg(grad(f))
         interior = f[-1 // 2] - 2 * f[1 // 2] + f[3 // 2]
-        @test simplify(lower(Δ, (:,), (1 // 2,))) ==ₛ simplify(interior)
+        @test lower(Δ, (:,), (1 // 2,)) ==ₛ interior
         # the same stencil next to the wall, relative to the wall point
-        @test simplify(lower(Δ, (↓,), (1 // 2,))) ==ₛ simplify(interior)
-        @test simplify(lower(Δ, (↓,), (3 // 2,))) ==ₛ simplify(f[1 // 2] - 2 * f[3 // 2] + f[5 // 2])
-        @test simplify(lower(divg(grad(f)), (:, :), (0, 0))) ==ₛ
-            simplify(f[-1, 0] + f[0, -1] - 4 * f[0, 0] + f[1, 0] + f[0, 1])
+        @test lower(Δ, (↓,), (1 // 2,)) ==ₛ interior
+        @test lower(Δ, (↓,), (3 // 2,)) ==ₛ f[1 // 2] - 2 * f[3 // 2] + f[5 // 2]
+        @test lower(divg(grad(f)), (:, :), (0, 0)) ==ₛ
+            f[-1, 0] + f[0, -1] - 4 * f[0, 0] + f[1, 0] + f[0, 1]
     end
 
     @testset "rules" begin
@@ -102,9 +102,9 @@ Chmy.lower_rule(::Unsampled, args::Tuple{DTerm}, face, x) = 2 * args[1]
         gravity = pack([0, -1])
         # a call with all tensor arguments in component form is evaluated right away
         @test ispack(f * gravity)
-        @test simplify(lower((f * gravity)[2], (:, :), (0, 0))) ==ₛ -f[0, 0]
+        @test lower((f * gravity)[2], (:, :), (0, 0)) ==ₛ -f[0, 0]
         # mixed with coordinate-free tensors, the call is evaluated during lowering
-        @test simplify(lower((u + gravity)[2], (:, :), (0, 0))) ==ₛ u[2][0, 0] - 1
+        @test lower((u + gravity)[2], (:, :), (0, 0)) ==ₛ u[2][0, 0] - 1
         @test_throws DimensionMismatch lower((u + gravity)[2], (:, :, :), (0, 0, 0))
     end
 
@@ -132,7 +132,7 @@ Chmy.lower_rule(::Unsampled, args::Tuple{DTerm}, face, x) = 2 * args[1]
         @test (@inferred lower(ξ² * f, (:, :), (1 // 2, 0))) ==ₛ (𝑗 - 1) * f[1 // 2, 0]
         @test (@inferred lower(s[1](ξ¹ * f), (:,), (0,))) ==ₛ (𝑖 - 1 // 2) * f[1 // 2] - (𝑖 - 3 // 2) * f[-1 // 2]
         # the trace on the lower wall is at the coordinate 0
-        @test (@inferred lower(ξ¹ * f, (:, :), (↓, 0))) ==ₛ Literal(0) * f[↓, 0]
+        @test (@inferred lower(ξ¹ * f, (:, :), (↓, 0))) ==ₛ Literal(0)
         @test_throws ArgumentError lower(ξ¹ * f, (:, :), (↑, 0))
         @test_throws ArgumentError lower(ξ¹ * f, (:, :), (:, 0))
     end

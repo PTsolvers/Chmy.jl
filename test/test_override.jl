@@ -2,8 +2,6 @@ using Test
 using Chmy
 using Chmy: OverrideSample, candidates, match
 
-lowerat(expr, face, x) = simplify(lower(expr, face, x))
-
 @testset "predicates" begin
     # the position of a ghost segment by the left wall in a corner kernel
     x = (-1 // 2, 0 // 1)
@@ -49,48 +47,48 @@ end
     @testset "not overridden" begin
         # in the interior, or outside the region
         @test (@inferred lower(override(u, LeftWall => Add(p)), (:, :), (0, 0))) ==ₛ r
-        @test lowerat(override(u, (LeftWall, Boundary) => Add(p)), (↓, :), (1, 0)) ==ₛ u[1, 0]
+        @test lower(override(u, (LeftWall, Boundary) => Add(p)), (↓, :), (1, 0)) ==ₛ u[1, 0]
         # and at traces, which have no distance from the wall
-        @test lowerat(override(u, (LeftWall, Boundary) => Add(p))[↓, 0], (↓, :), (0, 0)) ==ₛ u[↓, 0]
+        @test lower(override(u, (LeftWall, Boundary) => Add(p))[↓, 0], (↓, :), (0, 0)) ==ₛ u[↓, 0]
     end
 
     @testset "one wall" begin
         # only the bottom wall is adjacent to the face, so the left predicate never applies
-        @test lowerat(override(u, (LeftWall, Boundary) => Add(p), (BottomWall, Boundary) => Add(q)), (:, ↓), (0, 0)) ==ₛ simplify(r + q)
+        @test lower(override(u, (LeftWall, Boundary) => Add(p), (BottomWall, Boundary) => Add(q)), (:, ↓), (0, 0)) ==ₛ r + q
     end
 
     @testset "replacement" begin
         # a term that is not a rule call replaces the overridden term
-        @test lowerat(override(u, Boundary => v), (:, ↓), (0, 0)) ==ₛ v[0, 0]
-        @test lowerat(override(u, (LeftWall, Boundary) => p + q), (↓, :), (0, 0)) ==ₛ simplify(p + q)
-        @test lowerat(override(u, Boundary => 0), (↓, :), (0, 0)) ==ₛ Literal(0)
+        @test lower(override(u, Boundary => v), (:, ↓), (0, 0)) ==ₛ v[0, 0]
+        @test lower(override(u, (LeftWall, Boundary) => p + q), (↓, :), (0, 0)) ==ₛ p + q
+        @test lower(override(u, Boundary => 0), (↓, :), (0, 0)) ==ₛ Literal(0)
         # also a number
-        @test lowerat(override(1, Boundary => Scale(1 // 2)), (↓, :), (0, 0)) ==ₛ Literal(1 // 2)
+        @test lower(override(1, Boundary => Scale(1 // 2)), (↓, :), (0, 0)) ==ₛ Literal(1 // 2)
     end
 
     @testset "composition at a corner" begin
         # the rules compose in the order of the predicates, the first one is the outermost
-        @test lowerat(override(u, (LeftWall, Boundary) => Add(p), (BottomWall, Boundary) => Scale(2)), (↓, ↓), (0, 0)) ==ₛ simplify(2r + p)
-        @test lowerat(override(u, (BottomWall, Boundary) => Scale(2), (LeftWall, Boundary) => Add(p)), (↓, ↓), (0, 0)) ==ₛ simplify(2 * (r + p))
-        @test lowerat(override(u, (AnyCorner, Boundary) => Scale(1 // 2), Boundary => Add(p)), (↓, ↓), (0, 0)) ==ₛ simplify((1 // 2) * (r + p + p))
-        @test lowerat(override(u, Boundary => Add(p), (AnyCorner, Boundary) => Add(pc)), (↓, ↓), (0, 0)) ==ₛ simplify(r + p + p + pc)
+        @test lower(override(u, (LeftWall, Boundary) => Add(p), (BottomWall, Boundary) => Scale(2)), (↓, ↓), (0, 0)) ==ₛ 2r + p
+        @test lower(override(u, (BottomWall, Boundary) => Scale(2), (LeftWall, Boundary) => Add(p)), (↓, ↓), (0, 0)) ==ₛ 2 * (r + p)
+        @test lower(override(u, (AnyCorner, Boundary) => Scale(1 // 2), Boundary => Add(p)), (↓, ↓), (0, 0)) ==ₛ (1 // 2) * (r + p + p)
+        @test lower(override(u, Boundary => Add(p), (AnyCorner, Boundary) => Add(pc)), (↓, ↓), (0, 0)) ==ₛ r + p + p + pc
         # every wall of a 3D corner on mixed sides contributes once
-        @test lowerat(override(u, Boundary => Add(p)), (↑, ↓, ↑), (0, 0, 0)) ==ₛ simplify(u[0, 0, 0] + 3p)
+        @test lower(override(u, Boundary => Add(p)), (↑, ↓, ↑), (0, 0, 0)) ==ₛ u[0, 0, 0] + 3p
     end
 
     @testset "positions through stencils" begin
         D = StaggeredCentralDifference()
         # cell centre next to the lower wall: the sample at -1//2 lies on the wall
-        lo = lowerat(D[2](override(u, (BottomWall, Boundary) => Add(q))), (:, ↓), (1 // 2, 1 // 2))
-        @test lo ==ₛ simplify(u[1 // 2, 1] - (u[1 // 2, 0] + q))
+        lo = lower(D[2](override(u, (BottomWall, Boundary) => Add(q))), (:, ↓), (1 // 2, 1 // 2))
+        @test lo ==ₛ u[1 // 2, 1] - (u[1 // 2, 0] + q)
         # next to the upper wall: the sample at +1//2 lies on the wall
-        hi = lowerat(D[2](override(u, (TopWall, Boundary) => Add(q))), (:, ↑), (1 // 2, -1 // 2))
-        @test hi ==ₛ simplify((u[1 // 2, 0] + q) - u[1 // 2, -1])
+        hi = lower(D[2](override(u, (TopWall, Boundary) => Add(q))), (:, ↑), (1 // 2, -1 // 2))
+        @test hi ==ₛ (u[1 // 2, 0] + q) - u[1 // 2, -1]
     end
 
     @testset "data of rules" begin
         # the data are arguments of the override call, so rewriters reach them
-        @test lowerat(subs(override(u, Boundary => Add(p)), p => q), (↓, ↓), (0, 0)) ==ₛ simplify(r + q + q)
+        @test lower(subs(override(u, Boundary => Add(p)), p => q), (↓, ↓), (0, 0)) ==ₛ r + q + q
     end
 
     @testset "samples" begin
@@ -110,19 +108,19 @@ end
     # a ghost segment: the wall is half a cell away, the mirror sample half a cell inside
     # positions along the sides are measured from the wall along the axis, so ghosts are at negative positions by
     # the lower wall and at positive ones by the upper wall
-    @test lowerat(override(u, LeftWall => WallValue(g)), (↓,), (-1 // 2,)) ==ₛ simplify(2g - u[1 // 2])
-    @test lowerat(override(u, RightWall => WallValue(g)), (↑,), (1 // 2,)) ==ₛ simplify(2g - u[-1 // 2])
+    @test lower(override(u, LeftWall => WallValue(g)), (↓,), (-1 // 2,)) ==ₛ 2g - u[1 // 2]
+    @test lower(override(u, RightWall => WallValue(g)), (↑,), (1 // 2,)) ==ₛ 2g - u[-1 // 2]
     # a ghost point, and the wall point
-    @test lowerat(override(u, LeftWall => WallValue(g)), (↓,), (-1,)) ==ₛ simplify(2g - u[1])
-    @test lowerat(override(u, LeftWall => WallValue(g)), (↓,), (0,)) ==ₛ g
+    @test lower(override(u, LeftWall => WallValue(g)), (↓,), (-1,)) ==ₛ 2g - u[1]
+    @test lower(override(u, LeftWall => WallValue(g)), (↓,), (0,)) ==ₛ g
     # the boundary value is read at the wall, at both walls
-    @test lowerat(override(u, LeftWall => WallValue(sin(ξ¹))), (↓,), (-1 // 2,)) ==ₛ simplify(2sin(𝑖 - 1) - u[1 // 2])
-    @test lowerat(override(u, RightWall => WallValue(sin(ξ¹))), (↑,), (1 // 2,)) ==ₛ simplify(2sin(𝑖 - 1) - u[-1 // 2])
+    @test lower(override(u, LeftWall => WallValue(sin(ξ¹))), (↓,), (-1 // 2,)) ==ₛ 2sin(𝑖 - 1) - u[1 // 2]
+    @test lower(override(u, RightWall => WallValue(sin(ξ¹))), (↑,), (1 // 2,)) ==ₛ 2sin(𝑖 - 1) - u[-1 // 2]
     # an outward derivative gives the same expression at both walls, and keeps the wall value
-    @test lowerat(override(u, WallDerivative(g)), (↓,), (-1 // 2,)) ==ₛ simplify(u[1 // 2] + g)
-    @test lowerat(override(u, WallDerivative(g)), (↑,), (1 // 2,)) ==ₛ simplify(u[-1 // 2] + g)
-    @test lowerat(override(u, WallDerivative(g)), (↓,), (-1,)) ==ₛ simplify(u[1] + 2g)
-    @test lowerat(override(u, WallDerivative(g)), (↓,), (0,)) ==ₛ u[0]
+    @test lower(override(u, WallDerivative(g)), (↓,), (-1 // 2,)) ==ₛ u[1 // 2] + g
+    @test lower(override(u, WallDerivative(g)), (↑,), (1 // 2,)) ==ₛ u[-1 // 2] + g
+    @test lower(override(u, WallDerivative(g)), (↓,), (-1,)) ==ₛ u[1] + 2g
+    @test lower(override(u, WallDerivative(g)), (↓,), (0,)) ==ₛ u[0]
     # inside the domain the rules throw
     @test_throws ArgumentError lower(override(u, (LeftWall, Interior) => WallValue(g)), (↓,), (1 // 2,))
     @test_throws ArgumentError lower(override(u, (LeftWall, Interior) => WallDerivative(g)), (↓,), (1 // 2,))
@@ -130,24 +128,24 @@ end
     @test_throws ArgumentError lower(override(u, (AnyCorner, Ghost) => WallValue(g)), (↓, ↓), (-1 // 2, -1 // 2))
     # a diagonal ghost: the left rule moves the sample inside, where the bottom rule applies
     ũ = override(u, LeftWall => WallValue(gL), BottomWall => WallValue(gB))
-    @test lowerat(ũ, (↓, ↓), (-1 // 2, -1 // 2)) ==ₛ simplify(2gL - (2gB - u[1 // 2, 1 // 2]))
+    @test lower(ũ, (↓, ↓), (-1 // 2, -1 // 2)) ==ₛ 2gL - (2gB - u[1 // 2, 1 // 2])
 
     # the laplacian next to the wall with a zero outward derivative, at both walls
     Δ(x) = Divergence(StaggeredCentralDifference())(Gradient(StaggeredCentralDifference())(x))
     ũ = override(u, WallDerivative(0))
-    @test lowerat(Δ(ũ), (↓,), (1 // 2,)) ==ₛ simplify(u[3 // 2] - u[1 // 2])
-    @test lowerat(Δ(ũ), (↑,), (-1 // 2,)) ==ₛ simplify(u[-3 // 2] - u[-1 // 2])
+    @test lower(Δ(ũ), (↓,), (1 // 2,)) ==ₛ u[3 // 2] - u[1 // 2]
+    @test lower(Δ(ũ), (↑,), (-1 // 2,)) ==ₛ u[-3 // 2] - u[-1 // 2]
     # or with a zero normal flux on the wall
     D = StaggeredCentralDifference()
     q̃ = override(Gradient(D)(u), (Boundary, 𝐧) => 0)
-    @test lowerat(Divergence(D)(q̃), (↓,), (1 // 2,)) ==ₛ simplify(u[3 // 2] - u[1 // 2])
+    @test lower(Divergence(D)(q̃), (↓,), (1 // 2,)) ==ₛ u[3 // 2] - u[1 // 2]
 
     # the laplacian in the corner cell
     D = StaggeredCentralDifference()
     ũ = override(u, LeftWall => WallValue(uL), WallDerivative(ĝ))
     Δũ = D[1](D[1](ũ)) + D[2](D[2](ũ))
     expected = u[3 // 2, 1 // 2] + u[1 // 2, 3 // 2] - 4 * u[1 // 2, 1 // 2] + 2uL + ĝ
-    @test lowerat(Δũ, (↓, ↓), (1 // 2, 1 // 2)) ==ₛ simplify(expected)
+    @test lower(Δũ, (↓, ↓), (1 // 2, 1 // 2)) ==ₛ expected
     @test (@inferred lower(Δũ, (↓, ↓), (1 // 2, 1 // 2))) isa DTerm
 end
 
@@ -159,28 +157,28 @@ end
     @testset "vectors" begin
         # the normal component is taken along the outward normal, so it changes sign at the lower wall
         V̄ = override(V, (Boundary, 𝐧) => WallValue(g))
-        @test lowerat(V̄[2], (:, ↓), (0, 0)) ==ₛ simplify(-g)
-        @test lowerat(V̄[2], (:, ↑), (0, 0)) ==ₛ g
-        @test lowerat(V̄[1], (:, ↓), (0, 0)) ==ₛ V[1][0, 0]
+        @test lower(V̄[2], (:, ↓), (0, 0)) ==ₛ -g
+        @test lower(V̄[2], (:, ↑), (0, 0)) ==ₛ g
+        @test lower(V̄[1], (:, ↓), (0, 0)) ==ₛ V[1][0, 0]
         # pointwise rules see the outward frame as well
-        @test lowerat(override(V, (Boundary, 𝐧) => g)[2], (:, ↓), (0, 0)) ==ₛ simplify(-g)
+        @test lower(override(V, (Boundary, 𝐧) => g)[2], (:, ↓), (0, 0)) ==ₛ -g
         # a later predicate applies to the components that the earlier one does not match
         V̄ = override(V, (BottomWall, Boundary, 𝐧) => WallValue(g), (BottomWall, Boundary, 𝐭) => Add(h))
-        @test lowerat(V̄[1], (:, ↓), (0, 0)) ==ₛ simplify(V[1][0, 0] + h)
+        @test lower(V̄[1], (:, ↓), (0, 0)) ==ₛ V[1][0, 0] + h
         # every component
         V̄ = override(V, (BottomWall, Boundary) => WallValue(g))
-        @test lowerat(V̄[1], (:, ↓), (0, 0)) ==ₛ g
-        @test lowerat(V̄[2], (:, ↓), (0, 0)) ==ₛ simplify(-g)
+        @test lower(V̄[1], (:, ↓), (0, 0)) ==ₛ g
+        @test lower(V̄[2], (:, ↓), (0, 0)) ==ₛ -g
     end
 
     @testset "rank 2" begin
         # vector data are indexed by the free indices
         σ̄ = override(σ, (Ghost, (𝐧, :)) => WallValue(t))
-        @test lowerat(σ̄[2, 1], (:, ↑), (1 // 2, 1 // 2)) ==ₛ simplify(2 * t[1][1 // 2, 0] - σ[2, 1][1 // 2, -1 // 2])
-        @test lowerat(σ̄[2, 1], (:, ↓), (1 // 2, -1 // 2)) ==ₛ simplify(-2 * t[1][1 // 2, 0] - σ[2, 1][1 // 2, 1 // 2])
+        @test lower(σ̄[2, 1], (:, ↑), (1 // 2, 1 // 2)) ==ₛ 2 * t[1][1 // 2, 0] - σ[2, 1][1 // 2, -1 // 2]
+        @test lower(σ̄[2, 1], (:, ↓), (1 // 2, -1 // 2)) ==ₛ -2 * t[1][1 // 2, 0] - σ[2, 1][1 // 2, 1 // 2]
         # two indices along the normal keep the sign, while the vector data are global and change sign along the normal
-        @test lowerat(σ̄[2, 2], (:, ↓), (1 // 2, -1 // 2)) ==ₛ simplify(-2 * t[2][1 // 2, 0] - σ[2, 2][1 // 2, 1 // 2])
-        @test lowerat(σ̄[1, 2], (:, ↓), (1 // 2, -1 // 2)) ==ₛ σ[1, 2][1 // 2, -1 // 2]
+        @test lower(σ̄[2, 2], (:, ↓), (1 // 2, -1 // 2)) ==ₛ -2 * t[2][1 // 2, 0] - σ[2, 2][1 // 2, 1 // 2]
+        @test lower(σ̄[1, 2], (:, ↓), (1 // 2, -1 // 2)) ==ₛ σ[1, 2][1 // 2, -1 // 2]
     end
 
     @testset "stokes" begin
@@ -192,10 +190,10 @@ end
         τ = -P * ℐ(2) + 2η * sym(grad(V̄))
         # free slip on the bottom wall, free surface on the top wall
         τ̄ = override(τ, (BottomWall, Boundary, (𝐧, 𝐭)) => WallValue(0), (TopWall, (𝐧, :)) => WallValue(𝒪(1)))
-        @test lowerat(τ̄[2, 1], (:, ↓), (0, 0)) ==ₛ Literal(0)
-        @test lowerat(τ̄[1, 1], (:, ↓), (0, 0)) ==ₛ lowerat(τ[1, 1], (:, ↓), (0, 0))
+        @test lower(τ̄[2, 1], (:, ↓), (0, 0)) ==ₛ Literal(0)
+        @test lower(τ̄[1, 1], (:, ↓), (0, 0)) ==ₛ lower(τ[1, 1], (:, ↓), (0, 0))
         # the ghost value mirrors the value inside the domain
-        @test lowerat(τ̄[2, 2], (:, ↑), (1 // 2, 1 // 2)) ==ₛ simplify(-lowerat(τ[2, 2][0, -1], (:, ↑), (1 // 2, 1 // 2)))
+        @test lower(τ̄[2, 2], (:, ↑), (1 // 2, 1 // 2)) ==ₛ -lower(τ[2, 2][0, -1], (:, ↑), (1 // 2, 1 // 2))
     end
 
     @testset "wall vectors" begin
@@ -204,28 +202,28 @@ end
         @vectors v
         # the normal points outwards, so the normal component of a global vector is the same at both walls
         V̄ = override(V, (Boundary, 𝐧) => WallValue(W ⋅ 𝐧))
-        @test lowerat(V̄[2], (:, ↓), (0, 0)) ==ₛ W[2]
-        @test lowerat(V̄[2], (:, ↑), (0, 0)) ==ₛ W[2]
+        @test lower(V̄[2], (:, ↓), (0, 0)) ==ₛ W[2]
+        @test lower(V̄[2], (:, ↑), (0, 0)) ==ₛ W[2]
         # a global vector along the normal
         V̄ = override(V, Boundary => WallValue(g * 𝐧))
-        @test lowerat(V̄[2], (:, ↓), (0, 0)) ==ₛ simplify(-g)
-        @test lowerat(V̄[2], (:, ↑), (0, 0)) ==ₛ g
-        @test lowerat(V̄[1], (:, ↓), (0, 0)) ==ₛ Literal(0)
+        @test lower(V̄[2], (:, ↓), (0, 0)) ==ₛ -g
+        @test lower(V̄[2], (:, ↑), (0, 0)) ==ₛ g
+        @test lower(V̄[1], (:, ↓), (0, 0)) ==ₛ Literal(0)
         # partial slip, the tangential traction is proportional to the tangential velocity
         σ̄ = override(σ, (Ghost, (𝐧, 𝐭)) => WallValue(β * (v ⋅ 𝐭)))
-        @test lowerat(σ̄[2, 1], (:, ↓), (1 // 2, -1 // 2)) ==ₛ simplify(-2β * v[1][1 // 2, 0] - σ[2, 1][1 // 2, 1 // 2])
-        @test lowerat(σ̄[2, 1], (:, ↑), (1 // 2, 1 // 2)) ==ₛ simplify(2β * v[1][1 // 2, 0] - σ[2, 1][1 // 2, -1 // 2])
-        @test lowerat(σ̄[1, 2], (↓, :), (-1 // 2, 1 // 2)) ==ₛ simplify(-2β * v[2][0, 1 // 2] - σ[1, 2][1 // 2, 1 // 2])
+        @test lower(σ̄[2, 1], (:, ↓), (1 // 2, -1 // 2)) ==ₛ -2β * v[1][1 // 2, 0] - σ[2, 1][1 // 2, 1 // 2]
+        @test lower(σ̄[2, 1], (:, ↑), (1 // 2, 1 // 2)) ==ₛ 2β * v[1][1 // 2, 0] - σ[2, 1][1 // 2, -1 // 2]
+        @test lower(σ̄[1, 2], (↓, :), (-1 // 2, 1 // 2)) ==ₛ -2β * v[2][0, 1 // 2] - σ[1, 2][1 // 2, 1 // 2]
         # the tangential part of a vector
         vᵗ = v - (v ⋅ 𝐧) * 𝐧
         V̄ = override(V, (Boundary, :) => vᵗ)
-        @test lowerat(V̄[1], (:, ↓), (0, 0)) ==ₛ v[1][0, 0]
-        @test lowerat(V̄[2], (:, ↓), (0, 0)) ==ₛ Literal(0)
+        @test lower(V̄[1], (:, ↓), (0, 0)) ==ₛ v[1][0, 0]
+        @test lower(V̄[2], (:, ↓), (0, 0)) ==ₛ Literal(0)
         # every tangential component has its own tangent, the bottom wall is normal to the last axis
         σ̄ = override(σ, (BottomWall, Ghost, (𝐧, 𝐭)) => WallValue(β * (v ⋅ 𝐭)))
         for c in (1, 2)
-            @test lowerat(σ̄[3, c], (:, :, ↓), (1 // 2, 1 // 2, -1 // 2)) ==ₛ
-                simplify(-2β * v[c][1 // 2, 1 // 2, 0] - σ[3, c][1 // 2, 1 // 2, 1 // 2])
+            @test lower(σ̄[3, c], (:, :, ↓), (1 // 2, 1 // 2, -1 // 2)) ==ₛ
+                -2β * v[c][1 // 2, 1 // 2, 0] - σ[3, c][1 // 2, 1 // 2, 1 // 2]
         end
         # the normal is only defined on walls, the tangent only with tangential indices, and both only in the rule data
         @test_throws ArgumentError lower(override(V, (AnyCorner, Boundary) => 𝐧)[1], (↓, ↓), (0, 0))
@@ -250,25 +248,25 @@ end
     @uniform @scalars a
     D = StaggeredCentralDifference()
     # boundary data are sampled at the trace of the wall, and along the wall at the sample
-    @test lowerat(override(u, LeftWall => WallValue(𝒷(g))), (↓, :), (-1 // 2, 1 // 2)) ==ₛ simplify(2g[↓, 1 // 2] - u[1 // 2, 1 // 2])
-    @test lowerat(override(u, RightWall => WallValue(𝒷(g))), (↑, :), (1 // 2, 0)) ==ₛ simplify(2g[↑, 0] - u[-1 // 2, 0])
+    @test lower(override(u, LeftWall => WallValue(𝒷(g))), (↓, :), (-1 // 2, 1 // 2)) ==ₛ 2g[↓, 1 // 2] - u[1 // 2, 1 // 2]
+    @test lower(override(u, RightWall => WallValue(𝒷(g))), (↑, :), (1 // 2, 0)) ==ₛ 2g[↑, 0] - u[-1 // 2, 0]
     # at a corner point, the data of a wall predicate are read from the wall, and of a corner predicate at the corner
-    @test lowerat(override(u, (LeftWall, Boundary) => 𝒷(g)), (↓, ↓), (0, 0)) ==ₛ g[↓, 0]
-    @test lowerat(override(u, (AnyCorner, Boundary) => 𝒷(g)), (↓, ↓), (0, 0)) ==ₛ g[↓, ↓]
+    @test lower(override(u, (LeftWall, Boundary) => 𝒷(g)), (↓, ↓), (0, 0)) ==ₛ g[↓, 0]
+    @test lower(override(u, (AnyCorner, Boundary) => 𝒷(g)), (↓, ↓), (0, 0)) ==ₛ g[↓, ↓]
     # a single value for the whole wall
-    @test lowerat(override(u, (LeftWall, Boundary) => 𝒷(g; span = true)), (↓, :), (0, 1 // 2)) ==ₛ g[↓, :]
+    @test lower(override(u, (LeftWall, Boundary) => 𝒷(g; span = true)), (↓, :), (0, 1 // 2)) ==ₛ g[↓, :]
     # boundary data in expressions, and stencils along the wall
-    @test lowerat(override(u, (LeftWall, Boundary) => 𝒷(g) * v), (↓, :), (0, 0)) ==ₛ g[↓, 0] * v[0, 0]
-    @test lowerat(override(u, (LeftWall, Boundary) => D[2](𝒷(g))), (↓, :), (0, 1 // 2)) ==ₛ simplify(g[↓, 1] - g[↓, 0])
+    @test lower(override(u, (LeftWall, Boundary) => 𝒷(g) * v), (↓, :), (0, 0)) ==ₛ g[↓, 0] * v[0, 0]
+    @test lower(override(u, (LeftWall, Boundary) => D[2](𝒷(g))), (↓, :), (0, 1 // 2)) ==ₛ g[↓, 1] - g[↓, 0]
     # expressions of boundary data are traces as a whole, constant along the normal
-    @test lowerat(override(u, (LeftWall, Boundary) => 𝒷(2g)), (↓, :), (0, 0)) ==ₛ simplify(2g[↓, 0])
-    @test lowerat(override(u, (LeftWall, Boundary) => 𝒷(D[2](g))), (↓, :), (0, 1 // 2)) ==ₛ simplify(g[↓, 1] - g[↓, 0])
-    @test lowerat(override(u, (LeftWall, Boundary) => 𝒷(D[1](g))), (↓, :), (0, 1 // 2)) ==ₛ Literal(0)
+    @test lower(override(u, (LeftWall, Boundary) => 𝒷(2g)), (↓, :), (0, 0)) ==ₛ 2g[↓, 0]
+    @test lower(override(u, (LeftWall, Boundary) => 𝒷(D[2](g))), (↓, :), (0, 1 // 2)) ==ₛ g[↓, 1] - g[↓, 0]
+    @test lower(override(u, (LeftWall, Boundary) => 𝒷(D[1](g))), (↓, :), (0, 1 // 2)) ==ₛ Literal(0)
     # tensor data, and uniform data
     V̄ = override(V, (LeftWall, Boundary) => 𝒷(W))
-    @test lowerat(V̄[1], (↓, :), (0, 0)) ==ₛ W[1][↓, 0]
-    @test lowerat(V̄[2], (↓, :), (0, 0)) ==ₛ W[2][↓, 0]
-    @test lowerat(override(u, (LeftWall, Boundary) => 𝒷(a)), (↓, :), (0, 0)) ==ₛ a
+    @test lower(V̄[1], (↓, :), (0, 0)) ==ₛ W[1][↓, 0]
+    @test lower(V̄[2], (↓, :), (0, 0)) ==ₛ W[2][↓, 0]
+    @test lower(override(u, (LeftWall, Boundary) => 𝒷(a)), (↓, :), (0, 0)) ==ₛ a
     # boundary data are only defined in the data of rules
     @test_throws ArgumentError lower(𝒷(g), (:,), (0,))
 end

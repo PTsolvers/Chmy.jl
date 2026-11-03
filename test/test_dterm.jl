@@ -271,6 +271,17 @@ Random.seed!(1234) # deterministic tests
             @test a[↓, 0] !=ₛ a[↑, 0]
             @test sprint(show, a[↓, -1 // 2]) == "a[↓, -1//2]"
             @test sprint(show, a[:, 1]) == "a[:, 1]"
+            # samples of samples compose like positions in lowering, unless they have different lengths
+            @test a[1 // 2][1 // 2] ==ₛ a[1]
+            @test a[1 // 2, 0][↓, 0] ==ₛ a[↓, 0]
+            @test a[↓, 0][1 // 2, 1] ==ₛ a[↓, 1]
+            @test isinds(argument(a[1 // 2][1, 0]))
+            # constants are not sampled, uniform calls are
+            @test b[1 // 2] ==ₛ b
+            @test Literal(2)[1 // 2] ==ₛ Literal(2)
+            @tensors 1 @uniform(w)
+            @test w[1][0, 1] ==ₛ w[1]
+            @test isinds(sin(b)[1 // 2])
 
             @test_throws ArgumentError operation(expr)
             @test_throws ArgumentError arguments(expr)
@@ -340,7 +351,8 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred isnegof(-a, a)) == true
 
         @test (@inferred isnegof(a + b, -(a + b))) == true
-        @test (@inferred isnegof(a + b, -a - b)) == false
+        @test (@inferred isnegof(a + b, -a - b)) == true
+        @test (@inferred isnegof(a + b, a - b)) == false
 
         @test (@inferred isnegof(a, a)) == false
         @test (@inferred isnegof(a, b)) == false
@@ -355,7 +367,9 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred a ==ₛ Tensor(0, :a, Kind.None(), false))
         @test (@inferred a !=ₛ Tensor(1, :a, Kind.None(), false))
         @test (@inferred a + b ==ₛ a + b)
-        @test (@inferred a + b !=ₛ b + a)
+        # terms are canonical, but products are not distributed
+        @test (@inferred a + b ==ₛ b + a)
+        @test (@inferred 2 * (a + b) !=ₛ 2a + 2b)
         @test (@inferred a !=ₛ a + b)
         @test (@inferred ZeroTensor(2) ==ₛ ZeroTensor(2))
         @test (@inferred ZeroTensor(2) !=ₛ ZeroTensor(3))
@@ -388,7 +402,8 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred u[2] <ₛ v[1])
         @test (@inferred a[1] <ₛ a[↓])
         @test (@inferred a[↓] <ₛ a[↑])
-        @test (@inferred a[0] <ₛ a[1])
+        # samples are ordered by descending offsets
+        @test (@inferred a[1] <ₛ a[0])
 
         terms = DTerm[sin(b), sin(a), cos(a), Literal(2), a]
         expected = DTerm[a, Literal(2), cos(a), sin(a), sin(b)]

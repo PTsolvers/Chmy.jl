@@ -1,9 +1,8 @@
 """
     ==ₛ(a, b)
 
-Test whether two Chmy terms are structurally equal.
-This function **does not** compare canonical forms of `a` and `b`.
-For example, `x + y ==ₛ y + x` is `false`.
+Test whether two Chmy terms are structurally equal. Terms are built in canonical form, so equivalent constructions are
+equal, e.g. `x + y ==ₛ y + x`, but the canonical form is not a normal form: `2(x + y) ==ₛ 2x + 2y` is `false`.
 """
 function (==ₛ)(a::DTerm, b::DTerm)
     hash(a) == hash(b) || return false
@@ -74,15 +73,6 @@ end
 (<ₛ)(::Fun, ::Operator) = true
 (<ₛ)(::Operator, ::Fun) = false
 (<ₛ)(x::Operator, y::Operator) = isless(objectid(x), objectid(y))
-(<ₛ)(x::Location, y::Location) = locrank(x) < locrank(y)
-(<ₛ)(::Rational, ::Global) = true
-(<ₛ)(::Global, ::Rational) = false
-
-locrank(::Point) = 0
-locrank(::Segment) = 1
-locrank(::Lower) = 2
-locrank(::Upper) = 3
-locrank(::Colon) = 4
 
 """
     isnegof(x, y)
@@ -104,16 +94,16 @@ isnegof(x::T, y::S) where {T <: Number, S <: Number} = isequal(x, -y)::Bool
 """
     𝒪(rank)
 
-Construct symbolic zero tensor of rank `rank`.
+Construct symbolic zero tensor of rank `rank`, which is the literal zero for rank zero.
 """
-const 𝒪 = ZeroTensor
+𝒪(rank::Integer) = iszero(rank) ? ZERO : ZeroTensor(rank)
 
 """
     ℐ(rank)
 
-Construct symbolic identity tensor of rank `rank`.
+Construct symbolic identity tensor of rank `rank`, which is the literal one for rank zero.
 """
-const ℐ = IdTensor
+ℐ(rank::Integer) = iszero(rank) ? ONE : IdTensor(rank)
 
 function DTermImpl.DExpr(head::Head, args::NTuple{N, DTerm}) where {N}
     rank = @match head begin
@@ -257,6 +247,17 @@ end
 
 # specialize on tuple length to avoid boxing in isuniform recursive call (Julia 1.13)
 all_isuniform(args::NTuple{N, DTerm}) where {N} = all(isuniform, args)
+
+# uniform terms without calls are the same at every position, unlike uniform calls, whose lowering can depend on the
+# position, e.g. overrides of uniform terms
+function isconstant(term::DTerm)
+    return @match term begin
+        Literal(_) || ZeroTensor(_) || IdTensor(_) => true
+        Tensor(_, _, _, uniform) => uniform
+        DExpr(Comp(_), (arg,)) => isconstant(arg)
+        _ => false
+    end
+end
 
 """
     value(term)
@@ -462,7 +463,9 @@ and diagonal tensor structure. Zero and identity tensors return literal componen
 tensors return the stored entry.
 If `term` is a scalar, construct a sample of `term` at `positions` relative to the evaluation point: offsets, which
 must be multiples of `1//2`, or the global positions `↓`, `↑` and `:`. The global positions `↓` and `↑` sample the
-traces of `term` on the lower and upper walls, and `:` its value independent of the axis, e.g. `g[↓, 1//2]`.
+traces of `term` on the lower and upper walls, and `:` its value independent of the axis, e.g. `g[↓, 1//2]`. Samples
+of samples with as many positions compose, e.g. `g[1//2][1//2]` is `g[1]`, and literals and uniform tensors are not
+sampled.
 """
 function Base.getindex(term::DTerm)
     tensorrank(term) == 0 || throw(ArgumentError("number of subscripts not matching tensor rank"))
@@ -470,35 +473,35 @@ function Base.getindex(term::DTerm)
 end
 function Base.getindex(term::DTerm, I::Vararg{Integer, N}) where {N}
     tensorrank(term) == 0 && return makeinds(term, I)
+    return component(term, map(Int, I))
+end
+
+# the component `I` of `term`, respecting the structure of named, zero, identity, and packed tensors
+function component(term::DTerm, I::NTuple{N, Int}) where {N}
+    tensorrank(term) == N || throw(ArgumentError("number of subscripts not matching tensor rank"))
+    N == 0 && return term
     return @match term begin
         Tensor(_, _, kind, _) => begin
             if kind == Kind.Sym()
                 makecomp(term, sort(I))
             elseif kind == Kind.Alt()
                 if !allunique(I)
-                    Literal(0)
+                    ZERO
                 else
                     expr = makecomp(term, sort(I))
                     iseven(inversion_count(I)) ? expr : -expr
                 end
             elseif kind == Kind.Diag()
-                allequal(I) ? makecomp(term, I) : Literal(0)
+                allequal(I) ? makecomp(term, I) : ZERO
             elseif kind == Kind.None()
                 makecomp(term, I)
             else
                 error("unreachable")
             end
         end
-        ZeroTensor(rank) => begin
-            rank == N || throw(ArgumentError("number of subscripts not matching tensor rank"))
-            Literal(0)
-        end
-        IdTensor(rank) => begin
-            rank == N || throw(ArgumentError("number of subscripts not matching tensor rank"))
-            allequal(I) ? Literal(1) : Literal(0)
-        end
-        DExpr(Pack(rank, dims, kind), data) => begin
-            rank == N || throw(ArgumentError("number of subscripts not matching tensor rank"))
+        ZeroTensor(_) => ZERO
+        IdTensor(_) => allequal(I) ? ONE : ZERO
+        DExpr(Pack(_, dims, kind), data) => begin
             all(i -> 1 <= i <= dims, I) || throw(BoundsError(term, I))
             pack_entry(kind, dims, data, I)
         end
@@ -570,9 +573,13 @@ function isless_expr(x, y)::Bool
             opx == opy || return (opx <ₛ opy)::Bool
             isless_args(ax, ay)
         end
-        (Comp(ix), Comp(iy)) || (Inds(ix), Inds(iy)) => begin
+        (Comp(ix), Comp(iy)) => begin
             ax[1] ==ₛ ay[1] || return ax[1] <ₛ ay[1]
             isless_args(ix, iy)
+        end
+        (Inds(ix), Inds(iy)) => begin
+            ax[1] ==ₛ ay[1] || return ax[1] <ₛ ay[1]
+            isless_args(ix, iy, isless_position)
         end
         (Pack(rx, dx, _), Pack(ry, dy, _)) => begin
             (rx, dx) == (ry, dy) || return isless((rx, dx), (ry, dy))
@@ -582,10 +589,21 @@ function isless_expr(x, y)::Bool
     end
 end
 
-function isless_args(xs, ys)
+function isless_args(xs, ys, lt = <ₛ)
     for i in 1:min(length(xs), length(ys))
         x, y = xs[i], ys[i]
-        isequal(x, y) || return x <ₛ y
+        isequal(x, y) || return lt(x, y)
     end
     return length(xs) < length(ys)
 end
+
+# samples of a field are ordered by descending offsets, so that stencils read `f[1//2] - f[-1//2]`, followed by the
+# global positions
+isless_position(x::Rational{Int}, y::Rational{Int}) = x > y
+isless_position(::Rational{Int}, ::Global) = true
+isless_position(::Global, ::Rational{Int}) = false
+isless_position(x::Global, y::Global) = globalrank(x) < globalrank(y)
+
+globalrank(::Lower) = 0
+globalrank(::Upper) = 1
+globalrank(::Colon) = 2

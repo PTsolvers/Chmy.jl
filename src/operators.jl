@@ -1,8 +1,12 @@
-@inline function makecall(op::Operator, args::NTuple{N, DTerm}) where {N}
+# the canonical call `op(args...)` of canonical arguments: calls with all tensor arguments in component form are
+# evaluated componentwise, and the other calls with the rules of the operator
+function makecall(op::Operator, args::NTuple{N, DTerm})::DTerm where {N}
     checkranks(op, args)
-    isnothing(packed_dims(args)) && return makecall_unchecked(op, args)
-    # all tensor arguments are in component form, so pointwise functions are evaluated right away
-    return something(evaluate(op, args), makecall_unchecked(op, args))
+    if !isnothing(packed_dims(args))
+        result = evaluate_packed(op, args)::Union{Nothing, DTerm}
+        isnothing(result) || return result
+    end
+    return something(evaluate(op, args)::Union{Nothing, DTerm}, makecall_unchecked(op, args))
 end
 makecall(op::Operator, args::Vararg{DTerm, N}) where {N} = makecall(op, args)
 makecall_unchecked(op::Operator, args::NTuple{N, DTerm}) where {N} = DExpr(Call(op), args)
@@ -16,7 +20,12 @@ makecomp_unchecked(arg::DTerm, comp::NTuple{N, Int}) where {N} = DExpr(Comp(comp
 
 function makeinds(arg::DTerm, positions::NTuple{N, PositionLike}) where {N}
     tensorrank(arg) == 0 || throw(ArgumentError("only scalars can be arguments to indexing expression"))
-    return makeinds_unchecked(arg, map(asposition, positions))
+    p = map(asposition, positions)
+    # samples of samples with as many positions compose like positions in lowering, and constants are not sampled
+    return @match arg begin
+        DExpr(Inds(inner), (base,)) && if length(inner) == N end => makeinds_unchecked(base, map(shift, p, inner))
+        _ => isconstant(arg) ? arg : makeinds_unchecked(arg, p)
+    end
 end
 
 asposition(p::Global) = p
@@ -34,9 +43,19 @@ function makepack(rank::Integer, dims::Integer, kind::TensorKind, data::Tuple{Va
         throw(ArgumentError("number of entries must match the number of stored components of the tensor"))
     end
     any(x -> tensorrank(x) > 0, data) && throw(ArgumentError("entries of a tensor in component form must be scalars"))
-    return makepack_unchecked(rank, dims, kind, data)
+    return canonical_pack(rank, dims, kind, data)
 end
 makepack_unchecked(rank::Integer, dims::Integer, kind::TensorKind, data::Tuple{Vararg{DTerm}}) = DExpr(Pack(rank, dims, kind), data)
+
+# the canonical term with the head `head` and the children `args`
+function maketerm(head::Head, args::Tuple{Vararg{DTerm}})::DTerm
+    return @match head begin
+        Call(op) => makecall(op, args)
+        Comp(comps) => component(only(args), comps)
+        Inds(positions) => makeinds(only(args), positions)
+        Pack(rank, dims, kind) => makepack(rank, dims, kind, args)
+    end
+end
 
 # the number of dimensions of the arguments if all tensor arguments are in component form, and `nothing` otherwise
 function packed_dims(args::NTuple{N, DTerm}) where {N}
@@ -206,10 +225,7 @@ for op in (:+, :-, :*, :max, :min, :/, ://, :÷, :^, :<, :<=, :>, :>=, :(==), :!
     end
 end
 
-function Base.adjoint(t::DTerm)
-    tensorrank(t) == 0 && return t
-    return makecall(Fun(adjoint), t)
-end
+Base.adjoint(t::DTerm) = makecall(Fun(adjoint), t)
 
 """
     ⋅(a::DTerm, b::DTerm)
@@ -236,10 +252,7 @@ The outer product operator, which creates a tensor by combining all indices of `
 transpose(t::DTerm) = t'
 
 for op in (:det, :tr, :diag)
-    @eval function $op(t::DTerm)
-        tensorrank(t) == 0 && return t
-        return makecall(Fun($op), t)
-    end
+    @eval $op(t::DTerm) = makecall(Fun($op), t)
 end
 
 Base.inv(t::DTerm) = makecall(Fun(inv), t)
@@ -257,10 +270,7 @@ end
 
 The cofactor matrix of a second-rank tensor, satisfying `cof(t) = det(t) * inv(t)'`.
 """
-function cof(t::DTerm)
-    tensorrank(t) == 0 && return ONE
-    return makecall(Fun(cof), t)
-end
+cof(t::DTerm) = makecall(Fun(cof), t)
 
 """
     adj(t)
@@ -274,33 +284,23 @@ adj(t::DTerm) = cof(t)'
 
 The symmetric part of a second-rank tensor, defined as `(t + t') / 2`.
 """
-function sym(t::DTerm)
-    tensorrank(t) == 0 && return t
-    return makecall(Fun(sym), t)
-end
+sym(t::DTerm) = makecall(Fun(sym), t)
 
 """
     asym(t)
 
 The antisymmetric part of a second-rank tensor, defined as `(t - t') / 2`.
 """
-function asym(t::DTerm)
-    tensorrank(t) == 0 && return Literal(0)
-    return makecall(Fun(asym), t)
-end
+asym(t::DTerm) = makecall(Fun(asym), t)
 
 for op in (:gram, :cogram)
-    @eval function $op(t::DTerm)
-        tensorrank(t) == 0 && return t^2
-        return makecall(Fun($op), t)
-    end
+    @eval $op(t::DTerm) = makecall(Fun($op), t)
 end
 
 # scalar unary operations
 isunaryminus(expr::DTerm) = isunary(expr) && operation(expr) === Fun(-)
 
-# scalars skip the checks, while tensors in component form are negated right away
-Base.:-(arg::DTerm) = tensorrank(arg) == 0 ? makecall_unchecked(Fun(-), (arg,)) : makecall(Fun(-), (arg,))
+Base.:-(arg::DTerm) = makecall(Fun(-), (arg,))
 
 for op in (
         :sqrt, :abs,

@@ -56,7 +56,7 @@ end
 
 function lower_rule(divg::Divergence, args, comps, face, x)
     t = components(only(args), length(x))
-    return component_sum(DTerm[divg.op[i](t[i, comps...]) for i in eachindex(x)])
+    return +((divg.op[i](t[i, comps...]) for i in eachindex(x))...)
 end
 
 function lower_rule(curl::Curl, args, (i,), face, x)

@@ -47,6 +47,9 @@ const ξ³ = Coordinate(3)
 export ⊡, ⊗, sym, asym, cof, adj, gram, cogram
 include("operators.jl")
 
+export evaluate
+include("evaluate.jl")
+
 include("utils.jl")
 
 export AbstractRule, Passthrough, Chain, Prewalk, Postwalk, Fixpoint
@@ -72,9 +75,6 @@ include("topology.jl")
 
 export lower_rule, lower, At
 include("lowering.jl")
-
-export canonicalize, simplify
-include("simplify.jl")
 
 export Lifted
 include("lift.jl")

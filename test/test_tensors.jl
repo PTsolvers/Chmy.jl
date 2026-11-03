@@ -49,6 +49,11 @@ import LinearAlgebra
         Sc, Kc, Dc = components(S, 2), components(K, 2), components(D, 2)
         @test tensorkind(Sc + Dc) == Kind.Sym()
         @test tensorkind(Sc + Kc) == Kind.None()
+        # the symmetry is detected from the canonical components
+        Ac = components(A, 2)
+        @test tensorkind(Ac + Ac') == Kind.Sym()
+        @test tensorkind(Ac - Ac') == Kind.Alt()
+        @test tensorkind(0 * Sc) == Kind.Diag()
         z = Literal(0)
         for (data, kind) in (
                 (DTerm[a, b, b, c], Kind.Sym()),
@@ -56,7 +61,7 @@ import LinearAlgebra
                 (DTerm[a, z, z, c], Kind.Diag()),
                 (DTerm[a, b, c, a], Kind.None()),
             )
-            tc = @inferred simplify(pack(reshape(data, 2, 2)))
+            tc = @inferred pack(reshape(data, 2, 2))
             @test tensorkind(tc) == kind
             @test isequal(DTerm[tc[i, j] for i in 1:2, j in 1:2], reshape(data, 2, 2))
         end
@@ -96,9 +101,9 @@ import LinearAlgebra
     @testset "matrix operations" begin
         matrix = [4 1; 2 3]
         tc = pack(matrix)
-        @test value(simplify(@inferred tr(tc))) == LinearAlgebra.tr(matrix)
+        @test value(@inferred tr(tc)) == LinearAlgebra.tr(matrix)
         diagonal = @inferred diag(tc)
-        @test [value(simplify(diagonal[i])) for i in 1:2] == LinearAlgebra.diag(matrix)
+        @test [value(diagonal[i]) for i in 1:2] == LinearAlgebra.diag(matrix)
         for (op, expected) in (
                 (transpose, transpose(matrix)),
                 (sym, (matrix + transpose(matrix)) / 2),
@@ -108,13 +113,13 @@ import LinearAlgebra
                 (inv, LinearAlgebra.inv(matrix)),
             )
             result = @inferred op(tc)
-            @test [value(simplify(result[i, j])) for i in 1:2, j in 1:2] ≈ expected
+            @test [value(result[i, j]) for i in 1:2, j in 1:2] ≈ expected
         end
 
         complex_matrix = [1 + im 2 - im; 3 + 2im 4 - im]
         complex_tc = pack(complex_matrix)
         transposed = @inferred adjoint(complex_tc)
-        @test value(simplify(transposed[1, 2])) == complex_matrix[2, 1]
+        @test value(transposed[1, 2]) == complex_matrix[2, 1]
     end
 
     @testset "dimension-specific determinant, cofactor, and adjugate" begin
@@ -122,11 +127,11 @@ import LinearAlgebra
         for dims in 1:3
             m = matrix[1:dims, 1:dims]
             tc = pack(m)
-            @test value(simplify(@inferred det(tc))) ≈ LinearAlgebra.det(m)
+            @test value(@inferred det(tc)) ≈ LinearAlgebra.det(m)
             cofactor = @inferred cof(tc)
-            @test [value(simplify(cofactor[i, j])) for i in 1:dims, j in 1:dims] ≈ LinearAlgebra.det(m) * transpose(LinearAlgebra.inv(m))
+            @test [value(cofactor[i, j]) for i in 1:dims, j in 1:dims] ≈ LinearAlgebra.det(m) * transpose(LinearAlgebra.inv(m))
             adjugate = @inferred adj(tc)
-            @test [value(simplify(adjugate[i, j])) for i in 1:dims, j in 1:dims] ≈ LinearAlgebra.det(m) * LinearAlgebra.inv(m)
+            @test [value(adjugate[i, j]) for i in 1:dims, j in 1:dims] ≈ LinearAlgebra.det(m) * LinearAlgebra.inv(m)
         end
     end
 end

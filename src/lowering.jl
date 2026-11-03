@@ -29,14 +29,13 @@ end
 
 lower_rule(op::Operator, args) = no_rule_error(op, args, 1)
 
-# pointwise functions are evaluated with tensor arguments in component form one level deep,
-# computing the entire result to read its component `comps`
+# pointwise functions are evaluated with tensor arguments in component form one level deep, computing the entire
+# result to read its component `comps`; a scalar function of scalars is the call itself, which is kept, and its
+# arguments are lowered at the evaluation point
 function lower_rule(op::Union{Fun, BroadcastedFun}, args, comps, face, x)
-    result = evaluate(op, map(t -> components(t, length(x)), args))
-    isnothing(result) || return result[comps...]
-    # a scalar function of scalars is kept, and its arguments are lowered at the evaluation point
-    isempty(comps) || expansion_error(op)
-    return makecall_unchecked(op, args)
+    result = makecall(op, map(t -> components(t, length(x)), args))
+    isempty(comps) || !iscall(result) || expansion_error(op)
+    return component(result, comps)
 end
 
 """
@@ -68,7 +67,7 @@ or `(↓, :)` by the left wall, into samples of fields, e.g. `f[1//2, 0]`, expan
 face, and to the wall point along its sides `↓` and `↑`, in the direction of the axis: integer positions are points,
 half-integer positions are segments. A global position `↓`, `↑` or `:` evaluates `expr` on the traces of the fields.
 Samples nested in `expr` shift the position, so `lower(expr, face, x)` equals `lower(expr[x...], face, 0)`. Uniform
-terms are kept as they are.
+terms are kept as they are. The result is in canonical form, so samples multiplied by zero are dropped.
 """
 function lower(expr::DTerm, face::Face{N}, x::NTuple{N, PositionLike}) where {N}
     return lowerat(expr, face, map(asposition, x))
@@ -87,13 +86,11 @@ function lowerat(term::DTerm, face::Face{N}, x::NTuple{N, Position})::DTerm wher
         DExpr(Call(op), args) => lower_call(op, args, (), face, x)
         DExpr(Comp(comps), (arg,)) => begin
             all(c -> 1 <= c <= N, comps) || throw(BoundsError(arg, comps))
-            iscall(arg) ? lower_call(operation(arg), arguments(arg), comps, face, x) : leaf(term, x)
+            iscall(arg) ? lower_call(operation(arg), arguments(arg), comps, face, x) : makeinds(term, x)
         end
-        ZeroTensor(_) => ZERO
-        IdTensor(_) => ONE
         Index(_) => index_input_error()
         Coordinate(a) => coordinate_value(a, x)
-        _ => leaf(term, x)
+        _ => makeinds(term, x)
     end
 end
 
@@ -106,24 +103,15 @@ function lower_call(op, args, comps, face, x)
     return lowerat(term, face, x)
 end
 
-# a field is sampled at its position, uniform terms are not sampled
-leaf(t::DTerm, x) = isuniform(t) ? t : makeinds_unchecked(t, x)
-
 # a free coordinate is the distance from the lower wall in grid units: the point `𝑖` lies at `𝑖 - 1`, where the grid
 # index `𝑖` is the grid point of the kernel along the spanning axes of the face, and the wall point along its sides
 function coordinate_value(a, x::NTuple{N, Position}) where {N}
     1 <= a <= N || coordinate_dims_error(a, N)
     return coordinate_value(a, x[a])
 end
-coordinate_value(a, p::Rational{Int}) = offset_term(Index(a), p - 1)
+coordinate_value(a, p::Rational{Int}) = Index(a) + (p - 1)
 coordinate_value(a, ::Lower) = ZERO
 coordinate_value(a, p::Global) = throw(ArgumentError(LazyString("coordinates are not defined at the global position ", LocationName(p))))
-
-# canonical form `term`, `term + x`, or `term - x` of `term` shifted by `x`, with `x` positive
-function offset_term(term::DTerm, x::Rational{Int})
-    iszero(x) && return term
-    return x > 0 ? term + stencil_constant(x) : term - stencil_constant(-x)
-end
 
 @noinline lower_nodims_error() = throw(ArgumentError("lowering requires at least one dimension"))
 @noinline context_length_error() = throw(ArgumentError("the face and the position must have the same number of dimensions"))

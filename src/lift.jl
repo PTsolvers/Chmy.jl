@@ -38,12 +38,12 @@ function lower_rule(lf::Lifted{O, K}, args, comps, face::Face{N}, x::NTuple{N, P
     return insert_stencil(term, Val(N), lf.axes)
 end
 
-# replace kD samples `f[p₁, …, pₖ]` with nD samples at `pⱼ` along `axes[j]`, mirrored for negative axes, and zero otherwise
-@inline function insert_stencil(term, dims, axes)
+# replace kD samples `f[p₁, …, pₖ]` with nD samples at `pⱼ` along `axes[j]`, mirrored for negative axes, and zero
+# otherwise; the rebuilt expressions are canonical in nD, where mirrored samples can change their order
+function insert_stencil(term, dims, axes)
     return @match term begin
-        DExpr(Inds(offsets), (arg,)) && if length(offsets) == length(axes) end => makeinds_unchecked(arg, insert_offsets(dims, axes, offsets))
-        DExpr(head, args) => something(insert_args(head, args, dims, axes), term)
-        _ => term
+        DExpr(Inds(offsets), (arg,)) && if length(offsets) == length(axes) end => makeinds(arg, insert_offsets(dims, axes, offsets))
+        _ => walkargs(t -> insert_stencil(t, dims, axes), term)
     end
 end
 
@@ -52,19 +52,5 @@ end
         j = findfirst(b -> abs(b) == a, axes)
         isnothing(j) && return (0 // 1)::Position
         return mirror(offsets[j], axes[j])::Position
-    end
-end
-
-@inline function insert_args(head, args, dims, axes)
-    for k in eachindex(args)
-        arg = insert_stencil(args[k], dims, axes)
-        arg ==ₛ args[k] && continue
-        return DExpr(head, insert_args(args, arg, dims, axes, k))
-    end
-    return nothing
-end
-@inline function insert_args(args::NTuple{N, DTerm}, arg, dims, axes, k) where {N}
-    return ntuple(Val(N)) do j
-        j < k ? args[j] : j == k ? arg : insert_stencil(args[j], dims, axes)
     end
 end

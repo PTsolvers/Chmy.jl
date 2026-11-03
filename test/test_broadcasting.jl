@@ -34,7 +34,7 @@ using Chmy: BroadcastedFun, Kind
     @test tensorkind(sin.(Sc) .+ Dc) == Kind.Sym()
     diagonal = exp.(Dc)
     @test tensorkind(diagonal) == Kind.Sym()
-    @test simplify(diagonal[1, 2]) ==ₛ Literal(1)
+    @test diagonal[1, 2] ==ₛ Literal(1)
     @test tensorkind(Kc .+ 1) == Kind.None()
 
     @vectors u

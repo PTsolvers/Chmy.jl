@@ -1,7 +1,13 @@
 using Test
 using Chmy
+using Chmy: DExpr, Call, Pack, Kind
 
-@testset "canonicalize" begin
+# a call built without the rules
+raw(f, args...) = DExpr(Call(Fun(f)), args)
+
+subterms(t) = isexpr(t) ? DTerm[t; mapreduce(subterms, vcat, children(t); init = DTerm[])] : DTerm[t]
+
+@testset "canonical construction" begin
     @scalars a b c
     @vectors u v
     @tensors 2 A @sym(S) @alt(K)
@@ -9,50 +15,45 @@ using Chmy
 
     @testset "literal values" begin
         for (input, expected) in (
-                (0.0, 0), (-0.0, 0), (0 // 1, 0), (false, 0), (0.0 + 0.0im, 0),
-                (1.0, 1), (1 // 1, 1), (true, 1), (1.0 + 0.0im, 1),
+                (0.0, 0), (-0.0, 0), (0 // 1, 0), (0.0 + 0.0im, 0),
+                (1.0, 1), (1 // 1, 1), (1.0 + 0.0im, 1),
                 (2.0, 2), (-2.0, -2), (3 // 1, 3), (2.0 + 0.0im, 2),
                 (Int32(2), 2), (big(2), 2),
+                # booleans are kept, so that conditions stay valid
+                (false, false), (true, true),
             )
-            for f in (canonicalize, simplify)
-                result = @inferred f(Literal(input))
-                @test value(result) === expected
-                @test value(@inferred f(result)) === expected
-            end
+            @test value(@inferred evaluate(Literal(input))) === expected
+            # numbers in expressions are canonical
+            @test value(Literal(0) + input) == expected
         end
         for input in (0.5, 2 // 3, 2.0 + 1.0im, Inf, -Inf, NaN)
             term = Literal(input)
-            @test (@inferred canonicalize(term)) === term
-            @test (@inferred simplify(term)) === term
+            @test (@inferred evaluate(term)) === term
         end
-        @test_throws InexactError canonicalize(Literal(big(typemax(Int)) + 1))
+        @test_throws InexactError evaluate(Literal(big(typemax(Int)) + 1))
     end
 
     @testset "scalar constants" begin
         for (input, expected) in (
                 (𝒪(0), 0), (ℐ(0), 1),
                 (sin(Literal(0)), 0), (cos(Literal(0)), 1), (sqrt(Literal(4)), 2),
-                (Literal(2.0) * Literal(1), 2),
+                (Literal(2.0) * Literal(1), 2), (Literal(2) / Literal(4), 1 // 2),
             )
-            @test value(@inferred canonicalize(input)) === expected
-            @test value(@inferred simplify(input)) === expected
+            @test value(input) === expected
         end
         for input in (𝒪(1), 𝒪(2), ℐ(1), ℐ(2))
-            @test (@inferred canonicalize(input)) === input
-            @test (@inferred simplify(input)) === input
+            @test (@inferred evaluate(input)) === input
         end
         for input in (a^0.5 * a^1.5, (a^0.5)^4.0)
-            result = @inferred canonicalize(input)
-            @test result ==ₛ a^2
-            @test value(arguments(result)[2]) === 2
+            @test input ==ₛ a^2
+            @test value(arguments(input)[2]) === 2
         end
     end
 
+    # different constructions of the same term give the same canonical representative
     @testset "scalar algebra" begin
         for (input, expected) in (
                 (Literal(2) + Literal(3), Literal(5)),
-                (Literal(2) / Literal(4), Literal(1 // 2)),
-                (sin(Literal(0)), Literal(0)),
                 (b + (c + a), a + b + c),
                 (b * (c * a), a * b * c),
                 (a + b + a, 2a + b),
@@ -81,8 +82,14 @@ using Chmy
                 (b - a, -(a - b)),
                 ((-a)^2, a^2),
                 ((-a)^3, -a^3),
+                (sin(a + a) - sin(2a), Literal(0)),
+                (c * (b - a), -(c * (a - b))),
+                ((a - b) / (b - a), Literal(-1)),
+                (a + Literal(2.0), a + 2),
+                (a + 𝒪(0), a),
+                (a * ℐ(0), a),
             )
-            @test (@inferred canonicalize(input)) ==ₛ expected
+            @test input ==ₛ expected
         end
     end
 
@@ -119,6 +126,7 @@ using Chmy
                 (A'', A),
                 (S', S),
                 (K', -K),
+                (K'', K),
                 (sym(S), S),
                 (sym(K), Z),
                 (asym(S), Z),
@@ -134,33 +142,53 @@ using Chmy
                 (tr(K), Literal(0)),
                 (diag(K), 𝒪(1)),
                 (diag(I), ℐ(1)),
+                (tr((inv(A) ⋅ A) ⋅ A), tr(A)),
+                (adj(ℐ(2)), ℐ(2)),
             )
-            @test (@inferred canonicalize(input)) ==ₛ expected
+            @test input ==ₛ expected
+        end
+        # matrix functions of scalars
+        for (input, expected) in ((tr(a), a), (det(a), a), (a', a), (sym(a), a), (asym(a), Literal(0)), (cof(a), Literal(1)), (gram(a), a^2))
+            @test input ==ₛ expected
         end
     end
-end
 
-@testset "simplify" begin
-    @scalars a b c
-    @tensors 2 A
+    @testset "structure" begin
+        @scalars f
+        @test arity(a + b + c) == 3
+        @test isunaryminus(b - a)
+        # products are not distributed
+        @test 2 * (a + b) !=ₛ 2a + 2b
+        # samples are ordered by descending offsets
+        @test isequal(arguments(f[1 // 2] - f[-1 // 2]), (f[1 // 2], f[-1 // 2]))
+        @test isequal(arguments(f[-1] - 2f[0] + f[1]), (f[1] - 2f[0], f[-1]))
+    end
 
-    expr = sin(b + a)
-    @test (@inferred canonicalize(expr)) ==ₛ expr
-    @test (@inferred simplify(expr)) ==ₛ sin(a + b)
-    @test (@inferred simplify(sin(a + a) - sin(2a))) ==ₛ Literal(0)
-    @test value(@inferred simplify(cos(sin(Literal(0))))) === 1
-    @test (@inferred simplify(tr((inv(A) ⋅ A) ⋅ A))) ==ₛ tr(A)
-    @test (@inferred simplify(adj(ℐ(2)))) ==ₛ ℐ(2)
-    @test (@inferred simplify(a * (c + b))) ==ₛ a * (b + c)
-    @test (@inferred simplify(c * (b - a))) ==ₛ -(c * (a - b))
-    @test (@inferred simplify((a - b) / (b - a))) ==ₛ Literal(-1)
+    @testset "evaluate" begin
+        # terms assembled from raw parts are rebuilt in canonical form
+        @test (@inferred evaluate(raw(+, b, a))) ==ₛ a + b
+        @test (@inferred evaluate(raw(*, Literal(0), a))) ==ₛ Literal(0)
+        result = @inferred evaluate(raw(sin, raw(+, a, Literal(2.0))))
+        @test result ==ₛ sin(a + 2)
+        @test value(arguments(only(arguments(result)))[2]) === 2
+        @test (@inferred evaluate(raw(tr, raw(⋅, raw(⋅, raw(inv, A), A), A)))) ==ₛ tr(A)
+        @test tensorkind(@inferred evaluate(DExpr(Pack(2, 2, Kind.None()), (a, b, b, c)))) == Kind.Sym()
+    end
 
-    expr = sin(a + Literal(2.0))
-    @test (@inferred canonicalize(expr)) === expr
-    result = @inferred simplify(expr)
-    @test result ==ₛ sin(a + Literal(2))
-    @test value(arguments(only(arguments(result)))[2]) === 2
-    @test value(arguments(only(arguments(@inferred simplify(result))))[2]) === 2
-    @test (@inferred simplify(a + 𝒪(0))) ==ₛ a
-    @test (@inferred simplify(a * ℐ(0))) ==ₛ a
+    @testset "fixed points" begin
+        # every subterm of a canonical term is canonical
+        @scalars f
+        D = StaggeredCentralDifference()
+        Δ = Divergence(D)(Gradient(D)(override(f, LeftWall => WallValue(a), WallDerivative(b))))
+        corpus = DTerm[
+            b + (c + a), c - a - b, b^2 + a * b + a^2, a / (a * b), (a^b)^(2c), (2a)^(-3), c * (b - a),
+            (a + b)^2 * (a + b)^-3, -(a - b) * -(b - a), 2.5a + 0.5a, A ⋅ adj(A), det(A) * ℐ(2) - A ⋅ adj(A),
+            sym(asym(A)) + asym(A)', cof(components(A, 3))[1, 2], inv(components(S, 2))[1, 2],
+            lower(Δ, (↓, :), (1 // 2, 1 // 2)), lower(Δ, (↓, ↓), (1 // 2, 1 // 2)),
+            lower(CentralDifference{5}()[1](sin(f) * f), (:,), (0,)),
+        ]
+        for t in corpus, s in subterms(t)
+            @test (@inferred evaluate(s)) ==ₛ s
+        end
+    end
 end
