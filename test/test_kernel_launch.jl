@@ -108,8 +108,13 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             end
         end
 
+        @testset "outer width of 0 only with 0 in the lower dimensions" begin
+            g3 = UniformGrid(arch; origin=(T(-1), T(-1), T(-1)), extent=(T(2), T(2), T(2)), dims=(16, 12, 8))
+            @test_throws ArgumentError Launcher(arch, g3; outer_width=(4, 0, 2))
+        end
+
         @testset "overlapped launch matches plain launch" begin
-            for (dims, outer_width) in (((32,), (4,)), ((32, 16), (4, 2)), ((16, 12, 8), (4, 2, 2)))
+            for (dims, outer_width) in (((32,), (4,)), ((32, 16), (4, 2)), ((16, 12, 8), (4, 2, 2)), ((32, 16), (0, 2)), ((16, 12, 8), (0, 2, 2)), ((16, 12, 8), (0, 0, 2)))
                 N  = length(dims)
                 g  = UniformGrid(arch; origin=ntuple(_ -> T(-1), N), extent=ntuple(_ -> T(2), N), dims=dims)
                 dt = minimum(spacing(g))^2 / N / T(2.1)

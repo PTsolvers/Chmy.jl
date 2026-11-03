@@ -31,7 +31,8 @@ Constructs a `Launcher` object configured based on the input parameters.
 ## Arguments:
 - `arch`: The associated architecture.
 - `grid`: The grid defining the computational domain.
-- `outer_width`: Optional parameter specifying outer width.
+- `outer_width`: Optional parameter specifying outer width. A width of 0 leaves the outer points of a dimension to the inner
+  kernel (e.g. `(0, 8, 4)`: no split in x); it requires 0 in all lower dimensions.
 
 !!! warning
 
@@ -42,6 +43,10 @@ function Launcher(arch, grid; outer_width=nothing)
     worksize = size(grid, Center()) .+ 2
 
     if !isnothing(outer_width)
+        # with an outer width of 0, the inner kernel computes the outer points of a dimension: the boundary conditions of the
+        # dimensions launched after it (lower dimensions) would read points that their own outer kernels have not computed yet
+        any(D -> iszero(outer_width[D]) && any(!iszero, outer_width[1:D-1]), 1:length(outer_width)) &&
+            throw(ArgumentError("an outer width of 0 requires 0 in all lower dimensions, got $outer_width"))
         setup() = activate!(arch; priority=:high)
         workers = Worker(; setup)
     else
@@ -82,6 +87,14 @@ Base.@assume_effects :foldable function outer_offset(launcher::Launcher, ::Dim{D
             outer_width(launcher)[I]
         end
     end
+end
+
+# position of the inner kernel among the dimensions in launch order (N, ..., 1): before the first one with an outer width of 0,
+# whose outer points it computes, or after all of them (N + 1)
+Base.@assume_effects :foldable function inner_position(launcher::Launcher)
+    N = ndims(launcher)
+    J = findfirst(J -> iszero(outer_width(launcher)[N-J+1]), 1:N)
+    return isnothing(J) ? N + 1 : J
 end
 
 """
@@ -188,18 +201,21 @@ end
             end
 
             # outer points first, last dimension first, with an event after both sides of each dimension: the boundary
-            # conditions of a dimension read its outer points and those of the dimensions before it
+            # conditions of a dimension read its outer points and those of the dimensions before it. The inner kernel also
+            # computes the outer points of dimensions with an outer width of 0: it goes before the first of them.
+            inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
             ntuple(Val(N)) do J
                 Base.@_inline_meta
                 D = N - J + 1
-                outer_fun = kernel(backend, groupsize, StaticSize(outer_worksize(launcher, Dim(D))))
-                outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(1))...))
-                outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(2))...))
+                J == inner_position(launcher) && inner_fun(args..., offset + Offset(inner_offset(launcher)...))
+                if !iszero(outer_width(launcher)[D])
+                    outer_fun = kernel(backend, groupsize, StaticSize(outer_worksize(launcher, Dim(D))))
+                    outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(1))...))
+                    outer_fun(args..., offset + Offset(outer_offset(launcher, Dim(D), Side(2))...))
+                end
                 put!(events, record_event(backend))
             end
-
-            inner_fun = kernel(backend, groupsize, StaticSize(inner_worksize(launcher)))
-            inner_fun(args..., offset + Offset(inner_offset(launcher)...))
+            inner_position(launcher) > N && inner_fun(args..., offset + Offset(inner_offset(launcher)...))
 
             wait(launcher.workers)
         end
