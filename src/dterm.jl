@@ -617,3 +617,44 @@ isless_position(x::Global, y::Global) = globalrank(x) < globalrank(y)
 globalrank(::Lower) = 0
 globalrank(::Upper) = 1
 globalrank(::Colon) = 2
+
+# sums and products are printed and compiled as raw calls of `+`, `-`, `*`, `/`, `^` and `inv`: the terms of a sum in
+# their order with the constant last, where negative terms are subtracted, and the bases of a product with negative
+# powers in the denominator
+function callform(term::DTerm)
+    return @match term begin
+        AddMul(op, coeff, dict) && if op === (+) end => sum_callform(coeff, dict)
+        AddMul(_, coeff, dict) => signed(isnegative(coeff), monomial_callform(magnitude(coeff), dict))
+    end
+end
+
+rawcall(f, args) = makecall_unchecked(Fun(f), Tuple(args))
+chain(f, args) = length(args) == 1 ? only(args) : rawcall(f, args)
+signed(negative, x) = negative ? rawcall(-, (x,)) : x
+
+# the magnitude of a real coefficient, other numbers are kept
+magnitude(c) = isnegative(c) ? -c : c
+
+function sum_callform(coeff, dict)
+    parts = Tuple{Bool, DTerm}[(isnegative(value(v)), scaled(magnitude(value(v)), k)) for (k, v) in dict]
+    iszero(coeff) || push!(parts, (isnegative(coeff), canonical_literal(magnitude(coeff))))
+    # runs of positive terms are added, and negative terms are subtracted
+    (negative, x), rest = Iterators.peel(parts)
+    run = DTerm[signed(negative, x)]
+    for (negative, x) in rest
+        run = negative ? DTerm[rawcall(-, (chain(+, run), x))] : push!(run, x)
+    end
+    return chain(+, run)
+end
+
+function monomial_callform(c, dict)
+    num, den = DTerm[], DTerm[]
+    for (b, p) in dict
+        negative = isliteral(p) && isnegative(value(p))
+        q = negative ? canonical_literal(-value(p)) : p
+        push!(negative ? den : num, isstaticone(q) ? b : rawcall(^, (b, q)))
+    end
+    isone(c) || pushfirst!(num, canonical_literal(c))
+    isempty(den) && return chain(*, num)
+    return isempty(num) ? rawcall(inv, (chain(*, den),)) : rawcall(/, (chain(*, num), chain(*, den)))
+end
