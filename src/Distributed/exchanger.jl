@@ -17,7 +17,7 @@ struct Exchanger
     recv_reqs::Vector{MPI.Request}
     send_bufs::Vector{AbstractArray} # the buffers of the current exchange, one per field
     recv_bufs::Vector{AbstractArray}
-    recv_done::Vector{Bool}
+    received::Base.RefValue{Bool}    # all messages of the current exchange received and unpacked
 
     function Exchanger()
         buffers   = HaloBuffers[]
@@ -25,8 +25,7 @@ struct Exchanger
         recv_reqs = MPI.Request[]
         send_bufs = AbstractArray[]
         recv_bufs = AbstractArray[]
-        recv_done = Bool[]
-        return new(buffers, send_reqs, recv_reqs, send_bufs, recv_bufs, recv_done)
+        return new(buffers, send_reqs, recv_reqs, send_bufs, recv_bufs, Ref(false))
     end
 end
 
@@ -50,14 +49,13 @@ function Base.resize!(ex::Exchanger, count::Integer)
     resize!(ex.recv_reqs, count)
     resize!(ex.send_bufs, count)
     resize!(ex.recv_bufs, count)
-    resize!(ex.recv_done, count)
     return
 end
 
 function reset_reqs!(ex::Exchanger)
     fill!(ex.send_reqs, MPI.REQUEST_NULL)
     fill!(ex.recv_reqs, MPI.REQUEST_NULL)
-    fill!(ex.recv_done, false)
+    ex.received[] = false
     return
 end
 

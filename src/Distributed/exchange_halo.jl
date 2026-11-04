@@ -1,28 +1,42 @@
-# copy between a halo buffer and a view on the device with a kernel on the task's stream: it does not block the host (copyto! of
-# a contiguous view waits for the copy on AMDGPU), and its small workgroups run next to the kernels of the inner points (the copy
-# kernels of AMDGPU and GPUArrays use workgroups of 512 and 1024 work-items, which wait until those end); host buffers (MPI
-# without GPU support) are copied with copyto!
-@kernel function copy_halo_kernel!(dst, src)
-    I = @index(Global, Linear)
-    @inbounds dst[I] = src[I]
+# copy between the halo buffers and the views of all fields of one side with one kernel on the task's stream: it does not block the
+# host (copyto! of a contiguous view waits for the copy on AMDGPU), and its small workgroups run next to the kernels of the inner
+# points (the copy kernels of AMDGPU and GPUArrays use workgroups of 512 and 1024 work-items, which wait until those end). One
+# launch for all fields: a launch costs the host about as much as the MPI calls of a message. Buffers and views are indexed
+# linearly. Host buffers (MPI without GPU support) are copied with copyto!.
+@inline copy_halos_at!(I, ::Tuple{}, ::Tuple{}) = nothing
+@inline function copy_halos_at!(I, dsts::Tuple, srcs::Tuple)
+    dst = first(dsts)
+    if I <= length(dst)
+        @inbounds dst[I] = first(srcs)[I]
+    end
+    copy_halos_at!(I, Base.tail(dsts), Base.tail(srcs))
+    return
 end
 
-copy_halo!(backend::Backend, dst, src) = (copy_halo_kernel!(backend, 256, length(dst))(dst, src); return)
-copy_halo!(::CPU, dst, src) = (copyto!(dst, src); return)
+@kernel function copy_halos_kernel!(dsts, srcs)
+    I = @index(Global, Linear)
+    copy_halos_at!(I, dsts, srcs)
+end
+
+copy_halos!(backend::Backend, dsts, srcs) = (copy_halos_kernel!(backend, 256, maximum(length, dsts))(dsts, srcs); return)
+copy_halos!(::CPU, dsts, srcs) = (foreach(copyto!, dsts, srcs); return)
+
+# the first K buffers of the current exchange as a tuple (for the copy kernel)
+buffer_tuple(bufs::Vector{AbstractArray}, ::Val{K}) where {K} = ntuple(idx -> bufs[idx], Val(K))
 
 exchange_backend(arch::DistributedArchitecture) = is_gpu_aware(arch) ? Architectures.get_backend(arch) : CPU()
 
 # post the receives of one side and pack its send buffers
 function post_receives!(ex::Exchanger, side::Side{S}, dim::Dim{D}, arch::DistributedArchitecture,
-                        fields::Tuple{Vararg{Field}}) where {S,D}
+                        fields::Tuple{Vararg{Field,K}}) where {S,D,K}
     isempty(fields) && return
     nbrank = neighbor(topology(arch), D, S)
     @assert nbrank != MPI.PROC_NULL "no neighbor to communicate"
     init!(ex, exchange_backend(arch), dim, side, fields)
-    for idx in eachindex(fields)
+    for idx in 1:K
         ex.recv_reqs[idx] = MPI.Irecv!(ex.recv_bufs[idx], cart_comm(topology(arch)); source=nbrank)
-        copy_halo!(exchange_backend(arch), ex.send_bufs[idx], get_send_view(side, dim, fields[idx]))
     end
+    copy_halos!(exchange_backend(arch), buffer_tuple(ex.send_bufs, Val(K)), map(f -> get_send_view(side, dim, f), fields))
     return
 end
 
@@ -35,18 +49,23 @@ function post_sends!(ex::Exchanger, ::Side{S}, ::Dim{D}, arch::DistributedArchit
     return
 end
 
-# unpack the messages of one side that have arrived; true once all its receives and sends are complete
-function test_exchange!(ex::Exchanger, side::Side, dim::Dim, arch::DistributedArchitecture, fields::Tuple{Vararg{Field}})
+# unpack the messages of one side once all have arrived; true once all its receives and sends are complete
+function test_exchange!(ex::Exchanger, side::Side, dim::Dim, arch::DistributedArchitecture, fields::Tuple{Vararg{Field,K}}) where {K}
     isempty(fields) && return true
-    done = true
-    for idx in eachindex(fields)
-        if !ex.recv_done[idx] && MPI.Test(ex.recv_reqs[idx])
-            copy_halo!(exchange_backend(arch), get_recv_view(side, dim, fields[idx]), ex.recv_bufs[idx])
-            ex.recv_done[idx] = true
+    if !ex.received[]
+        received = true
+        for idx in 1:K
+            received &= MPI.Test(ex.recv_reqs[idx])
         end
-        done &= ex.recv_done[idx] & MPI.Test(ex.send_reqs[idx])
+        received || return false
+        copy_halos!(exchange_backend(arch), map(f -> get_recv_view(side, dim, f), fields), buffer_tuple(ex.recv_bufs, Val(K)))
+        ex.received[] = true
     end
-    return done
+    sent = true
+    for idx in 1:K
+        sent &= MPI.Test(ex.send_reqs[idx])
+    end
+    return sent
 end
 
 """
