@@ -22,7 +22,8 @@ A struct representing a launcher for asynchronous kernel execution.
 """
 struct Launcher{Worksize,OuterWidth,Workers,Exchangers}
     workers::Workers
-    exchangers::Exchangers # state of the halo exchanges of an overlapped launch on a distributed architecture
+    exchangers::Exchangers              # state of the halo exchanges of an overlapped launch on a distributed architecture
+    events::Base.RefValue{Channel{Any}} # events of the outer kernels of an overlapped launch, reused from one launch to the next
 end
 
 """
@@ -57,7 +58,7 @@ function Launcher(arch, grid; outer_width=nothing)
         exchangers = nothing
     end
 
-    return Launcher{worksize,outer_width,typeof(workers),typeof(exchangers)}(workers, exchangers)
+    return Launcher{worksize,outer_width,typeof(workers),typeof(exchangers)}(workers, exchangers, Ref(Channel{Any}(length(worksize))))
 end
 
 Base.@assume_effects :foldable Base.ndims(::Launcher{WorkSize}) where {WorkSize} = length(WorkSize)
@@ -193,7 +194,10 @@ end
             # boundary conditions and halo exchange of all dimensions on the worker, one dimension after the other (the
             # exchanged faces include the corners received in the dimensions before), each after the outer points it reads
             N = ndims(grid)
-            events = Channel{Any}(N)
+            events = launcher.events[]
+            if !isopen(events) || isready(events) # left closed or with events by a failed launch
+                events = launcher.events[] = Channel{Any}(N)
+            end
             put!(launcher.workers) do
                 ntuple(Val(ndims(grid))) do J   # ndims(grid), not N: known when compiling the closure
                     Base.@_inline_meta
