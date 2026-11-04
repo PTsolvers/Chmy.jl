@@ -122,6 +122,8 @@ tensorrank(::typeof(gram), args) = 2
 tensorrank(::typeof(cogram), args) = 2
 tensorrank(::typeof(diag), args) = 1
 
+tensorrank(op::Union{ZeroTensor, IdTensor}, args) = op.rank
+
 @inline function checkscalar(op, args)
     if any(x -> tensorrank(x) > 0, args)
         throw(ArgumentError(LazyString("all arguments to '", op, "' must be scalars")))

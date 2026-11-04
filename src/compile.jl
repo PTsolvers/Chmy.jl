@@ -35,8 +35,6 @@ function toexpr(expr::DTerm, face, bnd)
         DExpr(Call(op), args) => toexpr_call(op, args, face, bnd)
         AddMul(_, _, _) => toexpr(callform(expr), face, bnd)
         DExpr(Pack(_, _, _), _) => throw(ArgumentError("tensors in component form should be indexed before compilation"))
-        ZeroTensor(_) => throw(ArgumentError("zero tensors should be lowered before compilation"))
-        IdTensor(_) => throw(ArgumentError("identity tensors should be lowered before compilation"))
         _ => throw(ArgumentError(LazyString("unsupported expression '", expr, "' for compilation")))
     end
 end

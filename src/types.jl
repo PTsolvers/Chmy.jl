@@ -71,7 +71,7 @@ const Head = HeadImpl.Type
 
 # DTerm definition
 @data DTermImpl begin
-    export Literal, Index, Coordinate, Tensor, IdTensor, ZeroTensor, DExpr, AddMul
+    export Literal, Index, Coordinate, Tensor, DExpr, AddMul
 
     Literal(Number)
     Index(Int)
@@ -82,8 +82,6 @@ const Head = HeadImpl.Type
         kind::TensorKind
         uniform::Bool
     end
-    ZeroTensor(Int)
-    IdTensor(Int)
     struct DExpr
         head::Head
         args::Tuple{Vararg{DTermImpl}}
@@ -140,6 +138,15 @@ struct AnyTangent <: Operator
     slot::Int
 end
 AnyTangent() = AnyTangent(1)
+
+# the zero tensor and the identity tensor of rank `rank`, nullary operators, see `𝒪` and `ℐ`
+struct ZeroTensor <: Operator
+    rank::Int
+end
+
+struct IdTensor <: Operator
+    rank::Int
+end
 
 const 𝐧 = AnyNormal()
 const 𝐭 = AnyTangent()

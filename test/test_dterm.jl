@@ -140,22 +140,25 @@ Random.seed!(1234) # deterministic tests
     end
 
     @testset "ZeroTensor" begin
-        t = @inferred ZeroTensor(2)
-        @test (@inferred 𝒪(2)) === t
+        t = @inferred 𝒪(2)
+        @test operation(t) == ZeroTensor(2)
+        @test (@inferred t[1, 2]) ==ₛ Literal(0)
 
         @test (@inferred tensorrank(t)) == 2
-        @test (@inferred istensor(t)) == true
+        @test (@inferred istensor(t)) == false
         @test (@inferred isuniform(t)) == true
         @test (@inferred isstaticzero(t)) == true
         @test (@inferred isstaticone(t)) == false
     end
 
     @testset "IdTensor" begin
-        t = @inferred IdTensor(2)
-        @test (@inferred ℐ(2)) === t
+        t = @inferred ℐ(2)
+        @test operation(t) == IdTensor(2)
+        @test (@inferred t[1, 1]) ==ₛ Literal(1)
+        @test (@inferred t[1, 2]) ==ₛ Literal(0)
 
         @test (@inferred tensorrank(t)) == 2
-        @test (@inferred istensor(t)) == true
+        @test (@inferred istensor(t)) == false
         @test (@inferred isuniform(t)) == true
         @test (@inferred isstaticzero(t)) == false
         @test (@inferred isstaticone(t)) == true
@@ -399,10 +402,11 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred a + b ==ₛ b + a)
         @test (@inferred 2 * (a + b) !=ₛ 2a + 2b)
         @test (@inferred a !=ₛ a + b)
-        @test (@inferred ZeroTensor(2) ==ₛ ZeroTensor(2))
-        @test (@inferred ZeroTensor(2) !=ₛ ZeroTensor(3))
-        @test (@inferred IdTensor(2) ==ₛ IdTensor(2))
-        @test (@inferred IdTensor(2) !=ₛ IdTensor(3))
+        @test (@inferred 𝒪(2) ==ₛ 𝒪(2))
+        @test (@inferred 𝒪(2) !=ₛ 𝒪(3))
+        @test (@inferred ℐ(2) ==ₛ ℐ(2))
+        @test (@inferred ℐ(2) !=ₛ ℐ(3))
+        @test (@inferred 𝒪(2) !=ₛ ℐ(2))
         @test (@inferred Index(2) ==ₛ Index(2))
         @test (@inferred Index(1) !=ₛ Index(2))
         @test (@inferred Literal(1) ==ₛ Literal(1))

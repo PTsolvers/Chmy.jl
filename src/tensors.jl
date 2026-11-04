@@ -12,8 +12,6 @@ function components(t::DTerm, dims::Integer)::DTerm
     return @match t begin
         DExpr(Pack(_, d, _), _) => d == dims ? t : pack_dims_error(d, dims)
         Tensor(rank, _, kind, _) => pack(I -> makecomp_unchecked(t, I), kind, rank, dims)
-        ZeroTensor(rank) => literal_pack(ZERO, dims, rank)
-        IdTensor(rank) => literal_pack(ONE, dims, rank)
         DExpr(Call(op), args) => begin
             result = evaluate(op, map(x -> components(x, dims), args), dims)::Union{Nothing, DTerm}
             isnothing(result) && expansion_error(op)

@@ -12,8 +12,6 @@ function Base.show(io::IO, v::DTerm)
         Index(i) => print_index(io, i)
         Coordinate(i) => print_coordinate(io, i)
         Tensor(rank, name, _, _) => print_tensor(io, rank, name)
-        ZeroTensor(_) => print(io, '𝒪')
-        IdTensor(_) => print(io, 'ℐ')
         DExpr(Call(op), args) => printop(io, op, args)
         DExpr(Comp(comp), (arg,)) => print_indexed(io, arg, comp)
         DExpr(Inds(positions), (arg,)) => print_indexed(io, arg, map(position_name, positions))
@@ -131,6 +129,9 @@ function printop(io, op::Operator, args)
     print_opname(io, op)
     return print_list(io, '(', args, ')')
 end
+
+printop(io, ::ZeroTensor, args) = print(io, '𝒪')
+printop(io, ::IdTensor, args) = print(io, 'ℐ')
 
 """
     printprec(op, args)

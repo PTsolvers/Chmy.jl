@@ -21,8 +21,6 @@ default, tensor-valued calls are evaluated with the rules of their components, s
 function evaluate(term::DTerm)::DTerm
     return @match term begin
         Literal(x) => canonical_literal(x)
-        ZeroTensor(rank) => 𝒪(rank)
-        IdTensor(rank) => ℐ(rank)
         DExpr(head, args) => maketerm(head, map(evaluate, args))
         AddMul(_, _, _) => mapentries(evaluate, term)
         _ => term
@@ -59,6 +57,14 @@ along the axis `i`; components depending on the number of dimensions are evaluat
 """
 component(op, args, I) = nothing
 component(op::Fun, args, I) = component(op.f, args, I)
+
+# the zero and identity tensors of rank zero are literals, and their components are the same in any rank
+evaluate(op::ZeroTensor, args) = iszero(op.rank) ? ZERO : nothing
+evaluate(op::IdTensor, args) = iszero(op.rank) ? ONE : nothing
+component(::ZeroTensor, args, I) = ZERO
+component(::IdTensor, args, I) = allequal(I) ? ONE : ZERO
+evaluate(op::ZeroTensor, args, dims) = literal_pack(ZERO, dims, op.rank)
+evaluate(op::IdTensor, args, dims) = literal_pack(ONE, dims, op.rank)
 
 # functions have no rules by default
 evaluate(f, args) = nothing
@@ -147,13 +153,11 @@ end
 
 # matrix functions
 
-# the symmetry of a rank-2 tensor: named tensors have their kind, zero and identity tensors are diagonal, and the
-# projections `sym` and `asym` are symmetric and alternating
+# the symmetry of a rank-2 tensor: named tensors have their kind, and calls the symmetry of their operator
 function matrix_kind(a)
     return @match a begin
         Tensor(_, _, kind, _) => kind
-        ZeroTensor(_) || IdTensor(_) => Kind.Diag()
-        DExpr(Call(inner), (base,)) => projection_kind(inner, base)
+        DExpr(Call(op), args) => matrix_kind(op, args)
         # scalar multiples preserve symmetry, and sums keep the symmetry common to their terms
         AddMul(_, _, dict) => mapreduce(matrix_kind, common_kind, Iterators.filter(k -> tensorrank(k) > 0, dict.keys))
         _ => Kind.None()
@@ -164,12 +168,14 @@ common_kind(a::TensorKind, b::TensorKind) = a == b ? a : Kind.None()
 common_kind(::Kind.Diag, b::Kind.Sym) = b
 common_kind(a::Kind.Sym, ::Kind.Diag) = a
 
-projection_kind(op::Fun, base) = projection_kind(op.f, base)
-projection_kind(op, base) = Kind.None()
-projection_kind(::typeof(sym), base) = Kind.Sym()
-projection_kind(::typeof(asym), base) = Kind.Alt()
+# the symmetry of the call `op(args...)`
+matrix_kind(op::Fun, args) = matrix_kind(op.f, args)
+matrix_kind(op, args) = Kind.None()
+matrix_kind(::Union{ZeroTensor, IdTensor}, args) = Kind.Diag()
+matrix_kind(::typeof(sym), (base,)::Tuple{DTerm}) = Kind.Sym()
+matrix_kind(::typeof(asym), (base,)::Tuple{DTerm}) = Kind.Alt()
 # cofactors preserve symmetry, but not antisymmetry
-projection_kind(::typeof(cof), base) = cofactor_kind(matrix_kind(base))
+matrix_kind(::typeof(cof), (base,)::Tuple{DTerm}) = cofactor_kind(matrix_kind(base))
 cofactor_kind(kind::Union{Kind.Sym, Kind.Diag}) = kind
 cofactor_kind(kind) = Kind.None()
 
@@ -337,10 +343,10 @@ end
 
 # add the term `t` with the coefficient `c` to `terms`, and return the constant term
 function add!(terms, c0, t, c)
-    iszero(c) && return c0
+    # zero tensors vanish from the sum
+    (iszero(c) || tensorrank(t) > 0 && isstaticzero(t)) && return c0
     return @match t begin
         Literal(x) => c0 + c * exact(x)
-        ZeroTensor(_) => c0
         # a sum scaled by a number other than ±1 is the product with the number, which keeps the sum as a term with
         # a positive leading coefficient
         AddMul(op, _, _) && if op === (+) && !isone(abs(c)) end => add!(terms, c0, scaled(c, t), 1)
@@ -391,9 +397,10 @@ end
 function mul!(powers, c, t, p)
     isstaticzero(p) && return c
     isliteral(t) && isliteral(p) && return c * numpow(value(t), value(p))
+    # zero tensors annihilate the product
+    tensorrank(t) > 0 && isstaticzero(t) && return zero(c)
     integer = isinteger(p)
     @match t begin
-        ZeroTensor(_) => return zero(c)
         # the bases of a product are collected, and its coefficient unless it is negative and the power is not an integer
         AddMul(op, q, dict) && if op === (*) && (integer || ispositive(q)) end => begin
             isone(q) || (c = mul!(powers, c, canonical_literal(q), p))

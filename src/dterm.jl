@@ -13,8 +13,6 @@ function (==ₛ)(a::DTerm, b::DTerm)
             an == bn &&
             ak == bk &&
             au == bu
-        (ZeroTensor(x), ZeroTensor(y)) => x == y
-        (IdTensor(x), IdTensor(y)) => x == y
         (Index(i), Index(j)) => i == j
         (Coordinate(i), Coordinate(j)) => i == j
         (DExpr(ah, ac), DExpr(bh, bc)) => ah == bh && isequal_args(ac, bc)
@@ -72,7 +70,7 @@ function (<ₛ)(x::DTerm, y::DTerm)
         end
         (DExpr(_, _), DExpr(_, _)) => isless_expr(x, y)
         (AddMul(_, _, _), AddMul(_, _, _)) => isless_addmul(x, y)
-        _ => false # Equal-rank zero and identity tensors.
+        _ => error("unreachable")
     end
 end
 (<ₛ)(x, y) = x < y
@@ -86,14 +84,14 @@ end
 
 Construct symbolic zero tensor of rank `rank`, which is the literal zero for rank zero.
 """
-𝒪(rank::Integer) = iszero(rank) ? ZERO : ZeroTensor(rank)
+𝒪(rank::Integer) = ZeroTensor(rank)()
 
 """
     ℐ(rank)
 
 Construct symbolic identity tensor of rank `rank`, which is the literal one for rank zero.
 """
-ℐ(rank::Integer) = iszero(rank) ? ONE : IdTensor(rank)
+ℐ(rank::Integer) = IdTensor(rank)()
 
 function DTermImpl.DExpr(head::Head, args::NTuple{N, DTerm}) where {N}
     rank = @match head begin
@@ -140,9 +138,9 @@ iscoordinate(term::DTerm) = isa_variant(term, Coordinate)
 """
     istensor(term)
 
-Return `true` if `term` is a named tensor, zero tensor, or identity tensor.
+Return `true` if `term` is a named tensor.
 """
-istensor(term::DTerm) = isa_variant(term, Tensor) || isa_variant(term, ZeroTensor) || isa_variant(term, IdTensor)
+istensor(term::DTerm) = isa_variant(term, Tensor)
 
 """
     isexpr(term)
@@ -245,7 +243,6 @@ function isuniform(term::DTerm)
     return @match term begin
         Literal(_) => true
         Tensor(_, _, _, uniform) => uniform
-        ZeroTensor(_) || IdTensor(_) => true
         DExpr(_, args) => all_isuniform(args)
         AddMul(_, _, dict) => all(isuniform, Iterators.flatten((dict.keys, dict.vals)))
         _ => false
@@ -259,7 +256,7 @@ all_isuniform(args::NTuple{N, DTerm}) where {N} = all(isuniform, args)
 # position, e.g. overrides of uniform terms
 function isconstant(term::DTerm)
     return @match term begin
-        Literal(_) || ZeroTensor(_) || IdTensor(_) => true
+        Literal(_) => true
         Tensor(_, _, _, uniform) => uniform
         DExpr(Comp(_), (arg,)) => isconstant(arg)
         _ => false
@@ -286,10 +283,14 @@ Return `true` if `term` is a literal whose value is `isequal` to zero or a symbo
 function isstaticzero(term::DTerm)::Bool
     return @match term begin
         Literal(val) => isequal(val, 0)::Bool
-        ZeroTensor(_) => true
+        DExpr(Call(op), args) => isstaticzero(op, args)
         _ => false
     end
 end
+
+# calls are not static zeros unless specified otherwise
+isstaticzero(::Operator, args) = false
+isstaticzero(::ZeroTensor, args) = true
 
 """
     isstaticone(term)
@@ -299,10 +300,14 @@ Return `true` if `term` is a literal whose value is `isequal` to one or a symbol
 function isstaticone(term::DTerm)::Bool
     return @match term begin
         Literal(val) => isequal(val, 1)::Bool
-        IdTensor(_) => true
+        DExpr(Call(op), args) => isstaticone(op, args)
         _ => false
     end
 end
+
+# calls are not static ones unless specified otherwise
+isstaticone(::Operator, args) = false
+isstaticone(::IdTensor, args) = true
 
 """
     isinteger(term::DTerm)
@@ -414,7 +419,6 @@ Return the tensor rank of `term`. Scalars have rank zero.
 function tensorrank(term::DTerm)::Int
     return @match term begin
         Tensor(rank, _, _, _) => rank
-        ZeroTensor(rank) || IdTensor(rank) => rank
         DExpr(_, _, rank, _) => rank
         AddMul(_, _, _, rank, _) => rank
         _ => 0
@@ -469,7 +473,7 @@ function Base.getindex(term::DTerm, I::Vararg{Integer, N}) where {N}
     return component(term, map(Int, I))
 end
 
-# the component `I` of `term`, respecting the structure of named, zero, identity, and packed tensors
+# the component `I` of `term`, respecting the structure of named and packed tensors
 function component(term::DTerm, I::NTuple{N, Int}) where {N}
     tensorrank(term) == N || throw(ArgumentError("number of subscripts not matching tensor rank"))
     N == 0 && return term
@@ -492,8 +496,6 @@ function component(term::DTerm, I::NTuple{N, Int}) where {N}
                 error("unreachable")
             end
         end
-        ZeroTensor(_) => ZERO
-        IdTensor(_) => allequal(I) ? ONE : ZERO
         DExpr(Pack(_, dims, kind), data) => begin
             all(i -> 1 <= i <= dims, I) || throw(BoundsError(term, I))
             pack_entry(kind, dims, data, I)
@@ -531,8 +533,6 @@ function Base.hash(term::DTerm, h::UInt)::UInt
         Index(i) => hash(i, hash(:Index, h))
         Coordinate(i) => hash(i, hash(:Coordinate, h))
         Tensor(rank, name, kind, uniform) => hash(uniform, hash(kind, hash(name, hash(rank, hash(:Tensor, h)))))
-        ZeroTensor(rank) => hash(rank, hash(:ZeroTensor, h))
-        IdTensor(rank) => hash(rank, hash(:IdTensor, h))
         DExpr(_, _, _, cached) => iszero(h) ? cached : hash(cached, h)
         AddMul(_, _, _, _, cached) => iszero(h) ? cached : hash(cached, h)
     end
@@ -546,11 +546,9 @@ function termrank(term)
         Index(_) => 0
         Coordinate(_) => 1
         Tensor(_, _, _, _) => 2
-        ZeroTensor(_) => 3
-        IdTensor(_) => 4
-        Literal(_) => 5
-        DExpr(_, _) => 6
-        AddMul(_, _, _) => 7
+        Literal(_) => 3
+        DExpr(_, _) => 4
+        AddMul(_, _, _) => 5
     end
 end
 
