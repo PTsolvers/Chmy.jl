@@ -18,7 +18,6 @@ function post_receives!(ex::Exchanger, side::Side{S}, dim::Dim{D}, arch::Distrib
     isempty(fields) && return
     nbrank = neighbor(topology(arch), D, S)
     @assert nbrank != MPI.PROC_NULL "no neighbor to communicate"
-    reset_allocators!(ex)
     init!(ex, exchange_backend(arch), dim, side, fields)
     for idx in eachindex(fields)
         ex.recv_reqs[idx] = MPI.Irecv!(ex.recv_bufs[idx], cart_comm(topology(arch)); source=nbrank)

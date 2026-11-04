@@ -1,20 +1,32 @@
+# the send and receive buffers of one field in the exchanges of dimension `dim`: vectors of the length of its faces, kept from one
+# exchange to the next (the pack and unpack copies index faces and buffers linearly)
+struct HaloBuffers
+    dim::Int
+    eltype::DataType
+    backend::Backend
+    nsend::Int
+    nrecv::Int
+    send::AbstractVector
+    recv::AbstractVector
+end
+
 # state of the halo exchange of one side of a dimension, reused from one exchange to the next: requests, buffers, bookkeeping
 struct Exchanger
-    storage::Dict{Backend,StackAllocator}
+    buffers::Vector{HaloBuffers}     # every buffer pair of this side so far (dimension, element type and lengths)
     send_reqs::Vector{MPI.Request}
     recv_reqs::Vector{MPI.Request}
-    send_bufs::Vector{AbstractArray}
+    send_bufs::Vector{AbstractArray} # the buffers of the current exchange, one per field
     recv_bufs::Vector{AbstractArray}
     recv_done::Vector{Bool}
 
     function Exchanger()
-        storage   = Dict{Backend,StackAllocator}()
+        buffers   = HaloBuffers[]
         send_reqs = MPI.Request[]
         recv_reqs = MPI.Request[]
         send_bufs = AbstractArray[]
         recv_bufs = AbstractArray[]
         recv_done = Bool[]
-        return new(storage, send_reqs, recv_reqs, send_bufs, recv_bufs, recv_done)
+        return new(buffers, send_reqs, recv_reqs, send_bufs, recv_bufs, recv_done)
     end
 end
 
@@ -33,10 +45,6 @@ function task_local_exchangers()
     return get!(() -> (Exchanger(), Exchanger()), task_local_storage(), :chmy_exchangers)::NTuple{2,Exchanger}
 end
 
-function get_allocator(ex::Exchanger, backend::Backend)
-    return get!(() -> StackAllocator(backend), ex.storage, backend)
-end
-
 function Base.resize!(ex::Exchanger, count::Integer)
     resize!(ex.send_reqs, count)
     resize!(ex.recv_reqs, count)
@@ -53,29 +61,39 @@ function reset_reqs!(ex::Exchanger)
     return
 end
 
-function init!(ex::Exchanger, backend::Backend, dim, side, fields::Tuple{Vararg{Field}})
-    resize!(ex, length(fields))
-    reset_reqs!(ex)
+function halo_buffer(backend::Backend, T::DataType, n::Integer)
+    buffer = KernelAbstractions.allocate(backend, T, n)
+    # used by one exchange at a time, after the previous one has completed: the implicit synchronization would only order its uses
+    # after complete work (and add a wait when the exchanging task's stream changes)
+    disable_task_sync!(buffer)
+    return buffer
+end
 
-    alloc_size = 0
-    foreach(fields) do field
-        send_view = get_send_view(side, dim, field)
-        recv_view = get_recv_view(side, dim, field)
-        alloc_size += prod(size(send_view)) * sizeof(eltype(field))
-        alloc_size += prod(size(recv_view)) * sizeof(eltype(field))
+# the buffers of field `idx`: a pair of this dimension, element type and lengths that no field before it in this exchange has
+# taken, or a new one
+function take_buffers!(ex::Exchanger, backend::Backend, ::Dim{D}, side::Side, field::Field, idx::Integer) where {D}
+    T     = eltype(field)
+    nsend = length(get_send_view(side, Dim(D), field))
+    nrecv = length(get_recv_view(side, Dim(D), field))
+    k = findfirst(ex.buffers) do b
+        b.dim == D && b.eltype === T && b.nsend == nsend && b.nrecv == nrecv && b.backend == backend &&
+            !any(j -> ex.send_bufs[j] === b.send, 1:(idx-1))
     end
-
-    tla = get_allocator(ex, backend)
-    resize!(tla, alloc_size)
-
-    foreach(enumerate(fields)) do (idx, field)
-        send_view = get_send_view(side, dim, field)
-        recv_view = get_recv_view(side, dim, field)
-        ex.send_bufs[idx] = allocate(tla, eltype(field), size(send_view))
-        ex.recv_bufs[idx] = allocate(tla, eltype(field), size(recv_view))
+    if isnothing(k)
+        push!(ex.buffers, HaloBuffers(D, T, backend, nsend, nrecv, halo_buffer(backend, T, nsend), halo_buffer(backend, T, nrecv)))
+        k = lastindex(ex.buffers)
     end
-
+    ex.send_bufs[idx] = ex.buffers[k].send
+    ex.recv_bufs[idx] = ex.buffers[k].recv
     return
 end
 
-reset_allocators!(ex::Exchanger) = foreach(reset!, values(ex.storage))
+function init!(ex::Exchanger, backend::Backend, dim::Dim, side::Side, fields::Tuple{Vararg{Field,K}}) where {K}
+    resize!(ex, K)
+    reset_reqs!(ex)
+    ntuple(Val(K)) do idx
+        Base.@_inline_meta
+        take_buffers!(ex, backend, dim, side, fields[idx], idx)
+    end
+    return
+end

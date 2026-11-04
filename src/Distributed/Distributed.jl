@@ -27,7 +27,6 @@ using KernelAbstractions
 include("topology.jl")
 include("distributed_architecture.jl")
 include("distributed_grid.jl")
-include("stack_allocator.jl")
 include("communication_views.jl")
 include("exchanger.jl")
 include("exchange_halo.jl")

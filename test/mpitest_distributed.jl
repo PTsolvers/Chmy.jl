@@ -98,10 +98,20 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             @test C_ovl ≈ C_plain
         end
 
-        # an overlapped launcher owns the state of its halo exchanges (one per side); a plain launcher uses the calling task's
+        # an overlapped launcher owns the state of its halo exchanges (one per side), whose buffers are allocated once; a plain
+        # launcher uses the calling task's
         @testset "exchange state of the launcher" begin
-            @test Launcher(arch, grid; outer_width=(2, 2)).exchangers isa NTuple{2,Chmy.Distributed.Exchanger}
+            launcher = Launcher(arch, grid; outer_width=(2, 2))
+            @test launcher.exchangers isa NTuple{2,Chmy.Distributed.Exchanger}
             @test isnothing(Launcher(arch, grid).exchangers)
+            Co, Cn = Field(backend, grid, Center()), Field(backend, grid, Center())
+            Vx     = Field(backend, grid, (Vertex(), Center()))
+            dt     = minimum(spacing(grid))^2 / 2 / T(2.1)
+            launch() = launcher(arch, grid, diffusion_step! => (Cn, Co, dt, grid); bc=batch(grid, Cn => Neumann(), Vx => Neumann(); exchange=(Cn, Vx)))
+            launch()
+            buffers = map(ex -> copy(ex.buffers), launcher.exchangers)
+            launch()
+            @test all(map((ex, b) -> length(ex.buffers) == length(b) && all(ex.buffers .=== b), launcher.exchangers, buffers))
         end
     end
 end
