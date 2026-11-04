@@ -24,16 +24,15 @@ Lifted(op::Operator, axes::Vararg{Integer, N}) where {N} = Lifted(op, axes)
 tensorrank(lf::Lifted, args) = tensorrank(lf.op, args)
 checkranks(lf::Lifted, args::NTuple{N, DTerm}) where {N} = checkranks(lf.op, args)
 
-function lower_rule(lf::Lifted{O, K}, args, comps, face::Face{N}, x::NTuple{N, Position}) where {O, K, N}
+function lower_rule(lf::Lifted{O, K}, args, face::Face{N}, x::NTuple{N, Position}) where {O, K, N}
     maximum(abs, lf.axes) <= N || throw(ArgumentError("the lifted axes exceed the number of dimensions"))
-    # tensor components are not mapped to the lifted axes yet, so only scalar calls of scalars can be lifted
-    isempty(comps) || expansion_error(lf)
+    # tensor components are not mapped to the lifted axes yet, so only scalars can be lifted
     checkscalar(lf, args)
     # mirrored along negative axes: the side of the face flips, and the position changes sign, so that the outward
     # distance from the wall is kept
     lface = map(a -> mirror(face[abs(a)], a), lf.axes)
     lx = map(a -> mirror(x[abs(a)], a), lf.axes)
-    term = lower_rule(lf.op, args, comps, lface, lx)::DTerm
+    term = lower_rule(lf.op, args, lface, lx)::DTerm
     lf.axes == ntuple(identity, Val(N)) && return term
     return insert_stencil(term, Val(N), lf.axes)
 end

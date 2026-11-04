@@ -1,25 +1,18 @@
 """
-    lower_rule(op, args, comps, face, x)
     lower_rule(op, args, face, x)
     lower_rule(op, args)
 
-Expand the component `comps` of the call `op(args...)`, evaluated at the position `x` next to the `face`, into a
-scalar expression evaluated at `x`, which is lowered further. Samples in the expression are relative to `x`, e.g.
-`f[1//2, 0]`, and terms that are not sampled are read at `x`, e.g. `f[1//2, 0] - f`. A rule returning a call of its
-own operator, e.g. `op(args...)`, keeps the call and lowers only its arguments. The position `x` is in the frame of
-[`lower`](@ref): relative to the grid
-point of the kernel along the spanning axes `:` of the face, and to the wall along its sides `↓` and `↑`, or a global
-position. Most rules only sample relative to `x` and ignore `face` and `x`; the rules that depend on the boundary
-read them, e.g. overrides. Rules of scalar operators can omit `comps`, and rules of 1D operators can also omit `face`
-and `x`.
+Expand the scalar call `op(args...)`, evaluated at the position `x` next to the `face`, into a scalar expression
+evaluated at `x`, which is lowered further. Samples in the expression are relative to `x`, e.g. `f[1//2, 0]`, and
+terms that are not sampled are read at `x`, e.g. `f[1//2, 0] - f`. A rule returning a call of its own operator, e.g.
+`op(args...)`, keeps the call and lowers only its arguments. The position `x` is in the frame of [`lower`](@ref):
+relative to the grid point of the kernel along the spanning axes `:` of the face, and to the wall along its sides `↓`
+and `↑`, or a global position. Tensor arguments are in component form, see [`components`](@ref). Calls with a
+component form in the number of dimensions, see [`evaluate`](@ref), are lowered through it instead. Most rules only
+sample relative to `x` and ignore `face` and `x`; the rules that depend on the boundary read them, e.g. overrides.
+Rules of 1D operators can omit `face` and `x`.
 """
 function lower_rule end
-
-# scalar operators don't need the component
-function lower_rule(op::Operator, args, comps, face, x)
-    isempty(comps) || expansion_error(op)
-    return lower_rule(op, args, face, x)
-end
 
 # 1D operators don't need the face and the position
 function lower_rule(op::Operator, args, face, x)
@@ -29,12 +22,8 @@ end
 
 lower_rule(op::Operator, args) = no_rule_error(op, args, 1)
 
-# pointwise functions are evaluated with tensor arguments in component form one level deep, computing the entire
-# result to read its component `comps`; a scalar function of scalars is the call itself, which is kept, and its
-# arguments are lowered at the evaluation point
-function lower_rule(op::Union{Fun, BroadcastedFun}, args, comps, face, x)
-    return component(makecall(op, map(t -> components(t, length(x)), args)), comps)
-end
+# a pointwise function is the call itself, which is kept, and its arguments are lowered at the evaluation point
+lower_rule(op::Fun, args, face, x) = makecall(op, args)
 
 """
     At(positions...)
@@ -51,17 +40,17 @@ At(positions::Vararg{PositionLike}) = At(positions)
 tensorrank(::At, args) = tensorrank(only(args))
 checkranks(::At, args::Tuple{Vararg{DTerm}}) = length(args) == 1 || throw(ArgumentError("`At` requires one argument"))
 
-function lower_rule(at::At, (t,)::Tuple{DTerm}, comps, face, x)
-    length(at.positions) == length(x) || lower_dims_error()
-    return makeinds_unchecked(t[comps...], at.positions)
-end
+# scalars are sampled right away, and tensors component by component
+evaluate(at::At, (t,)::Tuple{DTerm}) = tensorrank(t) == 0 ? makeinds(t, at.positions) : nothing
+component(at::At, (t,)::Tuple{DTerm}, I) = makeinds(component(t, I), at.positions)
 
 """
     lower(expr, face, x)
 
 Lower the scalar expression `expr`, evaluated at the position `x` next to the `face`, e.g. `(:, :)` in the interior
-or `(↓, :)` by the left wall, into samples of fields, e.g. `f[1//2, 0]`, expanding operator calls with their
-[`lower_rule`](@ref). The positions are relative to the grid point of the kernel along the spanning axes `:` of the
+or `(↓, :)` by the left wall, into samples of fields, e.g. `f[1//2, 0]`, evaluating calls in component form in
+`length(x)` dimensions, see [`evaluate`](@ref), and expanding the other calls with their [`lower_rule`](@ref). The
+positions are relative to the grid point of the kernel along the spanning axes `:` of the
 face, and to the wall point along its sides `↓` and `↑`, in the direction of the axis: integer positions are points,
 half-integer positions are segments. A global position `↓`, `↑` or `:` evaluates `expr` on the traces of the fields.
 Samples nested in `expr` shift the position, so `lower(expr, face, x)` equals `lower(expr[x...], face, 0)`. Uniform
@@ -81,10 +70,11 @@ function lowerat(term::DTerm, face::Face{N}, x::NTuple{N, Position})::DTerm wher
             length(s) == N || lower_dims_error()
             lowerat(inner, face, map(shift, x, s))
         end
-        DExpr(Call(op), args) => lower_call(op, args, (), face, x)
+        DExpr(Call(op), args) => lower_call(op, args, face, x)
         DExpr(Comp(comps), (arg,)) => begin
             all(c -> 1 <= c <= N, comps) || throw(BoundsError(arg, comps))
-            iscall(arg) ? lower_call(operation(arg), arguments(arg), comps, face, x) : makeinds(term, x)
+            # a component of a call is read from the call in component form
+            iscall(arg) ? lowerat(component(components(arg, N), comps), face, x) : makeinds(term, x)
         end
         Index(_) => index_input_error()
         Coordinate(a) => coordinate_value(a, x)
@@ -92,13 +82,15 @@ function lowerat(term::DTerm, face::Face{N}, x::NTuple{N, Position})::DTerm wher
     end
 end
 
-# the result of the rule is a scalar expression evaluated at `x`, which is lowered further, unless the rule returns
-# a call of its own operator, which is kept with its arguments lowered
-function lower_call(op, args, comps, face, x)
-    term = lower_rule(op, args, comps, face, x)::DTerm
+# the call with its tensor arguments in component form is evaluated in `N` dimensions if possible, and expanded with
+# its rule otherwise; the result of the rule is a scalar expression evaluated at `x`, which is lowered further, unless
+# the rule returns a call of its own operator, which is kept with its arguments lowered
+function lower_call(op, args, face::Face{N}, x) where {N}
+    packed = map(t -> components(t, N), args)
+    evaluated = evaluate(op, packed, N)::Union{Nothing, DTerm}
+    isnothing(evaluated) || return lowerat(evaluated, face, x)
+    term = lower_rule(op, packed, face, x)::DTerm
     tensorrank(term) == 0 || rule_rank_error(op)
-    # the component of its own call would be expanded by the same rule again
-    iscomp(term) && argument(term) ==ₛ makecall_unchecked(op, args) && expansion_error(op)
     iscall(term) && operation(term) == op && return walkargs(t -> lowerat(t, face, x), term)
     return lowerat(term, face, x)
 end

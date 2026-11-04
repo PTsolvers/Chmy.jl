@@ -47,7 +47,7 @@ const ξ³ = Coordinate(3)
 export ⊡, ⊗, sym, asym, cof, adj, gram, cogram
 include("operators.jl")
 
-export evaluate
+export evaluate, component
 include("evaluate.jl")
 
 include("utils.jl")

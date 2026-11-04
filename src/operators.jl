@@ -1,12 +1,16 @@
 # the canonical call `op(args...)` of canonical arguments: calls with all tensor arguments in component form are
-# evaluated componentwise, and the other calls with the rules of the operator
+# evaluated in their number of dimensions, and the other calls with the rules of the operator; functions of literals
+# without a rule are evaluated numerically
 function makecall(op::Operator, args::NTuple{N, DTerm})::DTerm where {N}
     checkranks(op, args)
-    if !isnothing(packed_dims(args))
-        result = evaluate_packed(op, args)::Union{Nothing, DTerm}
+    dims = packed_dims(args)
+    if !isnothing(dims)
+        result = evaluate(op, args, dims)::Union{Nothing, DTerm}
         isnothing(result) || return result
     end
-    return something(evaluate(op, args)::Union{Nothing, DTerm}, makecall_unchecked(op, args))
+    result = evaluate(op, args)::Union{Nothing, DTerm}
+    isnothing(result) || return result
+    return something(fold_literals(op, args), makecall_unchecked(op, args))
 end
 makecall(op::Operator, args::Vararg{DTerm, N}) where {N} = makecall(op, args)
 makecall_unchecked(op::Operator, args::NTuple{N, DTerm}) where {N} = DExpr(Call(op), args)

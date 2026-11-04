@@ -5,9 +5,9 @@ using Chmy
 struct Pointwise <: Operator end
 Chmy.lower_rule(op::Pointwise, args::Tuple{DTerm}, face, x) = op(args[1])
 
-# a scalar operator depending on the number of dimensions
+# a scalar operator depending only on the number of dimensions
 struct Scaled <: Operator end
-Chmy.lower_rule(::Scaled, args::Tuple{DTerm}, face, x) = args[1] / length(x)
+Chmy.evaluate(::Scaled, args::Tuple{DTerm}, dims) = args[1] / dims
 
 # an operator whose rule returns a tensor in component form instead of a scalar
 struct Unindexed <: Operator end
@@ -17,11 +17,10 @@ Chmy.lower_rule(::Unindexed, args::Tuple{DTerm}, face, x) = pack([args[1], args[
 struct Unsampled <: Operator end
 Chmy.lower_rule(::Unsampled, args::Tuple{DTerm}, face, x) = 2 * args[1]
 
-# an operator whose rule returns a component of its own call
+# a tensor-valued operator without a component form
 struct Unexpanded <: Operator end
 Chmy.tensorrank(::Unexpanded, args) = 1
 Chmy.checkranks(::Unexpanded, ::Tuple{Vararg{DTerm}}) = nothing
-Chmy.lower_rule(op::Unexpanded, args, comps, face, x) = op(args...)[comps...]
 
 @testset "lowering" begin
     @scalars f g
@@ -109,9 +108,10 @@ Chmy.lower_rule(op::Unexpanded, args, comps, face, x) = op(args...)[comps...]
         # a call with all tensor arguments in component form is evaluated right away
         @test ispack(f * gravity)
         @test lower((f * gravity)[2], (:, :), (0, 0)) ==ₛ -f[0, 0]
-        # mixed with coordinate-free tensors, the call is evaluated during lowering
-        @test lower((u + gravity)[2], (:, :), (0, 0)) ==ₛ u[2][0, 0] - 1
-        @test_throws DimensionMismatch lower((u + gravity)[2], (:, :, :), (0, 0, 0))
+        # mixed with coordinate-free tensors, the call is evaluated component by component
+        @test (u + gravity)[2] ==ₛ u[2] - 1
+        @test lower((u + gravity) ⋅ u, (:, :), (0, 0)) ==ₛ u[1][0, 0]^2 + u[2][0, 0] * (u[2][0, 0] - 1)
+        @test_throws DimensionMismatch lower((u + gravity) ⋅ u, (:, :, :), (0, 0, 0))
     end
 
     @testset "sampling with At" begin
@@ -155,7 +155,7 @@ Chmy.lower_rule(op::Unexpanded, args, comps, face, x) = op(args...)[comps...]
         @test_throws ArgumentError lower(d(f), (:, :), (0, 0))
         # a rule must return a scalar of samples
         @test_throws ArgumentError lower(Unindexed()(f), (:, :), (0, 0))
-        # a rule must expand the components of its call
+        # tensor-valued calls must have a component form
         @test_throws ArgumentError lower(Unexpanded()(f)[1], (:, :), (0, 0))
         @test_throws ArgumentError lower(ξ³ * f, (:,), (0,))
     end

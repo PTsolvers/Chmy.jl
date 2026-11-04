@@ -46,22 +46,17 @@ function checkranks(::Curl, args::NTuple{N, DTerm}) where {N}
     return
 end
 
-# the rules read the components of the argument through its component form, which checks the dimensions of packs
+# the component `I` of the gradient differentiates the component `tail(I)` of the argument along the axis `first(I)`
+component(grad::Gradient, (t,)::Tuple{DTerm}, I) = grad.op[first(I)](component(t, Base.tail(I)))
 
-# the gradient differentiates the component `tail(comps)` of the argument along the axis `first(comps)`
-function lower_rule(grad::Gradient, args, comps, face, x)
-    t = components(only(args), length(x))
-    return grad.op[first(comps)](t[Base.tail(comps)...])
+function evaluate(divg::Divergence, (t,)::Tuple{DTerm}, dims)
+    return pack(I -> +((divg.op[i](t[i, I...]) for i in 1:dims)...), Kind.None(), tensorrank(t) - 1, dims)
 end
 
-function lower_rule(divg::Divergence, args, comps, face, x)
-    t = components(only(args), length(x))
-    return +((divg.op[i](t[i, comps...]) for i in eachindex(x))...)
-end
-
-function lower_rule(curl::Curl, args, (i,), face, x)
-    length(x) == 3 || throw(ArgumentError(LazyString("curl is only supported for 3D vector fields, got dimension ", length(x))))
-    v = components(only(args), 3)
-    j, k = mod1(i + 1, 3), mod1(i + 2, 3)
-    return curl.op[j](v[k]) - curl.op[k](v[j])
+function evaluate(curl::Curl, (v,)::Tuple{DTerm}, dims)
+    dims == 3 || throw(ArgumentError(LazyString("curl is only supported for 3D vector fields, got dimension ", dims)))
+    return pack(Kind.None(), 1, dims) do (i,)
+        j, k = mod1(i + 1, 3), mod1(i + 2, 3)
+        curl.op[j](v[k]) - curl.op[k](v[j])
+    end
 end

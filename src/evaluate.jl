@@ -1,15 +1,22 @@
 """
     evaluate(term)
     evaluate(op, args)
+    evaluate(op, args, dims)
 
 Rebuild `term` bottom-up through the canonical constructors. Terms built with operators, `getindex`, and `pack` are
 already canonical, i.e. the representative of their class under the algebraic and tensor rules, so `evaluate` is
 only needed for terms assembled from raw parts, e.g. `Literal(2.0)`.
 
 The second method is the rule of the call `op(args...)` with canonical `args`, applied every time the call is
-constructed: it returns the canonical form of the call, or `nothing` to keep the call as is. The rules of a function
+constructed: it returns the canonical form of the call, or `nothing` if no rule applies, in which case a function of
+literals is evaluated numerically, e.g. `sin(Literal(0))`, and other calls are kept as they are. The rules of a function
 `f` are methods of `evaluate(::typeof(f), args)`, and the rules of other operators are methods of
 `evaluate(::MyOperator, args)`. A rule may construct any term except the call `op(args...)` itself.
+
+The third method is the rule of the call in `dims` dimensions, with its tensor arguments in component form, applied
+when the call is constructed with tensors in component form, see [`pack`](@ref), and when it is lowered. It returns
+the call in component form, a [`pack`](@ref) or a scalar, or `nothing`, e.g. for the trace or the divergence. By
+default, tensor-valued calls are evaluated with the rules of their components, see [`component`](@ref).
 """
 function evaluate(term::DTerm)::DTerm
     return @match term begin
@@ -25,8 +32,39 @@ end
 evaluate(::Operator, args) = nothing
 evaluate(op::Fun, args) = evaluate(op.f, args)
 
-# functions of literals are evaluated numerically
-evaluate(f, args) = fold_literals(f, args)
+# tensor-valued calls are evaluated component by component if every component has a rule
+function evaluate(op, args, dims)
+    rank = tensorrank(op, args)
+    rank > 0 || return nothing
+    data = DTerm[]
+    complete = visit_components(Kind.None(), dims, rank) do I, state
+        c = component(op, args, I)::Union{Nothing, DTerm}
+        isnothing(c) || push!(data, c)
+        return state && !isnothing(c)
+    end
+    return complete ? makepack(rank, dims, Kind.None(), Tuple(data)) : nothing
+end
+evaluate(op::Fun, args, dims) = evaluate(op.f, args, dims)
+
+"""
+    component(op, args, I)
+
+The rule of the component `I` of the call `op(args...)` with canonical `args`, applied every time the component is
+constructed, e.g. `grad(u)[1, 2]`: it returns the component, or `nothing` to keep the component of the call. These
+rules hold in any number of dimensions, e.g. the component `(i, j)` of the gradient of `u` is the derivative of `u[j]`
+along the axis `i`; components depending on the number of dimensions are evaluated once it is known, see
+[`evaluate`](@ref), e.g. the trace or the divergence. A rule may construct any term except the component
+`op(args...)[I...]` itself.
+"""
+component(op, args, I) = nothing
+component(op::Fun, args, I) = component(op.f, args, I)
+
+# functions have no rules by default
+evaluate(f, args) = nothing
+
+# functions of literals are evaluated numerically, other operators are not
+fold_literals(::Operator, args) = nothing
+fold_literals(op::Fun, args) = fold_literals(op.f, args)
 
 function fold_literals(f, args)
     (!isempty(args) && all(isliteral, args)) || return nothing
@@ -51,18 +89,13 @@ evaluate(op::BroadcastedFun, args) = all(x -> tensorrank(x) == 0, args) ? makeca
 
 # arithmetic
 
-# sums and differences collect like terms, products and powers collect the powers of like factors, and the remaining
-# functions of literals are evaluated numerically
+# sums and differences collect like terms, and products and powers collect the powers of like factors, both read
+# from the raw call, e.g. `a - b` as the terms `a` and `-b`
 for (f, rule) in ((:+, :sum_rule), (:-, :sum_rule), (:*, :product_rule), (:/, :product_rule), (:^, :product_rule))
-    @eval evaluate(::typeof($f), args) = arithmetic($rule, Fun($f), args)
-end
-
-function arithmetic(rule, op, args)
-    raw = makecall_unchecked(op, args)
-    term = rule((raw,), tensorrank(raw))
-    # the collected terms are calls of functions
-    iscall(term) || return term
-    return something(fold_literals(operation(term).f, arguments(term)), term)
+    @eval function evaluate(::typeof($f), args)
+        raw = makecall_unchecked(Fun($f), args)
+        return $rule((raw,), tensorrank(raw))
+    end
 end
 
 # tensor products
@@ -161,8 +194,16 @@ antisymmetric_part(::Kind.Alt, a) = a
 antisymmetric_part(::Kind.None, a) = nothing
 
 const MatrixFunction = Union{
-    typeof(adjoint), typeof(sym), typeof(asym), typeof(inv), typeof(cof), typeof(det), typeof(tr), typeof(diag),
-    typeof(gram), typeof(cogram),
+    typeof(adjoint),
+    typeof(sym),
+    typeof(asym),
+    typeof(inv),
+    typeof(cof),
+    typeof(det),
+    typeof(tr),
+    typeof(diag),
+    typeof(gram),
+    typeof(cogram),
 }
 
 evaluate(f::MatrixFunction, (a,)::Tuple{DTerm}) = tensorrank(a) == 0 ? scalar_rule(f, a) : matrix_rule(f, a)
@@ -173,7 +214,7 @@ scalar_rule(::typeof(asym), a) = ZERO
 scalar_rule(::typeof(cof), a) = ONE
 scalar_rule(::Union{typeof(gram), typeof(cogram)}, a) = a^2
 # scalar inverses are powers
-scalar_rule(::typeof(inv), a) = arithmetic(product_rule, Fun(inv), (a,))
+scalar_rule(::typeof(inv), a) = a^Literal(-1)
 
 matrix_rule(f, a) = nothing
 
@@ -208,7 +249,8 @@ end
 # coefficients are exact rationals, or floating-point numbers once a float literal is collected
 const Polynomial = Dict{Dict{DTerm, DTerm}, Real}
 
-rawcall(f, args...) = makecall_unchecked(Fun(f), args)
+# calls of literals that are not collected into the coefficients, e.g. `2^(1//2)`, are evaluated numerically
+rawcall(f, args...) = something(fold_literals(f, args), makecall_unchecked(Fun(f), args))
 
 # real literals are collected into the coefficients, exactly as `Rational{Int}` if possible
 function literal_number(term)

@@ -7,6 +7,10 @@ raw(f, args...) = DExpr(Call(Fun(f)), args)
 
 subterms(t) = isexpr(t) ? DTerm[t; mapreduce(subterms, vcat, children(t); init = DTerm[])] : DTerm[t]
 
+# a function with a rule that doesn't apply to literals: sq(sqrt(x)) = x
+sq(x) = x^2
+Chmy.evaluate(::typeof(sq), (x,)::Tuple{DTerm}) = Chmy.argof(sqrt, x)
+
 @testset "canonical construction" begin
     @scalars a b c
     @vectors u v
@@ -44,6 +48,10 @@ subterms(t) = isexpr(t) ? DTerm[t; mapreduce(subterms, vcat, children(t); init =
         for input in (𝒪(1), 𝒪(2), ℐ(1), ℐ(2))
             @test (@inferred evaluate(input)) === input
         end
+        # functions of literals are evaluated numerically when their rules don't apply
+        @test Fun(sq)(sqrt(a)) ==ₛ a
+        @test value(@inferred Fun(sq)(Literal(3))) === 9
+        @test (@inferred Fun(sq)(a)) ==ₛ raw(sq, a)
         for input in (a^0.5 * a^1.5, (a^0.5)^4.0)
             @test input ==ₛ a^2
             @test value(arguments(input)[2]) === 2
@@ -92,6 +100,8 @@ subterms(t) = isexpr(t) ? DTerm[t; mapreduce(subterms, vcat, children(t); init =
                 (0.5a - a / 2, Literal(0)),
                 (a + 𝒪(0), a),
                 (a * ℐ(0), a),
+                # a single collected term can be a call of any operator
+                (CentralDifference()[1](a) + 0, CentralDifference()[1](a)),
             )
             @test input ==ₛ expected
         end

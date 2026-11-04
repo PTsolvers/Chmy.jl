@@ -505,6 +505,10 @@ function component(term::DTerm, I::NTuple{N, Int}) where {N}
             all(i -> 1 <= i <= dims, I) || throw(BoundsError(term, I))
             pack_entry(kind, dims, data, I)
         end
+        DExpr(Call(op), args) => begin
+            result = component(op, args, I)::Union{Nothing, DTerm}
+            isnothing(result) ? makecomp(term, I) : result
+        end
         _ => makecomp(term, I)
     end
 end

@@ -29,14 +29,30 @@ import LinearAlgebra
         zero = @inferred components(𝒪(1), 2)
         @test isequal(entries(zero), (Literal(0), Literal(0)))
         @test_throws ArgumentError components(A, 2)[1]
+        # a tensor of rank zero is its only entry
+        @test (@inferred pack(I -> a, Kind.None(), 0, 2)) ==ₛ a
         @test_throws BoundsError uc[3]
     end
 
     @testset "expressions" begin
-        # the components of tensor-valued expressions are not expanded
+        # tensor-valued calls are evaluated with the component forms of their arguments
         product = @inferred components(A ⋅ B, 2)
         @test tensorkind(product) == Kind.None()
-        @test product[1, 2] ==ₛ (A ⋅ B)[1, 2]
+        @test product[1, 2] ==ₛ A[1, 1] * B[1, 2] + A[1, 2] * B[2, 2]
+        @test tensorkind(components(sym(A), 2)) == Kind.Sym()
+        @test (@inferred components(inv(A), 2)[1, 1]) ==ₛ A[2, 2] / (A[1, 1] * A[2, 2] - A[1, 2] * A[2, 1])
+        # components of calls not depending on the number of dimensions are read right away, and those depending on
+        # it are kept
+        @test (@inferred (A + B)[1, 2]) ==ₛ A[1, 2] + B[1, 2]
+        @test (@inferred (A + B)[1, 2] - A[1, 2]) ==ₛ B[1, 2]
+        @test (@inferred (a * u)[2]) ==ₛ a * u[2]
+        @test (@inferred A'[1, 2]) ==ₛ A[2, 1]
+        @test (@inferred sym(A)[2, 1]) ==ₛ (1 // 2) * (A[1, 2] + A[2, 1])
+        @test (@inferred asym(A)[1, 1]) ==ₛ Literal(0)
+        @test (@inferred diag(A)[2]) ==ₛ A[2, 2]
+        @test (@inferred (u ⊗ v)[1, 2]) ==ₛ u[1] * v[2]
+        @test (@inferred (sin.(u))[1]) ==ₛ sin(u[1])
+        @test iscomp(@inferred (A ⋅ B)[1, 2])
         # scalars and tensors in component form are returned unchanged
         scalar = sin(a) + b * u[1]
         @test (@inferred components(scalar, 2)) === scalar

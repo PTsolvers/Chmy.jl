@@ -1,6 +1,6 @@
 using Test
 using Chmy
-using Chmy: OverrideSample, candidates, match
+using Chmy: OverrideComponent, OverrideSample, candidates, match
 
 @testset "predicates" begin
     # the position of a ghost segment by the left wall in a corner kernel
@@ -93,9 +93,9 @@ end
 
     @testset "samples" begin
         # samples built independently at the same site are equal, so they compare and hash by content
-        o = operation(override(u, LeftWall => Add(p)))
-        a = OverrideSample(o, (), (0 // 1, 0 // 1), (1 => FaceMatch((-1,), (0 // 1,)),))
-        b = OverrideSample(o, (), (0 // 1, 0 // 1), (1 => FaceMatch((-1,), (0 // 1,)),))
+        c = OverrideComponent(operation(override(u, LeftWall => Add(p))), ())
+        a = OverrideSample(c, (0 // 1, 0 // 1), (1 => FaceMatch((-1,), (0 // 1,)),))
+        b = OverrideSample(c, (0 // 1, 0 // 1), (1 => FaceMatch((-1,), (0 // 1,)),))
         @test a == b
         @test hash(a) == hash(b)
     end

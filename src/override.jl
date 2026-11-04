@@ -338,16 +338,20 @@ struct Override <: Operator
     predicates::Tuple{Vararg{OverridePredicate}}
 end
 
-# an override of the component `comps` sampled at the position `x`, with the matches of the faces that are still to be
-# applied
-struct OverrideSample <: Operator
+# the override of the component `comps` of the overridden term
+struct OverrideComponent <: Operator
     override::Override
     comps::Tuple{Vararg{Int}}
+end
+
+# an override of a component sampled at the position `x`, with the matches of the faces that are still to be applied
+struct OverrideSample <: Operator
+    component::OverrideComponent
     x::Tuple{Vararg{Position}}
     candidates::Tuple{Vararg{Pair{Int, OverrideMatch}}}
 end
 
-tensorrank(::Union{Override, OverrideSample}, args) = tensorrank(first(args))
+tensorrank(::Override, args) = tensorrank(first(args))
 
 function checkranks(o::Override, args::Tuple{Vararg{DTerm}})
     length(args) == 1 + length(o.predicates) || throw(ArgumentError("an override requires one rule per predicate"))
@@ -361,12 +365,18 @@ function checkranks(o::Override, args::Tuple{Vararg{DTerm}})
     return
 end
 
-# the arguments of an override sample are the ones of its override, checked when the override call was built
-checkranks(::OverrideSample, ::Tuple{Vararg{DTerm}}) = nothing
+# the arguments of the overrides of components are the ones of the override, checked when the override call was built
+checkranks(::Union{OverrideComponent, OverrideSample}, ::Tuple{Vararg{DTerm}}) = nothing
+
+# the overridden term, or its overridden component
+overridden(::Override, args) = first(args)
+overridden(c::OverrideComponent, args) = first(args)[c.comps...]
+overridden(s::OverrideSample, args) = overridden(s.component, args)
 
 # an override prints as the overridden term, highlighted in red
-printop(io, ::Union{Override, OverrideSample}, args) = printstyled(io, first(args); color = :red)
-printprec(::Union{Override, OverrideSample}, args) = printprec(first(args))
+const AnyOverride = Union{Override, OverrideComponent, OverrideSample}
+printop(io, o::AnyOverride, args) = printstyled(io, overridden(o, args); color = :red)
+printprec(o::AnyOverride, args) = printprec(overridden(o, args))
 
 # the first matching predicate of every face adjacent to the face of the kernel, faces of lower codimension and lower
 # axes first, ordered by the predicate
@@ -389,19 +399,26 @@ function candidates(predicates, comps, face::Face{N}, x) where {N}
     return Tuple(sort!(result; by = first))
 end
 
-function lower_rule(o::Override, args, comps, face, x)
-    sample = OverrideSample(o, comps, x, candidates(o.predicates, comps, face, x))
-    return lower_rule(sample, args, comps, face, x)
+# the overrides of the components read the whole overridden term, so that rules can couple its components
+component(o::Override, args, I) = OverrideComponent(o, I)(args...)
+
+# a scalar override is the override of its only component
+lower_rule(o::Override, args, face, x) = lower_rule(OverrideComponent(o, ()), args, face, x)
+
+function lower_rule(c::OverrideComponent, args, face, x)
+    sample = OverrideSample(c, x, candidates(c.override.predicates, c.comps, face, x))
+    return lower_rule(sample, args, face, x)
 end
 
-function lower_rule(s::OverrideSample, args, comps, face, x)
+function lower_rule(s::OverrideSample, args, face, x)
     # a sample read elsewhere, e.g. by a mirror rule, is matched again
-    (comps == s.comps && x == s.x) || return lower_rule(s.override, args, comps, face, x)
+    x == s.x || return lower_rule(s.component, args, face, x)
+    comps = s.component.comps
     isempty(s.candidates) && return first(args)[comps...]
     i, m = first(s.candidates)
-    rest = OverrideSample(s.override, s.comps, s.x, Base.tail(s.candidates))(args...)[comps...]
+    rest = OverrideSample(s.component, s.x, Base.tail(s.candidates))(args...)
     rule = args[1 + i]
-    pred = s.override.predicates[i]
+    pred = s.component.override.predicates[i]
     axes = signed_axes(m)
     matched = (; axes, tangents = tangentcomps(pred, comps), dims = length(x))
     data = map(g -> slicedata(resolve_face(g, matched), pred, comps, axes), arguments(rule))
@@ -428,7 +445,7 @@ resolve_face(term::DTerm, face) = iscall(term) ? resolve_face(operation(term), t
 resolve_face(::Operator, term, face) = walkargs(x -> resolve_face(x, face), term)
 
 # nested overrides resolve the data at their own faces
-resolve_face(::Override, term, face) = term
+resolve_face(::AnyOverride, term, face) = term
 
 function resolve_face(::AnyNormal, term, face)
     length(face.axes) == 1 ||
@@ -464,7 +481,10 @@ tensorrank(::OnFace, args) = tensorrank(only(args))
 checkranks(::OnFace, ::Tuple{Vararg{DTerm}}) = nothing
 print_opname(io, ::OnFace) = print(io, '𝒷')
 
-function lower_rule(::OnFace, args, comps, face, x)
+# the boundary data of a tensor are the boundary data of its components
+component(b::OnFace, args, I) = componentwise(b, args, I)
+
+function lower_rule(::OnFace, args, face, x)
     throw(ArgumentError("boundary data `𝒷` can only appear in the data of override rules"))
 end
 
