@@ -50,7 +50,7 @@ end
 component(grad::Gradient, (t,)::Tuple{DTerm}, I) = grad.op[first(I)](component(t, Base.tail(I)))
 
 function evaluate(divg::Divergence, (t,)::Tuple{DTerm}, dims)
-    return pack(I -> +((divg.op[i](t[i, I...]) for i in 1:dims)...), Kind.None(), tensorrank(t) - 1, dims)
+    return pack(I -> sum(divg.op[i](t[i, I...]) for i in 1:dims), Kind.None(), tensorrank(t) - 1, dims)
 end
 
 function evaluate(curl::Curl, (v,)::Tuple{DTerm}, dims)

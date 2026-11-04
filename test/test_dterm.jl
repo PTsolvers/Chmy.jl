@@ -1,6 +1,6 @@
 using Test
 using Chmy
-using Chmy: DExpr, Call, Comp, Inds, Pack, Kind, TensorKind, Tensor, ZeroTensor, IdTensor
+using Chmy: DExpr, AddMul, Call, Comp, Inds, Pack, Kind, TensorKind, Tensor, ZeroTensor, IdTensor
 using Moshi.Data: isa_variant
 
 using Random
@@ -188,9 +188,6 @@ Random.seed!(1234) # deterministic tests
             @test (@inferred isunary(DExpr(Call(Fun(-)), (a,)))) == true
             @test (@inferred isunary(DExpr(Call(Fun(sin)), (a,)))) == true
 
-            @test (@inferred isunaryminus(DExpr(Call(Fun(-)), (a,)))) == true
-            @test (@inferred isunaryminus(DExpr(Call(Fun(sin)), (a,)))) == false
-
             @test (@inferred isuniform(DExpr(Call(Fun(+)), (a, Literal(2), b)))) == false
             @test (@inferred isuniform(DExpr(Call(Fun(+)), (b, Literal(2), b)))) == true
 
@@ -337,6 +334,57 @@ Random.seed!(1234) # deterministic tests
             @test_throws ArgumentError components(expr)
             @test_throws ArgumentError tensorname(expr)
         end
+    end
+
+    @testset "AddMul" begin
+        @scalars a @uniform(b)
+        @vectors v
+        s = a + 2b + 1
+        p = 3a^2 * b
+
+        @test s isa DTerm
+        @test (@inferred isa_variant(s, AddMul))
+        # sums are calls of `+` of their terms in order with the constant last
+        @test (@inferred isexpr(s)) == true
+        @test (@inferred iscall(s)) == true
+        @test (@inferred head(s)) == Call(Fun(+))
+        @test operation(s) == Fun(+)
+        @test isequal(arguments(s), (a, 2b, Literal(1)))
+        @test isequal(children(s), arguments(s))
+        @test (@inferred arity(s)) == 3
+        @test operation(a - b) == Fun(+)
+        @test isequal(arguments(a - b), (a, -b))
+        # products are calls of `*` of their numeric factor and the powers of their bases
+        @test operation(p) == Fun(*)
+        @test isequal(arguments(p), (Literal(3), a^2, b))
+        @test operation(-a) == Fun(*)
+        @test isequal(arguments(-a), (Literal(-1), a))
+        @test (@inferred arity(-a)) == 2
+        @test isequal(arguments(a / b), (a, inv(b)))
+        # a single power is a call of `^`
+        @test operation(a^2) == Fun(^)
+        @test isequal(arguments(a^2), (a, Literal(2)))
+        @test isequal(arguments(inv(a)), (a, Literal(-1)))
+        # the call of the operation with the arguments is the same term
+        for t in (s, p, -a, -2a, -a^2 * b, a^2, inv(a), a - b, a / b, 2 * (a + b), -2 * (a + b))
+            @test operation(t)(arguments(t)...) ==ₛ t
+        end
+
+        @test (@inferred tensorrank(s)) == 0
+        @test (@inferred tensorrank(2v)) == 1
+        @test (@inferred tensorrank(v - a * v)) == 1
+        @test (@inferred isuniform(s)) == false
+        @test (@inferred isuniform(2b + 1)) == true
+        @test (@inferred isuniform(b^a)) == false
+
+        # compared and hashed by content
+        @test s ==ₛ 1 + b + b + a
+        @test hash(s) == hash(1 + b + b + a)
+        @test s !=ₛ a + 2b
+        @test p !=ₛ 2a^2 * b
+        @test (@inferred s <ₛ p) == true
+
+        @test_throws ArgumentError value(s)
     end
 
     @testset "isnegof" begin

@@ -71,6 +71,7 @@ function lowerat(term::DTerm, face::Face{N}, x::NTuple{N, Position})::DTerm wher
             lowerat(inner, face, map(shift, x, s))
         end
         DExpr(Call(op), args) => lower_call(op, args, face, x)
+        AddMul(_, _, _) => mapentries(t -> lowerat(t, face, x), term)
         DExpr(Comp(comps), (arg,)) => begin
             all(c -> 1 <= c <= N, comps) || throw(BoundsError(arg, comps))
             # a component of a call is read from the call in component form

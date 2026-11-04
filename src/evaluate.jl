@@ -24,6 +24,7 @@ function evaluate(term::DTerm)::DTerm
         ZeroTensor(rank) => 𝒪(rank)
         IdTensor(rank) => ℐ(rank)
         DExpr(head, args) => maketerm(head, map(evaluate, args))
+        AddMul(_, _, _) => mapentries(evaluate, term)
         _ => term
     end
 end
@@ -89,14 +90,14 @@ evaluate(op::BroadcastedFun, args) = all(x -> tensorrank(x) == 0, args) ? makeca
 
 # arithmetic
 
-# sums and differences collect like terms, and products and powers collect the powers of like factors, both read
-# from the raw call, e.g. `a - b` as the terms `a` and `-b`
-for (f, rule) in ((:+, :sum_rule), (:-, :sum_rule), (:*, :product_rule), (:/, :product_rule), (:^, :product_rule))
-    @eval function evaluate(::typeof($f), args)
-        raw = makecall_unchecked(Fun($f), args)
-        return $rule((raw,), tensorrank(raw))
-    end
-end
+# sums collect the coefficients of like terms, and products the powers of like bases, see `sumof` and `prodof`; the
+# arguments of `+`, `*` and `^` can be vectors, so that sums and products are rebuilt without specialising on their number
+evaluate(::typeof(+), args) = sumof(0, map(a -> a => 1, args), tensorrank(first(args)))
+evaluate(::typeof(-), (a,)::Tuple{DTerm}) = scaled(-1, a)
+evaluate(::typeof(-), (a, b)::Tuple{DTerm, DTerm}) = sumof(0, (a => 1, b => -1), tensorrank(a))
+evaluate(::typeof(*), args) = prodof(1, map(a -> a => ONE, args), maximum(tensorrank, args))
+evaluate(::typeof(/), (a, b)::Tuple{DTerm, DTerm}) = prodof(1, (a => ONE, b => Literal(-1)), tensorrank(a))
+evaluate(::typeof(^), (a, p)) = power(a, p)
 
 # tensor products
 
@@ -153,16 +154,20 @@ function matrix_kind(a)
         Tensor(_, _, kind, _) => kind
         ZeroTensor(_) || IdTensor(_) => Kind.Diag()
         DExpr(Call(inner), (base,)) => projection_kind(inner, base)
+        # scalar multiples preserve symmetry, and sums keep the symmetry common to their terms
+        AddMul(_, _, dict) => mapreduce(matrix_kind, common_kind, Iterators.filter(k -> tensorrank(k) > 0, dict.keys))
         _ => Kind.None()
     end
 end
+
+common_kind(a::TensorKind, b::TensorKind) = a == b ? a : Kind.None()
+common_kind(::Kind.Diag, b::Kind.Sym) = b
+common_kind(a::Kind.Sym, ::Kind.Diag) = a
 
 projection_kind(op::Fun, base) = projection_kind(op.f, base)
 projection_kind(op, base) = Kind.None()
 projection_kind(::typeof(sym), base) = Kind.Sym()
 projection_kind(::typeof(asym), base) = Kind.Alt()
-# negation preserves symmetry
-projection_kind(::typeof(-), base) = matrix_kind(base)
 # cofactors preserve symmetry, but not antisymmetry
 projection_kind(::typeof(cof), base) = cofactor_kind(matrix_kind(base))
 cofactor_kind(kind::Union{Kind.Sym, Kind.Diag}) = kind
@@ -242,303 +247,182 @@ function matrix_rule(::typeof(diag), a)
     return isstaticzero(a) || matrix_kind(a) == Kind.Alt() ? 𝒪(1) : nothing
 end
 
-# polynomial collection
+# sums and products
 
-# the polynomial is reconstructed with raw calls, which are canonical by construction
+# coefficients are exact rationals, or floating-point and complex numbers
+exact(x::Union{Integer, Rational}) = Rational{Int}(x)
+exact(x::Number) = x
 
-# coefficients are exact rationals, or floating-point numbers once a float literal is collected
-const Polynomial = Dict{Dict{DTerm, DTerm}, Real}
+ispositive(x::Real) = x > 0
+ispositive(x::Number) = false
+isnegative(x::Real) = x < 0
+isnegative(x::Number) = false
 
-# calls of literals that are not collected into the coefficients, e.g. `2^(1//2)`, are evaluated numerically
-rawcall(f, args...) = something(fold_literals(f, args), makecall_unchecked(Fun(f), args))
+# the numeric power `x ^ p`, exact for integer powers
+numpow(x, p) = isinteger(p) ? exact(x)^Int(p) : exact(x)^p
 
-# real literals are collected into the coefficients, exactly as `Rational{Int}` if possible
-function literal_number(term)
-    return @match term begin
-        Literal(x) => real_coefficient(canonical_number(x))
-        _ => nothing
+# the term `t` scaled by the number `c`, and the power `t ^ p`
+scaled(c, t) = prodof(c, (t => ONE,), tensorrank(t))
+power(t, p) = prodof(1, (t => p,), tensorrank(t))
+
+# the entries of the dictionary `d` sorted by their keys, with the values mapped by `f`
+function sorteddict(d, f = identity)
+    entries = sort!(collect(d); by = first, lt = <ₛ)
+    return LittleDict(DTerm[first(e) for e in entries], DTerm[f(last(e)) for e in entries])
+end
+
+# a sum is a call of `+` of its terms in order with the constant last, and a product is a call of `*` of its numeric
+# factor and the powers of its bases, or a call of `^` if it is a single power, which would otherwise be its own argument
+ispower(term) = isprod(term) && isone(term.coeff) && length(term.dict) == 1
+addmul_operation(term) = ispower(term) ? Fun(^) : Fun(term.op)
+
+function addmul_arguments(term)
+    (; op, coeff, dict) = term
+    if op === (+)
+        args = DTerm[isstaticone(v) ? k : scaled(value(v), k) for (k, v) in dict]
+        iszero(coeff) || push!(args, canonical_literal(coeff))
+        return args
+    end
+    ispower(term) && return DTerm[only(dict.keys), only(dict.vals)]
+    args = DTerm[isstaticone(p) ? b : power(b, p) for (b, p) in dict]
+    isone(coeff) || pushfirst!(args, canonical_literal(coeff))
+    return args
+end
+
+# the sum or the product with `f` applied to its terms or to its bases and powers, for maps commuting with the numeric
+# coefficients, e.g. lowering, so that the arguments aren't built
+mapentries(f, term) = mapentries(f, term.op, term)
+
+function mapentries(f, ::typeof(+), term)
+    (; coeff, dict) = term
+    keys = DTerm[f(k) for k in dict.keys]
+    all(i -> keys[i] === dict.keys[i], eachindex(keys)) && return term
+    return sumof(coeff, zip(keys, map(value, dict.vals)), tensorrank(first(keys)))
+end
+
+function mapentries(f, ::typeof(*), term)
+    (; coeff, dict) = term
+    keys, vals = DTerm[f(k) for k in dict.keys], DTerm[f(v) for v in dict.vals]
+    all(i -> keys[i] === dict.keys[i] && vals[i] === dict.vals[i], eachindex(keys)) && return term
+    return prodof(coeff, zip(keys, vals), maximum(tensorrank, keys))
+end
+
+# a sum is a key of a sum only if it is scaled, i.e. its coefficient is not ±1
+isunscaled(key, c) = issum(key) && isone(abs(c))
+
+# the canonical sum `coeff + Σ c * t` of the pairs `t => c` with numeric coefficients `c`
+function sumof(coeff, pairs, rank)
+    terms = Dict{DTerm, Number}()
+    c0 = exact(coeff)
+    for (t, c) in pairs
+        c0 = add!(terms, c0, t, exact(c))
+    end
+    # sums with the coefficient ±1 are flattened, all at once so that the result doesn't depend on the order
+    while true
+        unscaled = [k => c for (k, c) in terms if isunscaled(k, c)]
+        isempty(unscaled) && break
+        foreach(((k, _),) -> delete!(terms, k), unscaled)
+        for (k, c) in unscaled
+            c0 = add!(terms, c0, k, c)
+        end
+    end
+    isempty(terms) && return iszero(c0) ? 𝒪(rank) : canonical_literal(c0)
+    if iszero(c0) && length(terms) == 1
+        # a single term is the term itself, or the product with its coefficient
+        k, c = only(terms)
+        return isone(c) ? k : scaled(c, k)
+    end
+    return packed(AddMul(+, canonical_number(c0), sorteddict(terms, canonical_literal), rank))
+end
+
+# add the term `t` with the coefficient `c` to `terms`, and return the constant term
+function add!(terms, c0, t, c)
+    iszero(c) && return c0
+    return @match t begin
+        Literal(x) => c0 + c * exact(x)
+        ZeroTensor(_) => c0
+        # a sum scaled by a number other than ±1 is the product with the number, which keeps the sum as a term with
+        # a positive leading coefficient
+        AddMul(op, _, _) && if op === (+) && !isone(abs(c)) end => add!(terms, c0, scaled(c, t), 1)
+        # the terms of a sum are collected, but not the terms of its scaled sums
+        AddMul(op, s0, dict) && if op === (+) end => begin
+            for (k, v) in dict
+                addentry!(terms, k, c * exact(value(v)))
+            end
+            c0 + c * s0
+        end
+        # the coefficient of a product is collected, a scaled sum is kept as a term
+        AddMul(_, p, dict) && if !isone(p) end => (addentry!(terms, prodof(1, dict, tensorrank(t)), c * p); c0)
+        _ => (addentry!(terms, t, c); c0)
     end
 end
 
-real_coefficient(x::Union{Integer, Rational}) = Rational{Int}(x)
-real_coefficient(x::Real) = x
-real_coefficient(x) = nothing
-
-function integer_power(term)
-    c = literal_number(term)
-    return !isnothing(c) && isinteger(c) ? Int(c) : nothing
-end
-
-function negate_power(power)
-    p = integer_power(power)
-    !isnothing(p) && return Literal(Base.checked_neg(p))
-    @match power begin
-        Literal(x) => return canonical_literal(-x)
-        _ => nothing
-    end
-    return sum_rule((power,), 0, -1 // 1)
-end
-
-function add_exponents(x, y)
-    cx, cy = literal_number(x), literal_number(y)
-    !isnothing(cx) && !isnothing(cy) && return canonical_literal(cx + cy)
-    isliteral(x) && isliteral(y) && return canonical_literal(value(x) + value(y))
-    return sum_rule((x, y), 0)
-end
-
-function multiply_exponents(x, y)
-    x ==ₛ ONE && return y
-    y ==ₛ ONE && return x
-    cx, cy = literal_number(x), literal_number(y)
-    !isnothing(cx) && !isnothing(cy) && return canonical_literal(cx * cy)
-    isliteral(x) && isliteral(y) && return canonical_literal(value(x) * value(y))
-    return product_rule((x, y), 0)
-end
-
-function addpower!(powers, factor, power)
-    power ==ₛ ZERO && return
-    old = get(powers, factor, nothing)
-    combined = isnothing(old) ? power : add_exponents(old, power)
-    if combined ==ₛ ZERO
-        delete!(powers, factor)
+function addentry!(terms, k, c)
+    c = get(terms, k, 0) + c
+    if iszero(c)
+        delete!(terms, k)
     else
-        powers[factor] = combined
+        terms[k] = c
     end
     return
 end
 
-# `addends(f, args, scale)` returns the terms of the sum `f(args...)` with their scales, or `nothing` for other calls
-addends(op::Fun, args, scale) = addends(op.f, args, scale)
-addends(op, args, scale) = nothing
-addends(::typeof(+), args, scale) = map(a -> (a, scale), args)
-addends(::typeof(-), (a,)::Tuple{DTerm}, scale) = ((a, -scale),)
-addends(::typeof(-), (a, b)::Tuple{DTerm, DTerm}, scale) = ((a, scale), (b, -scale))
-
-addends(term::DTerm, scale) = iscall(term) ? addends(operation(term), arguments(term), scale) : nothing
-
-# additive children are canonical, so their terms are already ordered
-# inspect the first coefficient without rebuilding the factor
-function factor_leading_sign(term::DTerm)::Int
-    c = literal_number(term)
-    !isnothing(c) && return c < 0 ? -1 : 1
-    parts = addends(term, 1)
-    isnothing(parts) && return 1
-    first_term, scale = first(parts)
-    return scale * factor_leading_sign(first_term)
-end
-
-# `factor!(f, args, factor, powers, coef, power, p)` collects the factors of the call `factor = f(args...)` raised to
-# `power`, whose integer value is `p` or `nothing`, and returns the coefficient, or `nothing` if the call is a factor
-factor!(op::Fun, args, factor, powers, coef, power, p) = factor!(op.f, args, factor, powers, coef, power, p)
-factor!(op, args, factor, powers, coef, power, p) = nothing
-
-function factor!(::typeof(*), args, factor, powers, coef, power, p)
-    for arg in args
-        coef = collect_monomial!(powers, coef, arg, power)
+# the canonical product `coeff * Π t ^ p` of the pairs `t => p`
+function prodof(coeff, pairs, rank)
+    powers = Dict{DTerm, DTerm}()
+    c = exact(coeff)
+    for (t, p) in pairs
+        c = mul!(powers, c, t, p)
     end
-    return coef
+    iszero(c) && return 𝒪(rank)
+    isempty(powers) && return canonical_literal(c)
+    if length(powers) == 1
+        b, p = only(powers)
+        if p ==ₛ ONE
+            # a single base is the base itself, and negations and ±1 scalings of sums are distributed
+            isone(c) && return b
+            issum(b) && isone(abs(c)) && return sumof(0, (b => c,), rank)
+        end
+    end
+    return packed(AddMul(*, canonical_number(c), sorteddict(powers), rank))
 end
 
-function factor!(::typeof(/), (a, b), factor, powers, coef, power, p)
-    coef = collect_monomial!(powers, coef, a, power)
-    return collect_monomial!(powers, coef, b, negate_power(power))
-end
-
-function factor!(::typeof(inv), (a,), factor, powers, coef, power, p)
-    # scalar inverses are powers
-    tensorrank(a) == 0 || return nothing
-    return collect_monomial!(powers, coef, a, negate_power(power))
-end
-
-factor!(::typeof(^), (a, e), factor, powers, coef, power, p) = collect_monomial!(powers, coef, a, multiply_exponents(power, e))
-
-# integer powers of negations and of sums with a negative leading term are powers of the positive term
-function factor!(::typeof(-), args, factor, powers, coef, power, p)
-    isnothing(p) && return nothing
-    length(args) == 1 && return collect_monomial!(powers, isodd(p) ? -coef : coef, only(args), power)
-    return positive_sum!(factor, powers, coef, power, p)
-end
-factor!(::typeof(+), args, factor, powers, coef, power, p) = isnothing(p) ? nothing : positive_sum!(factor, powers, coef, power, p)
-
-function positive_sum!(factor, powers, coef, power, p)
-    factor_leading_sign(factor) < 0 || return nothing
-    positive = sum_rule((factor,), tensorrank(factor), -1 // 1)
-    return collect_monomial!(powers, isodd(p) ? -coef : coef, positive, power)
-end
-
-function collect_monomial!(powers, coef, factor, power)
-    p = integer_power(power)
-    p == 0 && return coef
-    c = literal_number(factor)
-    !isnothing(c) && !isnothing(p) && return coef * c^p
-
-    @match factor begin
-        ZeroTensor(_) => !isnothing(p) && p > 0 && (coef = zero(coef))
-        DExpr(Call(op), args) => begin
-            result = factor!(op, args, factor, powers, coef, power, p)
-            isnothing(result) || return result
+# multiply `powers` by the factor `t ^ p`, and return the numeric coefficient
+function mul!(powers, c, t, p)
+    isstaticzero(p) && return c
+    isliteral(t) && isliteral(p) && return c * numpow(value(t), value(p))
+    integer = isinteger(p)
+    @match t begin
+        ZeroTensor(_) => return zero(c)
+        # the bases of a product are collected, and its coefficient unless it is negative and the power is not an integer
+        AddMul(op, q, dict) && if op === (*) && (integer || ispositive(q)) end => begin
+            isone(q) || (c = mul!(powers, c, canonical_literal(q), p))
+            for (b, e) in dict
+                c = mul!(powers, c, b, e * p)
+            end
+            return c
+        end
+        # integer powers of sums with a negative leading coefficient are powers of their negation
+        AddMul(op, _, dict) && if op === (+) && integer && isnegative(value(first(dict.vals))) end => begin
+            c *= numpow(-1, value(p))
+            # negated directly, since `scaled` would normalise the sign of the sum again
+            t = sumof(0, (t => -1,), tensorrank(t))
         end
         _ => nothing
     end
-
-    addpower!(powers, factor, power)
-    return coef
+    old = get(powers, t, nothing)
+    p = isnothing(old) ? p : old + p
+    if isstaticzero(p)
+        delete!(powers, t)
+    else
+        powers[t] = p
+    end
+    return c
 end
 
-function collect_terms!(terms, scratch, term, scale)
-    parts = addends(term, scale)
-    if !isnothing(parts)
-        for (part, s) in parts
-            scratch = collect_terms!(terms, scratch, part, s)
-        end
-        return scratch
-    end
-
-    powers = isnothing(scratch) ? Dict{DTerm, DTerm}() : scratch
-    coef = collect_monomial!(powers, scale, term, ONE)
-    if !iszero(coef)
-        stored = getkey(terms, powers, nothing)
-        if isnothing(stored)
-            terms[powers] = coef
-            return nothing
-        end
-        coef += terms[stored]
-        if iszero(coef)
-            delete!(terms, stored)
-        else
-            terms[stored] = coef
-        end
-    end
-    empty!(powers)
-    return powers
-end
-
-sorted_factors(powers) = sort!(collect(powers); lt = (x, y) -> first(x) <ₛ first(y))
-
-function degree(factors)
-    isempty(factors) && return ZERO
-    length(factors) == 1 && return last(factors[1])
-    numeric = 0 // 1
-    for (_, power) in factors
-        p = literal_number(power)
-        isnothing(p) && return sum_rule((power for (_, power) in factors), 0)
-        numeric += p
-    end
-    return canonical_literal(numeric)
-end
-
-struct OrderedMonomial
-    coef::Real
-    factors::Vector{Pair{DTerm, DTerm}}
-    degree::DTerm
-end
-
-function OrderedMonomial(coef, powers)
-    factors = sorted_factors(powers)
-    return OrderedMonomial(coef, factors, degree(factors))
-end
-
-function Base.isless(x::OrderedMonomial, y::OrderedMonomial)
-    x.degree ==ₛ y.degree || return x.degree <ₛ y.degree
-    i, j = length(x.factors), length(y.factors)
-    while i > 0 || j > 0
-        if i == 0
-            return last(y.factors[j]) <ₛ ZERO
-        elseif j == 0
-            return ZERO <ₛ last(x.factors[i])
-        end
-        bx, px = x.factors[i]
-        by, py = y.factors[j]
-        if bx ==ₛ by
-            px ==ₛ py || return py <ₛ px
-            i -= 1
-            j -= 1
-        elseif bx <ₛ by
-            return py <ₛ ZERO
-        else
-            return ZERO <ₛ px
-        end
-    end
-    return false
-end
-
-# reconstruction only passes nonempty argument buffers
-call_expr(op, args) = length(args) == 1 ? args[1] : rawcall(op, args...)
-
-function abs_product_expr(coef, factors, num, den)
-    empty!(num)
-    empty!(den)
-    c = abs(coef)
-    for (base, power) in factors
-        @match power begin
-            Literal(p::Real) && if p < 0
-            end => begin
-                positive = negate_power(power)
-                push!(den, positive ==ₛ ONE ? base : rawcall(^, base, positive))
-            end
-            _ => push!(num, power ==ₛ ONE ? base : rawcall(^, base, power))
-        end
-    end
-    if isempty(num)
-        isempty(den) && return canonical_literal(c)
-        denominator = call_expr(*, den)
-        return isone(c) ? rawcall(inv, denominator) : rawcall(/, canonical_literal(c), denominator)
-    elseif isempty(den)
-        isone(c) || pushfirst!(num, canonical_literal(c))
-        return call_expr(*, num)
-    end
-    ratio = rawcall(/, call_expr(*, num), call_expr(*, den))
-    return isone(c) ? ratio : rawcall(*, canonical_literal(c), ratio)
-end
-
-function product_expr(coef, powers, rank)
-    iszero(coef) && return 𝒪(rank)
-    isempty(powers) && return canonical_literal(coef)
-    expr = abs_product_expr(coef, sorted_factors(powers), DTerm[], DTerm[])
-    return coef < 0 ? rawcall(-, expr) : expr
-end
-
-function sum_expr(terms, rank)
-    isempty(terms) && return 𝒪(rank)
-    if length(terms) == 1
-        powers, coef = first(terms)
-        return product_expr(coef, powers, rank)
-    end
-    ordered = Vector{OrderedMonomial}(undef, length(terms))
-    for (i, (powers, coef)) in enumerate(terms)
-        ordered[i] = OrderedMonomial(coef, powers)
-    end
-    sort!(ordered; rev = true)
-
-    negative = first(ordered).coef < 0
-    num, den, positive = DTerm[], DTerm[], DTerm[]
-    for mon in ordered
-        coef = negative ? -mon.coef : mon.coef
-        expr = abs_product_expr(coef, mon.factors, num, den)
-        if coef < 0
-            expr = rawcall(-, call_expr(+, positive), expr)
-            empty!(positive)
-        end
-        push!(positive, expr)
-    end
-    expr = call_expr(+, positive)
-    return negative ? rawcall(-, expr) : expr
-end
-
-function product_rule(args, rank)
-    powers = Dict{DTerm, DTerm}()
-    coef = 1 // 1
-    for arg in args
-        coef = collect_monomial!(powers, coef, arg, ONE)
-    end
-    return product_expr(coef, powers, rank)
-end
-
-function sum_rule(args, rank, scale = 1 // 1)
-    terms = Polynomial()
-    scratch = nothing
-    for arg in args
-        scratch = collect_terms!(terms, scratch, arg, scale)
-    end
-    return sum_expr(terms, rank)
+# a sum or a product of tensors in component form is in component form
+function packed(term)
+    dims = packed_dims(term.dict.keys)
+    isnothing(dims) && return term
+    return pack(I -> component(term, I), Kind.None(), tensorrank(term), dims)
 end

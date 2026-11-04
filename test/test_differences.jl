@@ -52,10 +52,8 @@ using Chmy
         @test (@inferred lower_rule(BackwardDifference(), (f,))) ==ₛ f[0] - f[-1]
         forward = @inferred lower_rule(ForwardDifference{3}(), (f,))
         @test forward ==ₛ 2 * f[1] - (3 // 2) * f[0] - (1 // 2) * f[2]
-        # the canonical form is `-((1//2) * f[2] - 2 * f[1] + (3//2) * f[0])`, with integer weights stored as `Int`
-        difference, last_term = arguments(only(arguments(forward)))
-        @test value(first(arguments(last(arguments(difference))))) isa Int
-        @test value(first(arguments(last_term))) isa Rational{Int}
+        # integer weights are stored as `Int`
+        @test map(t -> value(first(arguments(t))), arguments(forward)) === (-1 // 2, 2, -3 // 2)
         @test (@inferred lower_rule(BackwardDifference{3}(), (f,))) ==ₛ (1 // 2) * f[-2] + (3 // 2) * f[0] - 2 * f[-1]
         @test (@inferred lower_rule(Difference{3, 2}(), (f,))) ==ₛ 4 * f[2] - (5 // 2) * f[1] - (3 // 2) * f[3]
         @test (@inferred lower_rule(Difference{4, 1 // 2}(), (f,))) ==ₛ f[1] - (1 // 3) * f[-1] - (1 // 2) * f[0] - (1 // 6) * f[2]

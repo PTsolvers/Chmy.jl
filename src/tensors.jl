@@ -19,6 +19,8 @@ function components(t::DTerm, dims::Integer)::DTerm
             isnothing(result) && expansion_error(op)
             components(result, dims)
         end
+        # sums and products of tensors in component form are in component form, or zero tensors
+        AddMul(_, _, _) => components(mapentries(x -> components(x, dims), t), dims)
     end
 end
 
@@ -80,7 +82,8 @@ end
 pack_entry(::Kind.Diag, dims, data, I) = allequal(I) ? data[I[1]] : ZERO
 
 # the component `I` of a call acting on every component of its tensor arguments alike, e.g. broadcasting
-componentwise(op::Operator, args, I) = op(map(x -> tensorrank(x) == 0 ? x : component(x, I), args)...)
+componentwise(op::Operator, args, I) = op(map(x -> componentof(x, I), args)...)
+componentof(x, I) = tensorrank(x) == 0 ? x : component(x, I)
 
 component(op::BroadcastedFun, args, I) = componentwise(Fun(op), args, I)
 for op in (:+, :-, :*, :/, ://, :÷)
@@ -115,7 +118,7 @@ function evaluate(::typeof(×), (a, b)::Tuple{DTerm, DTerm}, dims)
     return makepack_unchecked(1, 3, Kind.None(), data)
 end
 
-evaluate(::typeof(tr), (t,)::Tuple{DTerm}, dims) = +((t[i, i] for i in 1:dims)...)
+evaluate(::typeof(tr), (t,)::Tuple{DTerm}, dims) = sum(t[i, i] for i in 1:dims)
 
 function evaluate(::typeof(det), (t,)::Tuple{DTerm}, dims)
     1 <= dims <= 3 || throw(ArgumentError("determinant is supported only in dimensions 1–3"))
@@ -142,10 +145,10 @@ evaluate(::typeof(inv), (t,)::Tuple{DTerm}, dims) = adj(t) / det(t)
 
 # the Gramian `t' ⋅ t` and the co-Gramian `t ⋅ t'`
 function evaluate(::typeof(gram), (t,)::Tuple{DTerm}, dims)
-    return pack(((i, j),) -> +((t[k, i] * t[k, j] for k in 1:dims)...), Kind.Sym(), 2, dims)
+    return pack(((i, j),) -> sum(t[k, i] * t[k, j] for k in 1:dims), Kind.Sym(), 2, dims)
 end
 function evaluate(::typeof(cogram), (t,)::Tuple{DTerm}, dims)
-    return pack(((i, j),) -> +((t[i, k] * t[j, k] for k in 1:dims)...), Kind.Sym(), 2, dims)
+    return pack(((i, j),) -> sum(t[i, k] * t[j, k] for k in 1:dims), Kind.Sym(), 2, dims)
 end
 
 function linear_index(::Kind.Sym, dims, I)
@@ -254,7 +257,7 @@ function contraction_component(a, b, I, n, dims)
     foreach_component(Kind.None(), dims, n) do K
         push!(terms, a[left..., K...] * b[K..., right...])
     end
-    return +(terms...)
+    return sum(terms)
 end
 
 function contract_components(a, b, n, dims)

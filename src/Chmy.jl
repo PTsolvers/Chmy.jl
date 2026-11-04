@@ -4,6 +4,7 @@ using KernelAbstractions
 
 using Moshi: Data.@data, Data.isa_variant, Match.@match
 
+using OrderedCollections: LittleDict
 using PrettyTables: pretty_table, TextTableFormat
 import Adapt
 
@@ -27,7 +28,7 @@ export head, children, operation, arguments
 export value, argument, arity, isunary, isbinary
 export components, entries, indices
 export tensorrank, tensorname, tensorkind
-export ==ₛ, !=ₛ, <ₛ, isnegof, isstaticzero, isstaticone, isunaryminus
+export ==ₛ, !=ₛ, <ₛ, isnegof, isstaticzero, isstaticone
 export 𝒪, ℐ
 include("dterm.jl")
 

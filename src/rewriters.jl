@@ -77,14 +77,26 @@ end
 (p::Postwalk)(term::DTerm) = Passthrough(p.rule)(walkargs(p, term))
 
 function walkargs(walk, term::DTerm)
-    isexpr(term) || return term
-    args = children(term)
-    for k in eachindex(args)
-        arg = walk(args[k])
-        arg === args[k] && continue
-        return maketerm(head(term), walkargs(walk, args, arg, k))
+    return @match term begin
+        DExpr(head, args) => begin
+            for k in eachindex(args)
+                arg = walk(args[k])
+                arg === args[k] && continue
+                return maketerm(head, walkargs(walk, args, arg, k))
+            end
+            term
+        end
+        AddMul(_, _, _) => walkaddmul(walk, term)
+        _ => term
     end
-    return term
+end
+
+# the arguments of a sum or a product are walked, and it is rebuilt from a vector if one of them changes
+function walkaddmul(walk, term::DTerm)
+    args = addmul_arguments(term)
+    walked = DTerm[walk(a) for a in args]
+    all(i -> walked[i] === args[i], eachindex(args)) && return term
+    return evaluate(addmul_operation(term), walked)::DTerm
 end
 
 # specialize on tuple length only when walk changes one of the children

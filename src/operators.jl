@@ -62,7 +62,7 @@ function maketerm(head::Head, args::Tuple{Vararg{DTerm}})::DTerm
 end
 
 # the number of dimensions of the arguments if all tensor arguments are in component form, and `nothing` otherwise
-function packed_dims(args::NTuple{N, DTerm}) where {N}
+function packed_dims(args)
     dims = nothing
     for x in args
         tensorrank(x) == 0 && continue
@@ -302,8 +302,6 @@ for op in (:gram, :cogram)
 end
 
 # scalar unary operations
-isunaryminus(expr::DTerm) = isunary(expr) && operation(expr) === Fun(-)
-
 Base.:-(arg::DTerm) = makecall(Fun(-), (arg,))
 
 for op in (

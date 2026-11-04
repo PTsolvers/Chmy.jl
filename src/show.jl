@@ -1,7 +1,7 @@
 function Base.show(io::IO, ::MIME"text/plain", v::DTerm)
     return @match v begin
         DExpr(Pack(rank, dims, kind), _) => print_pack_table(io, v, rank, dims, kind)
-        DExpr(_, _) => print(io, "Expression:\n ", v)
+        DExpr(_, _) || AddMul(_, _, _) => print(io, "Expression:\n ", v)
         _ => print(io, v)
     end
 end
@@ -18,7 +18,49 @@ function Base.show(io::IO, v::DTerm)
         DExpr(Comp(comp), (arg,)) => print_indexed(io, arg, comp)
         DExpr(Inds(positions), (arg,)) => print_indexed(io, arg, map(position_name, positions))
         DExpr(Pack(_, dims, _), _) => print_pack(io, v, dims, ())
+        AddMul(_, _, _) => print(io, callform(v))
     end
+end
+
+# sums and products are printed and compiled as raw calls of `+`, `-`, `*`, `/`, `^` and `inv`: the terms of a sum in
+# their order with the constant last, where negative terms are subtracted, and the bases of a product with negative
+# powers in the denominator
+function callform(term::DTerm)
+    return @match term begin
+        AddMul(op, coeff, dict) && if op === (+) end => sum_callform(coeff, dict)
+        AddMul(_, coeff, dict) => signed(isnegative(coeff), monomial_callform(magnitude(coeff), dict))
+    end
+end
+
+rawcall(f, args) = makecall_unchecked(Fun(f), Tuple(args))
+chain(f, args) = length(args) == 1 ? only(args) : rawcall(f, args)
+signed(negative, x) = negative ? rawcall(-, (x,)) : x
+
+# the magnitude of a real coefficient, other numbers are kept
+magnitude(c) = isnegative(c) ? -c : c
+
+function sum_callform(coeff, dict)
+    parts = Tuple{Bool, DTerm}[(isnegative(value(v)), scaled(magnitude(value(v)), k)) for (k, v) in dict]
+    iszero(coeff) || push!(parts, (isnegative(coeff), canonical_literal(magnitude(coeff))))
+    # runs of positive terms are added, and negative terms are subtracted
+    (negative, x), rest = Iterators.peel(parts)
+    run = DTerm[signed(negative, x)]
+    for (negative, x) in rest
+        run = negative ? DTerm[rawcall(-, (chain(+, run), x))] : push!(run, x)
+    end
+    return chain(+, run)
+end
+
+function monomial_callform(c, dict)
+    num, den = DTerm[], DTerm[]
+    for (b, p) in dict
+        negative = isliteral(p) && isnegative(value(p))
+        q = negative ? canonical_literal(-value(p)) : p
+        push!(negative ? den : num, isstaticone(q) ? b : rawcall(^, (b, q)))
+    end
+    isone(c) || pushfirst!(num, canonical_literal(c))
+    isempty(den) && return chain(*, num)
+    return isempty(num) ? rawcall(inv, (chain(*, den),)) : rawcall(/, (chain(*, num), chain(*, den)))
 end
 
 # nested lists of all components, the outer list runs over the first index
@@ -145,6 +187,7 @@ const UNARY_PREC = Base.operator_precedence(:^)
 
 printprec(term::DTerm) = @match term begin
     DExpr(Call(op), args) => printprec(op, args)
+    AddMul(_, _, _) => printprec(callform(term))
     Literal(val) => literalprec(val)
     _ => 0
 end
@@ -196,10 +239,13 @@ function printop(io, op::Union{Fun, BroadcastedFun}, args)
             print_opname(io, op)
             print(io, ' ')
         end
-        print_operand(io, arg, prec)
+        # arithmetic operators are left-associative, so the first operand of the same precedence needs no parentheses
+        print_operand(io, arg, i == 1 && isleftarithmetic(prec) ? prec - 1 : prec)
     end
     return
 end
+
+isleftarithmetic(prec) = prec == Base.operator_precedence(:+) || prec == Base.operator_precedence(:*)
 
 function print_list(io, b, list, e)
     print(io, b)

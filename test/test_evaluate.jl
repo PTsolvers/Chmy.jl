@@ -5,6 +5,7 @@ using Chmy: DExpr, Call, Pack, Kind
 # a call built without the rules
 raw(f, args...) = DExpr(Call(Fun(f)), args)
 
+# the term and all its subterms
 subterms(t) = isexpr(t) ? DTerm[t; mapreduce(subterms, vcat, children(t); init = DTerm[])] : DTerm[t]
 
 # a function with a rule that doesn't apply to literals: sq(sqrt(x)) = x
@@ -54,7 +55,7 @@ Chmy.evaluate(::typeof(sq), (x,)::Tuple{DTerm}) = Chmy.argof(sqrt, x)
         @test (@inferred Fun(sq)(a)) ==ₛ raw(sq, a)
         for input in (a^0.5 * a^1.5, (a^0.5)^4.0)
             @test input ==ₛ a^2
-            @test value(arguments(input)[2]) === 2
+            @test value(last(arguments(input))) === 2
         end
     end
 
@@ -72,6 +73,9 @@ Chmy.evaluate(::typeof(sq), (x,)::Tuple{DTerm}) = Chmy.argof(sqrt, x)
                 (a * b - b * a + 2, Literal(2)),
                 (c + a - b, (a - b) + c),
                 (c - a - b, -(a + b - c)),
+                # negations and ±1 scalings of sums are distributed, other scalings are kept
+                (-(a + b), -a - b),
+                (3 * (a + b) - 2 * (a + b) + c, a + b + c),
                 (b^2 + a * b + a^2, a^2 + a * b + b^2),
                 (a^2 + b^2 + b * a, a^2 + a * b + b^2),
                 ((2 // 3) * a + (1 // 3) * a, a),
@@ -169,22 +173,39 @@ Chmy.evaluate(::typeof(sq), (x,)::Tuple{DTerm}) = Chmy.argof(sqrt, x)
 
     @testset "structure" begin
         @scalars f
-        @test arity(a + b + c) == 3
-        @test isunaryminus(b - a)
-        # products are not distributed
+        # sums are calls of `+` of their terms in order with the constant last
+        @test operation(a + 2b - 1) == Fun(+)
+        @test isequal(arguments(a + 2b - 1), (a, 2b, Literal(-1)))
+        @test isequal(arguments(b - a), (-a, b))
+        # products are calls of `*` with the numeric factor first, and single powers are calls of `^`
+        p = -2 * a^2 / b
+        @test operation(p) == Fun(*)
+        @test isequal(arguments(p), (Literal(-2), a^2, inv(b)))
+        @test operation(a^-2) == Fun(^)
+        @test isequal(arguments(a^-2), (a, Literal(-2)))
+        # products are not distributed, the scaled sum is a factor
         @test 2 * (a + b) !=ₛ 2a + 2b
+        @test isequal(arguments(2 * (a + b)), (Literal(2), a + b))
+        # but negations are
+        @test isequal(arguments(-(a + b)), (-a, -b))
+        # integer powers of sums are powers of the sum with a positive leading coefficient
+        @test isequal(arguments((b - a)^3), (Literal(-1), (a - b)^3))
         # samples are ordered by descending offsets
-        @test isequal(arguments(f[1 // 2] - f[-1 // 2]), (f[1 // 2], f[-1 // 2]))
-        @test isequal(arguments(f[-1] - 2f[0] + f[1]), (f[1] - 2f[0], f[-1]))
+        @test isequal(arguments(f[1 // 2] - f[-1 // 2]), (f[1 // 2], -f[-1 // 2]))
+        @test isequal(arguments(f[-1] - 2f[0] + f[1]), (f[1], -2f[0], f[-1]))
+        # sums and products of tensors in component form are in component form
+        @test ispack(components(A, 2) + 2 * components(A, 2))
+        @test ispack(a * components(A, 2))
     end
 
     @testset "evaluate" begin
         # terms assembled from raw parts are rebuilt in canonical form
         @test (@inferred evaluate(raw(+, b, a))) ==ₛ a + b
+        @test (@inferred evaluate(raw(-, raw(+, a, b)))) ==ₛ -a - b
         @test (@inferred evaluate(raw(*, Literal(0), a))) ==ₛ Literal(0)
         result = @inferred evaluate(raw(sin, raw(+, a, Literal(2.0))))
         @test result ==ₛ sin(a + 2)
-        @test value(arguments(only(arguments(result)))[2]) === 2
+        @test value(last(arguments(only(arguments(result))))) === 2
         @test (@inferred evaluate(raw(tr, raw(⋅, raw(⋅, raw(inv, A), A), A)))) ==ₛ tr(A)
         @test tensorkind(@inferred evaluate(DExpr(Pack(2, 2, Kind.None()), (a, b, b, c)))) == Kind.Sym()
     end
@@ -197,6 +218,7 @@ Chmy.evaluate(::typeof(sq), (x,)::Tuple{DTerm}) = Chmy.argof(sqrt, x)
         corpus = DTerm[
             b + (c + a), c - a - b, b^2 + a * b + a^2, a / (a * b), (a^b)^(2c), (2a)^(-3), c * (b - a),
             (a + b)^2 * (a + b)^-3, -(a - b) * -(b - a), 2.5a + 0.5a, A ⋅ adj(A), det(A) * ℐ(2) - A ⋅ adj(A),
+            2 * (a + b) + c, 2 * (a + b) - (a + b), (2a)^b, (-2a)^(1 // 2), a^b * 2^b, -(2 * (A + 3 * ℐ(2))),
             sym(asym(A)) + asym(A)', cof(components(A, 3))[1, 2], inv(components(S, 2))[1, 2],
             lower(Δ, (↓, :), (1 // 2, 1 // 2)), lower(Δ, (↓, ↓), (1 // 2, 1 // 2)),
             lower(CentralDifference{5}()[1](sin(f) * f), (:,), (0,)),

@@ -17,16 +17,22 @@ function (==ₛ)(a::DTerm, b::DTerm)
         (IdTensor(x), IdTensor(y)) => x == y
         (Index(i), Index(j)) => i == j
         (Coordinate(i), Coordinate(j)) => i == j
-        (DExpr(ah, ac), DExpr(bh, bc)) => begin
-            ah == bh || return false
-            length(ac) == length(bc) || return false
-            for k in eachindex(ac)
-                ac[k] ==ₛ bc[k] || return false
-            end
-            true
-        end
+        (DExpr(ah, ac), DExpr(bh, bc)) => ah == bh && isequal_args(ac, bc)
+        (AddMul(af, ac, ad), AddMul(bf, bc, bd)) =>
+            af === bf &&
+            isequal(ac, bc)::Bool &&
+            isequal_args(ad.keys, bd.keys) &&
+            isequal_args(ad.vals, bd.vals)
         _ => false
     end
+end
+
+function isequal_args(xs, ys)
+    length(xs) == length(ys) || return false
+    for k in eachindex(xs, ys)
+        xs[k] ==ₛ ys[k] || return false
+    end
+    return true
 end
 
 """
@@ -65,6 +71,7 @@ function (<ₛ)(x::DTerm, y::DTerm)
             false
         end
         (DExpr(_, _), DExpr(_, _)) => isless_expr(x, y)
+        (AddMul(_, _, _), AddMul(_, _, _)) => isless_addmul(x, y)
         _ => false # Equal-rank zero and identity tensors.
     end
 end
@@ -77,19 +84,9 @@ end
 """
     isnegof(x, y)
 
-Check whether canonical scalar expressions have equal bodies and opposite outer signs.
+Return `true` if the canonical form of `x + y` is zero, e.g. for `a - b` and `b - a`.
 """
-function isnegof(x::DTerm, y::DTerm)::Bool
-    if isliteral(x) && isliteral(y)
-        return isnegof(value(x), value(y))
-    elseif iscall(x) && isunaryminus(x)
-        return only(arguments(x)) ==ₛ y
-    elseif iscall(y) && isunaryminus(y)
-        return x ==ₛ only(arguments(y))
-    end
-    return false
-end
-isnegof(x::T, y::S) where {T <: Number, S <: Number} = isequal(x, -y)::Bool
+isnegof(x::DTerm, y::DTerm) = isstaticzero(x + y)
 
 """
     𝒪(rank)
@@ -116,6 +113,14 @@ function DTermImpl.DExpr(head::Head, args::NTuple{N, DTerm}) where {N}
         h = hash(args[k], h)
     end
     return DExpr(head, args, rank, h)
+end
+
+function DTermImpl.AddMul(op::Union{typeof(+), typeof(*)}, coeff::Number, dict::LittleDict, rank::Int)
+    h = hash(coeff, hash(op, hash(:AddMul)))
+    for k in eachindex(dict.keys)
+        h = hash(dict.vals[k], hash(dict.keys[k], h))
+    end
+    return AddMul(op, coeff, dict, rank, h)
 end
 
 """
@@ -151,14 +156,14 @@ istensor(term::DTerm) = isa_variant(term, Tensor) || isa_variant(term, ZeroTenso
 
 Return `true` if `term` is a symbolic expression.
 """
-isexpr(term::DTerm) = isa_variant(term, DExpr)
+isexpr(term::DTerm) = isa_variant(term, DExpr) || isa_variant(term, AddMul)
 
 """
     iscall(term)
 
 Return `true` if `term` is a call expression.
 """
-iscall(term::DTerm) = isa_variant(term, DExpr) && isa_variant(term.head, Call)
+iscall(term::DTerm) = isa_variant(term, AddMul) || (isa_variant(term, DExpr) && isa_variant(term.head, Call))
 
 """
     iscomp(term)
@@ -181,6 +186,10 @@ Return `true` if `term` is a tensor in component form, see [`pack`](@ref).
 """
 ispack(term::DTerm) = isa_variant(term, DExpr) && isa_variant(term.head, Pack)
 
+# sums and products are stored as `AddMul`, see `addmul_operation`
+issum(term::DTerm) = isa_variant(term, AddMul) && term.op === (+)
+isprod(term::DTerm) = isa_variant(term, AddMul) && term.op === (*)
+
 """
     head(term)
 
@@ -189,6 +198,7 @@ Return the head of an expression.
 function head(term::DTerm)
     return @match term begin
         DExpr(head, _) => head
+        AddMul(_, _, _) => Call(operation(term))
         _ => throw(ArgumentError("only expressions have a head"))
     end
 end
@@ -201,6 +211,7 @@ Return the tuple of children of an expression.
 function children(term::DTerm)
     return @match term begin
         DExpr(_, args) => args
+        AddMul(_, _, _) => arguments(term)
         _ => throw(ArgumentError("only expressions have children"))
     end
 end
@@ -213,6 +224,7 @@ Return the operator of a call expression.
 function operation(term::DTerm)
     return @match term begin
         DExpr(Call(op), _) => op
+        AddMul(_, _, _) => addmul_operation(term)
         _ => throw(ArgumentError("only call expressions have an operation"))
     end
 end
@@ -225,6 +237,7 @@ Return the argument tuple of a call expression.
 function arguments(term::DTerm)
     return @match term begin
         DExpr(Call(_), args) => args
+        AddMul(_, _, _) => Tuple(addmul_arguments(term))
         _ => throw(ArgumentError("only call expressions have arguments"))
     end
 end
@@ -241,6 +254,7 @@ function isuniform(term::DTerm)
         Tensor(_, _, _, uniform) => uniform
         ZeroTensor(_) || IdTensor(_) => true
         DExpr(_, args) => all_isuniform(args)
+        AddMul(_, _, dict) => all(isuniform, Iterators.flatten((dict.keys, dict.vals)))
         _ => false
     end
 end
@@ -326,36 +340,21 @@ end
 
 Return the number of arguments of a call expression.
 """
-function arity(term::DTerm)
-    return @match term begin
-        DExpr(Call(_), args) => length(args)
-        _ => throw(ArgumentError("only function expressions have arity"))
-    end
-end
+arity(term::DTerm) = length(arguments(term))
 
 """
     isunary(term)
 
 Return `true` if `term` is a call expression with one argument.
 """
-function isunary(term::DTerm)
-    return @match term begin
-        DExpr(Call(_), args) => length(args) == 1
-        _ => false
-    end
-end
+isunary(term::DTerm) = iscall(term) && arity(term) == 1
 
 """
     isbinary(term)
 
 Return `true` if `term` is a call expression with two arguments.
 """
-function isbinary(term::DTerm)
-    return @match term begin
-        DExpr(Call(_), args) => length(args) == 2
-        _ => false
-    end
-end
+isbinary(term::DTerm) = iscall(term) && arity(term) == 2
 
 """
     argument(term)
@@ -424,6 +423,7 @@ function tensorrank(term::DTerm)::Int
         Tensor(rank, _, _, _) => rank
         ZeroTensor(rank) || IdTensor(rank) => rank
         DExpr(_, _, rank, _) => rank
+        AddMul(_, _, _, rank, _) => rank
         _ => 0
     end
 end
@@ -509,6 +509,8 @@ function component(term::DTerm, I::NTuple{N, Int}) where {N}
             result = component(op, args, I)::Union{Nothing, DTerm}
             isnothing(result) ? makecomp(term, I) : result
         end
+        # the component of a sum or a product reads the components of its tensor keys
+        AddMul(_, _, _) => mapentries(x -> componentof(x, I), term)
         _ => makecomp(term, I)
     end
 end
@@ -539,6 +541,7 @@ function Base.hash(term::DTerm, h::UInt)::UInt
         ZeroTensor(rank) => hash(rank, hash(:ZeroTensor, h))
         IdTensor(rank) => hash(rank, hash(:IdTensor, h))
         DExpr(_, _, _, cached) => iszero(h) ? cached : hash(cached, h)
+        AddMul(_, _, _, _, cached) => iszero(h) ? cached : hash(cached, h)
     end
 end
 
@@ -554,6 +557,7 @@ function termrank(term)
         IdTensor(_) => 4
         Literal(_) => 5
         DExpr(_, _) => 6
+        AddMul(_, _, _) => 7
     end
 end
 
@@ -591,6 +595,15 @@ function isless_expr(x, y)::Bool
         end
         _ => error("unreachable")
     end
+end
+
+# sums before products, then by their keys, values, and coefficients
+function isless_addmul(x, y)::Bool
+    x.op === y.op || return x.op === (+)
+    dx, dy = x.dict, y.dict
+    isequal_args(dx.keys, dy.keys) || return isless_args(dx.keys, dy.keys)
+    isequal_args(dx.vals, dy.vals) || return isless_args(dx.vals, dy.vals)
+    return isless(x.coeff, y.coeff)::Bool
 end
 
 function isless_args(xs, ys, lt = <ₛ)

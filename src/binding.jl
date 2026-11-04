@@ -39,8 +39,9 @@ end
 function collect_bindings!(keys, term::DTerm)
     @match term begin
         DExpr(Inds(positions), (arg,)) => push!(keys, bindkey(arg, positions))
-        DExpr(Call(_), args) => foreach(t -> collect_bindings!(keys, t), args)
         Tensor(_, _, _, _) || DExpr(Comp(_), _) => push!(keys, term)
+        DExpr(_, args) => foreach(t -> collect_bindings!(keys, t), args)
+        AddMul(_, _, dict) => foreach(t -> collect_bindings!(keys, t), Iterators.flatten((dict.keys, dict.vals)))
         _ => nothing
     end
     return keys

@@ -71,7 +71,7 @@ const Head = HeadImpl.Type
 
 # DTerm definition
 @data DTermImpl begin
-    export Literal, Index, Coordinate, Tensor, IdTensor, ZeroTensor, DExpr
+    export Literal, Index, Coordinate, Tensor, IdTensor, ZeroTensor, DExpr, AddMul
 
     Literal(Number)
     Index(Int)
@@ -87,6 +87,15 @@ const Head = HeadImpl.Type
     struct DExpr
         head::Head
         args::Tuple{Vararg{DTermImpl}}
+        rank::Int
+        hash::UInt
+    end
+    # a sum `coeff + Σ v * k`, mapping the terms `k` to their literal coefficients `v`, or a product `coeff * Π k ^ v`,
+    # mapping the bases `k` to their powers `v`, with the keys sorted by `<ₛ`
+    struct AddMul
+        op::Union{typeof(+), typeof(*)}
+        coeff::Number
+        dict::LittleDict{DTermImpl, DTermImpl, Vector{DTermImpl}, Vector{DTermImpl}}
         rank::Int
         hash::UInt
     end

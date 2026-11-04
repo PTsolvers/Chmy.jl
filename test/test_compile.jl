@@ -5,7 +5,7 @@ using Chmy
     @scalars u g
     @uniform @scalars a
     # samples are bound by the location of their positions, traces by the global positions
-    @test isequal(bindings(a * u[1 // 2, 3 // 2] + u[-1 // 2, 1 // 2]), (a, u[𝓈, 𝓈]))
+    @test isequal(bindings(a * u[1 // 2, 3 // 2] + u[-1 // 2, 1 // 2]), (u[𝓈, 𝓈], a))
     # in the order of the canonical form
     @test isequal(bindings(u[0, 1 // 2] * g[↓, 1]), (g[↓, 𝓅], u[𝓅, 𝓈]))
     # samples at global positions only are their own keys
