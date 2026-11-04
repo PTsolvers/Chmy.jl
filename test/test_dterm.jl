@@ -387,26 +387,6 @@ Random.seed!(1234) # deterministic tests
         @test_throws ArgumentError value(s)
     end
 
-    @testset "isnegof" begin
-        @test (@inferred isnegof(Literal(1), Literal(-1))) == true
-        @test (@inferred isnegof(Literal(1), -Literal(1))) == true
-        @test (@inferred isnegof(Literal(1), Literal(1))) == false
-        @test (@inferred isnegof(Literal(1), Literal(2))) == false
-
-        @scalars a b
-
-        @test (@inferred isnegof(a, -a)) == true
-        @test (@inferred isnegof(-a, a)) == true
-
-        @test (@inferred isnegof(a + b, -(a + b))) == true
-        @test (@inferred isnegof(a + b, -a - b)) == true
-        @test (@inferred isnegof(a + b, a - b)) == false
-
-        @test (@inferred isnegof(a, a)) == false
-        @test (@inferred isnegof(a, b)) == false
-        @test (@inferred isnegof(a, -b)) == false
-    end
-
     @testset "==ₛ" begin
         @scalars a b @uniform(c)
         @vectors P Q

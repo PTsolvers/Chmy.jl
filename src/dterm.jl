@@ -82,13 +82,6 @@ end
 (<ₛ)(x::Operator, y::Operator) = isless(objectid(x), objectid(y))
 
 """
-    isnegof(x, y)
-
-Return `true` if the canonical form of `x + y` is zero, e.g. for `a - b` and `b - a`.
-"""
-isnegof(x::DTerm, y::DTerm) = isstaticzero(x + y)
-
-"""
     𝒪(rank)
 
 Construct symbolic zero tensor of rank `rank`, which is the literal zero for rank zero.

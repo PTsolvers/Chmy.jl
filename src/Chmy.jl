@@ -28,7 +28,7 @@ export head, children, operation, arguments
 export value, argument, arity, isunary, isbinary
 export components, entries, indices
 export tensorrank, tensorname, tensorkind
-export ==ₛ, !=ₛ, <ₛ, isnegof, isstaticzero, isstaticone
+export ==ₛ, !=ₛ, <ₛ, isstaticzero, isstaticone
 export 𝒪, ℐ
 include("dterm.jl")
 

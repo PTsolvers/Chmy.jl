@@ -224,20 +224,10 @@ end
 function isalt(dims, rank, data)
     rank < 2 && return false
     return cartesian(dims, rank) do I, state
-        J = sort(I)
-        i = linear_index(Kind.None(), dims, I)
-        x = data[i]
-        if !allunique(J)
-            return state && isstaticzero(x)
-        else
-            j = linear_index(Kind.None(), dims, J)
-            y = data[j]
-            if iseven(inversion_count(I))
-                return state && x ==ₛ y
-            else
-                return state && isnegof(x, y)
-            end
-        end
+        x = data[linear_index(Kind.None(), dims, I)]
+        allunique(I) || return state && isstaticzero(x)
+        y = data[linear_index(Kind.None(), dims, sort(I))]
+        return state && x ==ₛ (iseven(inversion_count(I)) ? y : -y)
     end
 end
 
