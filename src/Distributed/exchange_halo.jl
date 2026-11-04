@@ -26,25 +26,25 @@ buffer_tuple(bufs::Vector{AbstractArray}, ::Val{K}) where {K} = ntuple(idx -> bu
 
 exchange_backend(arch::DistributedArchitecture) = is_gpu_aware(arch) ? Architectures.get_backend(arch) : CPU()
 
-# post the receives of one side and pack its send buffers
+# start the receives of one side and pack its send buffers
 function post_receives!(ex::Exchanger, side::Side{S}, dim::Dim{D}, arch::DistributedArchitecture,
                         fields::Tuple{Vararg{Field,K}}) where {S,D,K}
     isempty(fields) && return
     nbrank = neighbor(topology(arch), D, S)
     @assert nbrank != MPI.PROC_NULL "no neighbor to communicate"
-    init!(ex, exchange_backend(arch), dim, side, fields)
+    init!(ex, exchange_backend(arch), dim, side, fields, cart_comm(topology(arch)), nbrank)
     for idx in 1:K
-        ex.recv_reqs[idx] = MPI.Irecv!(ex.recv_bufs[idx], cart_comm(topology(arch)); source=nbrank)
+        MPI.Start(ex.recv_reqs[idx])
     end
     copy_halos!(exchange_backend(arch), buffer_tuple(ex.send_bufs, Val(K)), map(f -> get_send_view(side, dim, f), fields))
     return
 end
 
-# post the sends of one side, once its send buffers are packed
-function post_sends!(ex::Exchanger, ::Side{S}, ::Dim{D}, arch::DistributedArchitecture, fields::Tuple{Vararg{Field}}) where {S,D}
+# start the sends of one side, once its send buffers are packed
+function post_sends!(ex::Exchanger, ::Side, ::Dim, ::DistributedArchitecture, fields::Tuple{Vararg{Field,K}}) where {K}
     isempty(fields) && return
-    for idx in eachindex(fields)
-        ex.send_reqs[idx] = MPI.Isend(ex.send_bufs[idx], cart_comm(topology(arch)); dest=neighbor(topology(arch), D, S))
+    for idx in 1:K
+        MPI.Start(ex.send_reqs[idx])
     end
     return
 end
