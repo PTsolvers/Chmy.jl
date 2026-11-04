@@ -29,7 +29,7 @@ include("distributed_architecture.jl")
 include("distributed_grid.jl")
 include("stack_allocator.jl")
 include("communication_views.jl")
-include("task_local_exchanger.jl")
+include("exchanger.jl")
 include("exchange_halo.jl")
 include("gather.jl")
 

@@ -108,6 +108,10 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             end
         end
 
+        @testset "no exchange state without halo exchange" begin
+            @test isnothing(Launcher(arch, grid; outer_width=(1, 1)).exchangers)
+        end
+
         @testset "outer width of 0 only with 0 in the lower dimensions" begin
             g3 = UniformGrid(arch; origin=(T(-1), T(-1), T(-1)), extent=(T(2), T(2), T(2)), dims=(16, 12, 8))
             @test_throws ArgumentError Launcher(arch, g3; outer_width=(4, 0, 2))

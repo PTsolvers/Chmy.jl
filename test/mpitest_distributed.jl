@@ -97,6 +97,12 @@ for backend in TEST_BACKENDS, T in TEST_TYPES
             @test all(isfinite, C_plain)
             @test C_ovl ≈ C_plain
         end
+
+        # an overlapped launcher owns the state of its halo exchanges (one per side); a plain launcher uses the calling task's
+        @testset "exchange state of the launcher" begin
+            @test Launcher(arch, grid; outer_width=(2, 2)).exchangers isa NTuple{2,Chmy.Distributed.Exchanger}
+            @test isnothing(Launcher(arch, grid).exchangers)
+        end
     end
 end
 

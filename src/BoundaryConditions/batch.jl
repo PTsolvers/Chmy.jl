@@ -29,11 +29,12 @@ Apply boundary conditions using a batch set `batch` containing an `AbstractBatch
 end
 
 """
-    bc!(dim::Dim, arch::Architecture, grid::StructuredGrid, batch::Tuple{AbstractBatch,AbstractBatch})
+    bc!(dim::Dim, arch::Architecture, grid::StructuredGrid, batch::Tuple{AbstractBatch,AbstractBatch}; exchangers=nothing)
 
-Apply the boundary conditions of both sides of dimension `dim`, given as a pair of batches (side 1, side 2).
+Apply the boundary conditions of both sides of dimension `dim`, given as a pair of batches (side 1, side 2). `exchangers` is the state
+of the halo exchange on a distributed architecture (ignored here).
 """
-function bc!(dim::Dim, arch::Architecture, grid::SG, batch::Tuple{AbstractBatch,AbstractBatch})
+function bc!(dim::Dim, arch::Architecture, grid::SG, batch::Tuple{AbstractBatch,AbstractBatch}; exchangers=nothing)
     bc!(Side(1), dim, arch, grid, batch[1])
     bc!(Side(2), dim, arch, grid, batch[2])
     return

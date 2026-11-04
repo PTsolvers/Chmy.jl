@@ -11,16 +11,18 @@ using Chmy.BoundaryConditions
 using Chmy.Workers
 
 import Chmy.Architectures: enable_task_sync!, disable_task_sync!, record_event, wait_event
+import Chmy.Distributed: halo_exchangers
 
 using KernelAbstractions
 
 """
-    struct Launcher{Worksize,OuterWidth,Workers}
+    struct Launcher{Worksize,OuterWidth,Workers,Exchangers}
 
 A struct representing a launcher for asynchronous kernel execution.
 """
-struct Launcher{Worksize,OuterWidth,Workers}
+struct Launcher{Worksize,OuterWidth,Workers,Exchangers}
     workers::Workers
+    exchangers::Exchangers # state of the halo exchanges of an overlapped launch on a distributed architecture
 end
 
 """
@@ -49,11 +51,13 @@ function Launcher(arch, grid; outer_width=nothing)
             throw(ArgumentError("an outer width of 0 requires 0 in all lower dimensions, got $outer_width"))
         setup() = activate!(arch; priority=:high)
         workers = Worker(; setup)
+        exchangers = halo_exchangers(arch)
     else
         workers = nothing
+        exchangers = nothing
     end
 
-    return Launcher{worksize,outer_width,typeof(workers)}(workers)
+    return Launcher{worksize,outer_width,typeof(workers),typeof(exchangers)}(workers, exchangers)
 end
 
 Base.@assume_effects :foldable Base.ndims(::Launcher{WorkSize}) where {WorkSize} = length(WorkSize)
@@ -195,7 +199,7 @@ end
                     Base.@_inline_meta
                     D = ndims(grid) - J + 1
                     wait_event(backend, take!(events))
-                    bc!(Dim(D), arch, grid, bc[D])
+                    bc!(Dim(D), arch, grid, bc[D]; exchangers=launcher.exchangers)
                 end
                 KernelAbstractions.synchronize(backend)
             end
