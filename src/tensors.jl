@@ -1,24 +1,35 @@
 """
     components(term, dims)
 
-Return `term` in component form in `dims` spatial dimensions, i.e. a [`pack`](@ref) of the components `term[I...]`.
-Tensor-valued calls are evaluated in `dims` dimensions with the component forms of their arguments, see
-[`evaluate`](@ref), so that nested tensor operations are expanded at once, e.g. `sym(grad(u))`. Scalars, including
-scalar calls of tensors, e.g. `tr(A)`, and tensors already in component form are returned unchanged.
+Return `term` in component form in `dims` spatial dimensions: tensors are a [`pack`](@ref) of their components
+`term[I...]`, and every subterm is expanded the same way. Calls are evaluated in `dims` dimensions with the component
+forms of their arguments, see [`evaluate`](@ref), so that nested operations are expanded at once, e.g. `sym(grad(u))`,
+or scalars `tr(A)` and `divg(grad(u))`. Scalar calls without such a rule are kept with their arguments in component
+form, and tensor-valued calls without a rule throw an error. Terms already in component form are returned unchanged.
 """
 function components(t::DTerm, dims::Integer)::DTerm
     dims > 0 || throw(ArgumentError("dims must be a positive integer"))
-    tensorrank(t) == 0 && return t
+    expand(x) = components(x, dims)
     return @match t begin
-        DExpr(Pack(_, d, _), _) => d == dims ? t : pack_dims_error(d, dims)
-        Tensor(rank, _, kind, _) => pack(I -> makecomp_unchecked(t, I), kind, rank, dims)
+        DExpr(Pack(_, d, _), _) => d == dims ? walkargs(expand, t) : pack_dims_error(d, dims)
+        Tensor(rank, _, kind, _) => pack(I -> component(t, I), kind, rank, dims)
+        # rules build their results from the expanded arguments, and scalar calls without a rule are kept with them
         DExpr(Call(op), args) => begin
-            result = evaluate(op, map(x -> components(x, dims), args), dims)::Union{Nothing, DTerm}
-            isnothing(result) && expansion_error(op)
-            components(result, dims)
+            expanded = map(expand, args)
+            result = evaluate(op, expanded, dims)::Union{Nothing, DTerm}
+            if isnothing(result)
+                tensorrank(t) == 0 || expansion_error(op)
+                result = expanded === args ? t : makecall(op, expanded)
+            end
+            result
         end
         # sums and products of tensors in component form are in component form, or zero tensors
-        AddMul(_, _, _) => components(mapentries(x -> components(x, dims), t), dims)
+        AddMul(_, _, _) => begin
+            mapped = mapentries(expand, t)
+            tensorrank(t) == 0 || ispack(mapped) ? mapped : expand(mapped)
+        end
+        # components are read from their argument in component form
+        _ => walkargs(expand, t)
     end
 end
 

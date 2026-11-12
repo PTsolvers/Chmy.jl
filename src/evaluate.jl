@@ -13,10 +13,11 @@ literals is evaluated numerically, e.g. `sin(Literal(0))`, and other calls are k
 `f` are methods of `evaluate(::typeof(f), args)`, and the rules of other operators are methods of
 `evaluate(::MyOperator, args)`. A rule may construct any term except the call `op(args...)` itself.
 
-The third method is the rule of the call in `dims` dimensions, with its tensor arguments in component form, applied
-when the call is constructed with tensors in component form, see [`pack`](@ref), and when it is lowered. It returns
-the call in component form, a [`pack`](@ref) or a scalar, or `nothing`, e.g. for the trace or the divergence. By
-default, tensor-valued calls are evaluated with the rules of their components, see [`component`](@ref).
+The third method is the rule of the call in `dims` dimensions, with its arguments in component form, applied when the
+call is constructed with tensors in component form, see [`pack`](@ref), and by [`components`](@ref). It returns the
+call in component form, a [`pack`](@ref) or a scalar, e.g. for the trace or the divergence, built from the arguments,
+or `nothing`. By default, tensor-valued calls are evaluated with the rules of their components, see
+[`component`](@ref).
 """
 function evaluate(term::DTerm)::DTerm
     return @match term begin

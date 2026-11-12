@@ -24,6 +24,8 @@ using Chmy
 
     # nested operators are evaluated at once
     @test (@inferred divg(components(grad(a), 2))) ==ₛ d[1](d[1](a)) + d[2](d[2](a))
+    @test (@inferred components(divg(grad(a)), 2)) ==ₛ d[1](d[1](a)) + d[2](d[2](a))
+    @test (@inferred components(grad(divg(u)), 2)[1]) ==ₛ d[1](d[1](u[1]) + d[2](u[2]))
     @test (@inferred lower(divg(grad(a)), (:, :), (0, 0))) ==ₛ lower(d[1](d[1](a)) + d[2](d[2](a)), (:, :), (0, 0))
 
     @test_throws ArgumentError divg(a)

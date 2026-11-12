@@ -7,10 +7,9 @@ evaluated at `x`, which is lowered further. Samples in the expression are relati
 terms that are not sampled are read at `x`, e.g. `f[1//2, 0] - f`. A rule returning a call of its own operator, e.g.
 `op(args...)`, keeps the call and lowers only its arguments. The position `x` is in the frame of [`lower`](@ref):
 relative to the grid point of the kernel along the spanning axes `:` of the face, and to the wall along its sides `↓`
-and `↑`, or a global position. Tensor arguments are in component form, see [`components`](@ref). Calls with a
-component form in the number of dimensions, see [`evaluate`](@ref), are lowered through it instead. Most rules only
-sample relative to `x` and ignore `face` and `x`; the rules that depend on the boundary read them, e.g. overrides.
-Rules of 1D operators can omit `face` and `x`.
+and `↑`, or a global position. Arguments are in component form, see [`components`](@ref), and so is the expression
+built from them. Most rules only sample relative to `x` and ignore `face` and `x`; the rules that depend on the
+boundary read them, e.g. overrides. Rules of 1D operators can omit `face` and `x`.
 """
 function lower_rule end
 
@@ -48,8 +47,8 @@ component(at::At, (t,)::Tuple{DTerm}, I) = makeinds(component(t, I), at.position
     lower(expr, face, x)
 
 Lower the scalar expression `expr`, evaluated at the position `x` next to the `face`, e.g. `(:, :)` in the interior
-or `(↓, :)` by the left wall, into samples of fields, e.g. `f[1//2, 0]`, evaluating calls in component form in
-`length(x)` dimensions, see [`evaluate`](@ref), and expanding the other calls with their [`lower_rule`](@ref). The
+or `(↓, :)` by the left wall, into samples of fields, e.g. `f[1//2, 0]`, expanding `expr` in component form in
+`length(x)` dimensions, see [`components`](@ref), and the remaining calls with their [`lower_rule`](@ref). The
 positions are relative to the grid point of the kernel along the spanning axes `:` of the
 face, and to the wall point along its sides `↓` and `↑`, in the direction of the axis: integer positions are points,
 half-integer positions are segments. A global position `↓`, `↑` or `:` evaluates `expr` on the traces of the fields.
@@ -57,12 +56,12 @@ Samples nested in `expr` shift the position, so `lower(expr, face, x)` equals `l
 terms are kept as they are. The result is in canonical form, so samples multiplied by zero are dropped.
 """
 function lower(expr::DTerm, face::Face{N}, x::NTuple{N, PositionLike}) where {N}
-    return lowerat(expr, face, map(asposition, x))
+    return lowerat(components(expr, N), face, map(asposition, x))
 end
 lower(::DTerm, ::Tuple{}, ::Tuple{}) = lower_nodims_error()
 lower(::DTerm, ::Tuple, ::Tuple) = context_length_error()
 
-# the term evaluated at the position `x`
+# the term in component form evaluated at the position `x`
 function lowerat(term::DTerm, face::Face{N}, x::NTuple{N, Position})::DTerm where {N}
     tensorrank(term) == 0 || lower_rank_error()
     return @match term begin
@@ -72,25 +71,18 @@ function lowerat(term::DTerm, face::Face{N}, x::NTuple{N, Position})::DTerm wher
         end
         DExpr(Call(op), args) => lower_call(op, args, face, x)
         AddMul(_, _, _) => mapentries(t -> lowerat(t, face, x), term)
-        DExpr(Comp(comps), (arg,)) => begin
-            all(c -> 1 <= c <= N, comps) || throw(BoundsError(arg, comps))
-            # a component of a call is read from the call in component form
-            iscall(arg) ? lowerat(component(components(arg, N), comps), face, x) : makeinds(term, x)
-        end
+        # components of calls kept in component form, e.g. `𝐧[1]`, have no value at the evaluation point
+        DExpr(Comp(_), (arg,)) => iscall(arg) ? unknown_component_error(term) : makeinds(term, x)
         Index(_) => index_input_error()
         Coordinate(a) => coordinate_value(a, x)
         _ => makeinds(term, x)
     end
 end
 
-# the call with its tensor arguments in component form is evaluated in `N` dimensions if possible, and expanded with
-# its rule otherwise; the result of the rule is a scalar expression evaluated at `x`, which is lowered further, unless
-# the rule returns a call of its own operator, which is kept with its arguments lowered
+# the call in component form is expanded with its rule; the result of the rule is a scalar expression evaluated at `x`,
+# which is lowered further, unless the rule returns a call of its own operator, which is kept with its arguments lowered
 function lower_call(op, args, face::Face{N}, x) where {N}
-    packed = map(t -> components(t, N), args)
-    evaluated = evaluate(op, packed, N)::Union{Nothing, DTerm}
-    isnothing(evaluated) || return lowerat(evaluated, face, x)
-    term = lower_rule(op, packed, face, x)::DTerm
+    term = lower_rule(op, args, face, x)::DTerm
     tensorrank(term) == 0 || rule_rank_error(op)
     iscall(term) && operation(term) == op && return walkargs(t -> lowerat(t, face, x), term)
     return lowerat(term, face, x)
@@ -110,6 +102,7 @@ coordinate_value(a, p::Global) = throw(ArgumentError(LazyString("coordinates are
 @noinline context_length_error() = throw(ArgumentError("the face and the position must have the same number of dimensions"))
 @noinline lower_rank_error() = throw(ArgumentError("lower requires a scalar expression; select a scalar entry, e.g. expr[1, 2]"))
 @noinline lower_dims_error() = throw(ArgumentError("samples must have as many positions as there are dimensions"))
+@noinline unknown_component_error(term) = throw(ArgumentError(LazyString("the component `", term, "` has no value at the evaluation point")))
 @noinline index_input_error() = throw(ArgumentError("grid indices are produced by lowering and cannot appear in its input, use coordinates instead"))
 @noinline function coordinate_dims_error(a, n)
     throw(ArgumentError(LazyString("coordinate `", Coordinate(a), "` exceeds the number of dimensions ", n)))

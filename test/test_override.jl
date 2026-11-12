@@ -229,6 +229,8 @@ end
         @test_throws ArgumentError lower(override(V, (AnyCorner, Boundary) => 𝐧)[1], (↓, ↓), (0, 0))
         @test_throws ArgumentError lower(override(V, (Boundary, 𝐧) => WallValue(v ⋅ 𝐭))[2], (:, ↓), (0, 0))
         @test_throws ArgumentError lower((g * 𝐧)[1], (:, ↓), (0, 0))
+        # the components of the wall vectors are only known at the matched face
+        @test (@inferred components(g * 𝐧, 2)[2]) ==ₛ g * 𝐧()[2]
     end
 
     @testset "malformed patterns" begin

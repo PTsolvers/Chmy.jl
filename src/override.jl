@@ -212,8 +212,9 @@ isfree(::Union{AnyNormal, AnyTangent}) = false
 istangential(::AnyTangent) = true
 istangential(::Union{Colon, AnyNormal}) = false
 
-# the wall vectors in the data of rules
+# the wall vectors in the data of rules, whose components are only known at the matched face, see `resolve_face`
 tensorrank(::Union{AnyNormal, AnyTangent}, args) = 1
+evaluate(v::Union{AnyNormal, AnyTangent}, args, dims) = pack(I -> makecomp(v(), I), Kind.None(), 1, dims)
 
 printop(io, ::AnyNormal, args) = print(io, '𝐧')
 function printop(io, t::AnyTangent, args)

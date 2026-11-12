@@ -53,7 +53,12 @@ import LinearAlgebra
         @test (@inferred (u ⊗ v)[1, 2]) ==ₛ u[1] * v[2]
         @test (@inferred (sin.(u))[1]) ==ₛ sin(u[1])
         @test iscomp(@inferred (A ⋅ B)[1, 2])
-        # scalars and tensors in component form are returned unchanged
+        # scalar calls of tensors are evaluated in component form, also inside other terms
+        @test (@inferred components(tr(A), 2)) ==ₛ A[1, 1] + A[2, 2]
+        @test (@inferred components(a * tr(A), 2)) ==ₛ a * (A[1, 1] + A[2, 2])
+        @test (@inferred components(tr(A) * u, 2)[1]) ==ₛ (A[1, 1] + A[2, 2]) * u[1]
+        @test (@inferred components(tr(ℐ(2)), 3)) ==ₛ Literal(3)
+        # terms in component form are returned unchanged
         scalar = sin(a) + b * u[1]
         @test (@inferred components(scalar, 2)) === scalar
         uc = components(u, 2)
