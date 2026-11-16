@@ -69,7 +69,7 @@ include("calculus.jl")
 
 include("topology.jl")
 
-export lower_rule, lower, Project
+export lower_rule, Project
 include("lowering.jl")
 
 export Lifted

@@ -297,7 +297,7 @@ function addmul_arguments(term)
 end
 
 # the sum or the product with `f` applied to its terms or to its bases and powers, for maps commuting with the numeric
-# coefficients, e.g. lowering, so that the arguments aren't built
+# coefficients, e.g. sampling, so that the arguments aren't built
 mapentries(f, term) = mapentries(f, term.op, term)
 
 function mapentries(f, ::typeof(+), term)

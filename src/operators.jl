@@ -22,12 +22,10 @@ end
 makecomp(arg::DTerm, comp::Vararg{Int, N}) where {N} = makecomp(arg, comp)
 makecomp_unchecked(arg::DTerm, comp::NTuple{N, Int}) where {N} = DExpr(Comp(comp), (arg,))
 
+# the sample of the scalar `arg` at the positions, lowered in component form in as many dimensions as there are positions
 function makeinds(arg::DTerm, positions::NTuple{N, PositionLike}) where {N}
     tensorrank(arg) == 0 || throw(ArgumentError("only scalars can be arguments to indexing expression"))
-    p = map(asposition, positions)
-    isinds(arg) && throw(ArgumentError("samples cannot be sampled again"))
-    # constants are the same at every position
-    return isconstant(arg) ? arg : makeinds_unchecked(arg, p)
+    return sample(components(arg, N), map(asposition, positions))
 end
 
 asposition(p::Position) = p

@@ -22,32 +22,22 @@ Lifted(op::Operator, axes::Vararg{Integer, N}) where {N} = Lifted(op, axes)
 tensorrank(lf::Lifted, args) = tensorrank(lf.op, args)
 checkranks(lf::Lifted, args::NTuple{N, DTerm}) where {N} = checkranks(lf.op, args)
 
-# a nullary operator standing for its argument in the rule of a lifted operator, so that the samples of the rule are
-# mapped to all axes, and the samples inside the argument are not
+# a nullary operator standing for its argument in the rule of a lifted operator: its sample at the positions of the
+# rule is the sample of the argument at these positions along the lifted `axes`, and at `inds` along the other axes
 struct Placeholder <: Operator
     arg::DTerm
+    inds::Tuple{Vararg{Position}}
+    axes::Tuple{Vararg{Int}}
 end
+
+lower_rule(p::Placeholder, ::Tuple{}, positions::Tuple) = p.arg[insert_positions(p.inds, p.axes, positions)...]
 
 function lower_rule(lf::Lifted, args::Tuple, inds::NTuple{N, Position}) where {N}
     maximum(lf.axes) <= N || throw(ArgumentError("the lifted axes exceed the number of dimensions"))
     # tensor components are not mapped to the lifted axes yet, so only scalars can be lifted
     checkscalar(lf, args)
-    term = lower_rule(lf.op, map(t -> Placeholder(t)(), args), map(a -> inds[a], lf.axes))::DTerm
-    return insert_stencil(term, inds, lf.axes)
+    return lower_rule(lf.op, map(t -> Placeholder(t, inds, lf.axes)(), args), map(a -> inds[a], lf.axes))::DTerm
 end
-
-# replace kD samples `f[p₁, …, pₖ]` with nD samples at `pⱼ` along `axes[j]` and at `inds` along the other axes, and the
-# placeholders with their arguments
-function insert_stencil(term, inds, axes)
-    return @match term begin
-        DExpr(Inds(positions), (arg,)) => makeinds(insert_stencil(arg, inds, axes), insert_positions(inds, axes, positions))
-        DExpr(Call(op), _) => insert_call(op, term, inds, axes)
-        _ => walkargs(t -> insert_stencil(t, inds, axes), term)
-    end
-end
-
-insert_call(p::Placeholder, term, inds, axes) = p.arg
-insert_call(::Operator, term, inds, axes) = walkargs(t -> insert_stencil(t, inds, axes), term)
 
 # the samples of the rule have one position per lifted axis
 function insert_positions(inds::NTuple{N, Position}, axes::NTuple{K, Int}, positions::NTuple{K, Position}) where {N, K}

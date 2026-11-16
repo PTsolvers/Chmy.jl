@@ -27,12 +27,12 @@ using Chmy
     @test (@inferred components(divg(grad(a)), 2)) ==ₛ d[1](d[1](a)) + d[2](d[2](a))
     @test (@inferred components(grad(divg(u)), 2)[1]) ==ₛ d[1](d[1](u[1]) + d[2](u[2]))
     o = ((:, 0), (:, 0))
-    @test (@inferred lower(divg(grad(a))[o...])) ==ₛ lower((d[1](d[1](a)) + d[2](d[2](a)))[o...])
+    @test (@inferred divg(grad(a))[o...]) ==ₛ (d[1](d[1](a)) + d[2](d[2](a)))[o...]
 
     @test_throws ArgumentError divg(a)
     @test_throws ArgumentError curl(A)
     @test_throws ArgumentError curl(components(u, 2))
-    @test_throws ArgumentError lower(curl(u)[1][o...])
+    @test_throws ArgumentError curl(u)[1][o...]
     # tensors in component form must have the same number of dimensions
-    @test_throws DimensionMismatch lower(divg(u + pack([a, a, a]))[o...])
+    @test_throws DimensionMismatch divg(u + pack([a, a, a]))[o...]
 end

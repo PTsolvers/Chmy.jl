@@ -1,7 +1,7 @@
 """
     compile(term, binding; inbounds = false)
 
-Compile the lowered `term` into a function `f(data, I, N)`, where `data` are the values of the `binding`, `I` is the
+Compile `term` into a function `f(data, I, N)`, where `data` are the values of the `binding`, `I` is the
 grid point of the kernel and `N` the number of grid points along each axis. A sample at the coordinate
 `(frame, offset)` reads the index `o + floor(offset)` along its axis, where the origin `o` of the frame is `I[a]` for
 `:`, `1` for `↓`, and `N[a]` for `↑`; traces select the binding, e.g. `g[↓, 𝓈]`, and are not indexed. See
@@ -62,7 +62,6 @@ function toexpr_call(op::Fun, args, b)
 end
 
 function toexpr_inds(arg, positions, b)
-    iscall(arg) && throw(ArgumentError(LazyString("the sample of '", arg, "' must be lowered before compilation")))
     # coordinates are the distance from the lower wall, one less than the index of the point
     if iscoordinate(arg)
         a = value(arg)

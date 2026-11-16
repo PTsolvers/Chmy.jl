@@ -238,12 +238,12 @@ Random.seed!(1234) # deterministic tests
             # samples cannot be sampled again
             @test_throws ArgumentError a[(:, 1 // 2)][(:, 1)]
             @test_throws ArgumentError a[(:, 1 // 2)][(:, 1), (:, 1)]
-            # constants are not sampled, uniform calls are
+            # constants are not sampled, and uniform calls are lowered to constants
             @test b[(:, 1 // 2)] ==ₛ b
             @test Literal(2)[(:, 1 // 2)] ==ₛ Literal(2)
             @tensors 1 @uniform(w)
             @test w[1][(:, 0), (:, 1)] ==ₛ w[1]
-            @test isinds(sin(b)[(:, 1 // 2)])
+            @test sin(b)[(:, 1 // 2)] ==ₛ sin(b)
 
             @test_throws ArgumentError operation(expr)
             @test_throws ArgumentError arguments(expr)

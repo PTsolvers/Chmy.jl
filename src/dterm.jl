@@ -448,10 +448,14 @@ end
 Without indices, return the scalar `term` itself. Otherwise, construct a symbolic tensor component if `term` is not a scalar, respecting symmetric, alternating,
 and diagonal tensor structure. Zero and identity tensors return literal component values, and packed
 tensors return the stored entry.
-If `term` is a scalar, construct a sample of `term` at the absolute `positions`, one per axis: coordinates
-`(frame, offset)`, see [`Coord`](@ref), or the traces `↓`, `↑` and `:`, see [`Trace`](@ref), e.g. `g[↓, (:, 1//2)]`.
-Samples are lowered with [`lower`](@ref). Samples cannot be sampled again, and literals and uniform tensors are not
-sampled. Traces along some axes only, read at the evaluation point along the others, are taken with [`Project`](@ref).
+If `term` is a scalar, sample `term` at the absolute `positions`, one per axis: coordinates `(frame, offset)`, see
+[`Coord`](@ref), or the traces `↓`, `↑` and `:`, see [`Trace`](@ref), e.g. `g[↓, (:, 1//2)]`. The sample is lowered at
+once: `term` is expanded in component form in as many dimensions as there are positions, see [`components`](@ref), and
+its calls with their [`lower_rule`](@ref), into samples of fields, e.g. `divg(grad(u))[(:, 1//2), (:, 1//2)]` is a
+stencil of samples `u[(:, -1//2), (:, 1//2)]`. Literals and uniform tensors are not sampled, and a coordinate is the
+coordinate of the origin of the frame plus the offset, e.g. `ξ¹[(:, 0), :] + 1//2`, or the offset itself in the frame
+of the lower wall. Samples cannot be sampled again, also inside expressions. Traces along some axes only, read at the
+evaluation point along the others, are taken with [`Project`](@ref).
 """
 function Base.getindex(term::DTerm)
     tensorrank(term) == 0 || throw(ArgumentError("number of subscripts not matching tensor rank"))

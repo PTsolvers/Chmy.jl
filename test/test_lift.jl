@@ -40,9 +40,9 @@ end
     @test (@inferred lower_rule(Lifted(op, (1, 2)), (f,), x2)) ==ₛ lower_rule(op, (f,), x2)
     @test (@inferred lower_rule(Lifted(op, (2, 1)), (f,), x2)) ==ₛ f[(:, 0), (:, 1)] - f[(:, -1), (:, 0)]
     @test (@inferred lower_rule(Lifted(op, (3, 1)), (f,), x3)) ==ₛ f[(:, 0), (:, 0), (:, 1)] - f[(:, -1), (:, 0), (:, 0)]
-    # the samples inside the arguments are not mapped to the lifted axes
-    w = g[(↓, 0), (:, 1)]
-    @test lower(Lifted(op, (2, 1))(w * f)[x2...]) ==ₛ w * f[(:, 0), (:, 1)] - w * f[(:, -1), (:, 0)]
+    # the arguments are sampled at the lifted positions, and cannot contain samples
+    @test Lifted(op, (2, 1))(sin(f))[x2...] ==ₛ sin(f[(:, 0), (:, 1)]) - sin(f[(:, -1), (:, 0)])
+    @test_throws ArgumentError Lifted(op, (2, 1))(g[(↓, 0), (:, 1)] * f)[x2...]
 
     @test_throws ArgumentError Lifted(op, ())
     @test_throws ArgumentError Lifted(op, (1, 1))
@@ -57,8 +57,8 @@ end
     @vectors V
     d = CentralDifference()
     x = ((:, 0), (:, 0))
-    @test_throws ArgumentError lower(Lifted(Gradient(d), (2, 1))(f)[1][x...])
-    @test_throws ArgumentError lower(Lifted(Divergence(d), (2, 1))(V)[x...])
+    @test_throws ArgumentError Lifted(Gradient(d), (2, 1))(f)[1][x...]
+    @test_throws ArgumentError Lifted(Divergence(d), (2, 1))(V)[x...]
 end
 
 @testset "lifting at positions" begin

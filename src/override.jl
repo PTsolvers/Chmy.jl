@@ -417,7 +417,7 @@ function lower_rule(s::OverrideSample, args::Tuple, x::Tuple)
     # a sample read elsewhere, e.g. by a mirror rule, is matched again
     x == s.x || return lower_rule(s.component, args, x)
     comps = s.component.comps
-    isempty(s.candidates) && return first(args)[comps...]
+    isempty(s.candidates) && return first(args)[comps...][x...]
     i, m = first(s.candidates)
     rest = OverrideSample(s.component, s.x, Base.tail(s.candidates))(args...)
     rule = args[1 + i]
@@ -427,7 +427,7 @@ function lower_rule(s::OverrideSample, args::Tuple, x::Tuple)
     data = map(g -> slicedata(resolve_face(g, matched), pred, comps, axes), arguments(rule))
     # rules are written in the frame of the outward normal
     oriented(t) = orient(t, comps, axes)
-    return oriented(boundary_rule(operation(rule), oriented(rest), data, m))
+    return oriented(boundary_rule(operation(rule), oriented(rest), data, m))[x...]
 end
 
 # a component changes sign with every index along a mirrored axis
@@ -585,14 +585,14 @@ end
 
 function lower_rule(::WallValue, (u, g)::Tuple{DTerm, DTerm}, i::Coord)
     ξ = distance(i)
-    iszero(ξ) && return g
+    iszero(ξ) && return g[i]
     ξ > 0 && return 2g[wall(i)] - u[mirror(i)]
     throw(ArgumentError(lazy"WallValue can only be applied on the wall or in the ghost region, got ξ = $ξ"))
 end
 
 function lower_rule(::WallDerivative, (u, g)::Tuple{DTerm, DTerm}, i::Coord)
     ξ = distance(i)
-    iszero(ξ) && return u
+    iszero(ξ) && return u[i]
     ξ > 0 && return u[mirror(i)] + 2ξ * g[wall(i)]
     throw(ArgumentError(lazy"WallDerivative can only be applied on the wall or in the ghost region, got ξ = $ξ"))
 end

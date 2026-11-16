@@ -14,7 +14,7 @@ function diffusion(dims)
     # lower in the bulk at cell centres
     locs = ntuple(_ -> 𝓈, length(dims))
     pos = ntuple(_ -> (:, 1 // 2), length(dims))
-    r_l = lower(r_u[pos...])
+    r_l = r_u[pos...]
     # arrays
     u1 = rand(dims...)
     u2 = copy(u1)

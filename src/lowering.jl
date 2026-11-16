@@ -1,12 +1,10 @@
 """
     lower_rule(op, args, inds)
 
-Expand the scalar call `op(args...)` at the absolute positions `inds`, one [`Position`](@ref) per axis, into an
-expression of samples of the arguments at absolute positions, e.g. `f[i + 1//2] - f[i - 1//2]`, which is lowered
-further. The arguments are not lowered, and are in component form, see [`components`](@ref). Terms that are not
-sampled are read at `inds`, e.g. `f[i + 1//2] - f`, and a rule returning a call of its own operator, e.g.
-`op(args...)`, keeps the call and lowers its arguments at `inds`. Rules depending on the boundary read the frames of
-the positions, see [`Coord`](@ref).
+Expand the scalar call `op(args...)` at the absolute positions `inds`, one [`Position`](@ref) per axis, into a scalar
+expression of samples. The arguments are in component form, see [`components`](@ref), and the rule samples them with
+`getindex`, which lowers them in turn, e.g. `f[i + 1//2] - f[i - 1//2]`; a term read at the evaluation point is
+`f[inds...]`. Rules depending on the boundary read the frames of the positions, see [`Coord`](@ref).
 
 The rule of an operator with one argument can be a method of `lower_rule(op, arg::DTerm, inds)`, a rule in one
 dimension a method of `lower_rule(op, args, i::Position)`, and both `lower_rule(op, arg::DTerm, i::Position)`. The
@@ -20,8 +18,8 @@ _lower_rule(op, args::Union{DTerm, Tuple}, (i,)::Tuple{Position}) = lower_rule(o
 _lower_rule(op, (arg,)::Tuple{DTerm}, inds::Tuple{Position}) = lower_rule(op, arg, inds)
 _lower_rule(op, args, inds) = no_rule_error(op, args, inds)
 
-# a pointwise function is the call itself, which is kept, and its arguments are lowered at the evaluation point
-lower_rule(op::Fun, args::Tuple, inds::Tuple) = makecall(op, args)
+# a pointwise function is the function of its arguments sampled at the evaluation point
+lower_rule(op::Fun, args::Tuple, inds::Tuple) = makecall(op, map(a -> a[inds...], args))
 
 """
     Project(element, axis)
@@ -48,54 +46,31 @@ component(p::Project, args, I) = componentwise(p, args, I)
 
 function lower_rule(p::Project, t::DTerm, inds::NTuple{N, Position}) where {N}
     p.axis <= N || throw(ArgumentError(LazyString("the projected axis ", p.axis, " exceeds the number of dimensions ", N)))
-    return makeinds(t, Base.setindex(inds, Trace(p.element), p.axis))
+    return t[Base.setindex(inds, Trace(p.element), p.axis)...]
 end
 
-"""
-    lower(term)
-
-Lower the samples in `term`, e.g. `divg(grad(u))[(:, 1//2), (:, 1//2)]`: the sampled scalar expression is expanded in
-component form in as many dimensions as there are positions, see [`components`](@ref), and its calls with their
-[`lower_rule`](@ref), into samples of fields at absolute positions, e.g. `u[(:, -1//2), (:, 1//2)]`. Uniform terms
-are kept as they are. A coordinate is the sum of the coordinate of the origin of the frame, sampled, e.g.
-`ξ¹[(:, 0), :]`, and the offset, e.g. `ξ¹[(:, 0), :] + 1//2`; it is the offset itself in the frame of the lower wall.
-The result is in canonical form, so samples multiplied by zero are dropped.
-"""
-function lower(term::DTerm)::DTerm
+# the term in component form sampled at the positions `x`: calls are expanded with their rules, constants are kept,
+# and a coordinate is the sum of the coordinate of the origin of the frame and the offset
+function sample(term::DTerm, x::NTuple{N, Position})::DTerm where {N}
     return @match term begin
-        DExpr(Inds(x), (inner,)) => lower_inds(inner, x)
-        AddMul(_, _, _) => mapentries(lower, term)
-        _ => walkargs(lower, term)
-    end
-end
-
-# the expression sampled at the positions `x`
-lower_inds(inner::DTerm, x::Tuple{Vararg{Position}}) = lowerat(components(inner, length(x)), x)
-
-# the term in component form evaluated at the positions `x`
-function lowerat(term::DTerm, x::NTuple{N, Position})::DTerm where {N}
-    tensorrank(term) == 0 || lower_rank_error()
-    return @match term begin
-        DExpr(Inds(s), (inner,)) => begin
-            length(s) == N || lower_dims_error()
-            lowerat(inner, s)
-        end
-        DExpr(Call(op), args) => lower_call(op, args, x)
-        AddMul(_, _, _) => mapentries(t -> lowerat(t, x), term)
+        DExpr(Inds(_), _) => resample_error()
+        DExpr(Call(op), args) => sample_call(op, args, x)
+        AddMul(_, _, _) => mapentries(t -> sample(t, x), term)
         # components of calls kept in component form, e.g. `𝐧[1]`, have no value at the evaluation point
-        DExpr(Comp(_), (arg,)) => iscall(arg) ? unknown_component_error(term) : makeinds(term, x)
+        DExpr(Comp(_), (arg,)) => iscall(arg) ? unknown_component_error(term) : sample_leaf(term, x)
         Coordinate(_) => coordinate_value(term, x)
-        _ => makeinds(term, x)
+        _ => sample_leaf(term, x)
     end
 end
 
-# the call in component form is expanded with its rule; the result of the rule is a scalar expression evaluated at `x`,
-# which is lowered further, unless the rule returns a call of its own operator, which is kept with its arguments lowered
-function lower_call(op, args, x)::DTerm
+# constants are the same at every position
+sample_leaf(term, x) = isconstant(term) ? term : makeinds_unchecked(term, x)
+
+# a call is the scalar of samples returned by its rule
+function sample_call(op, args, x)::DTerm
     term = lower_rule(op, args, x)::DTerm
     tensorrank(term) == 0 || rule_rank_error(op)
-    iscall(term) && operation(term) == op && return walkargs(t -> lowerat(t, x), term)
-    return lowerat(term, x)
+    return term
 end
 
 # a coordinate is the distance from the lower wall in grid units, the coordinate of the origin of the frame plus the
@@ -115,8 +90,7 @@ trace_coordinate(ξ, ::Colon, n) = throw(ArgumentError(LazyString("the coordinat
 origin(ξ, ::Lower, n) = ZERO
 origin(ξ, frame::Union{Colon, Upper}, n) = makeinds_unchecked(ξ, Base.setindex(ntuple(_ -> Trace(:), n), Coord(frame, 0), value(ξ)))
 
-@noinline lower_rank_error() = throw(ArgumentError("lower requires a scalar expression; select a scalar entry, e.g. expr[1, 2]"))
-@noinline lower_dims_error() = throw(ArgumentError("samples must have as many positions as there are dimensions"))
+@noinline resample_error() = throw(ArgumentError("samples cannot be sampled again"))
 @noinline unknown_component_error(term) = throw(ArgumentError(LazyString("the component `", term, "` has no value at the evaluation point")))
 @noinline function coordinate_dims_error(a, n)
     throw(ArgumentError(LazyString("coordinate `", Coordinate(a), "` exceeds the number of dimensions ", n)))

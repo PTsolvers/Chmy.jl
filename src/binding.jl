@@ -28,7 +28,7 @@ bindkey(term::DTerm, positions::Tuple{Vararg{Trace}}) = makeinds_unchecked(term,
 """
     bindings(term)
 
-Returns the tuple of keys of the data that a lowered `term` reads, in the order of their first appearance: the
+Returns the tuple of keys of the data that `term` reads, in the order of their first appearance: the
 locations of the sampled fields, e.g. `u[𝓈, 𝓈]` for `u[(:, 1//2), (↓, 3//2)]`, samples at traces only, e.g.
 `g[↓, :]`, and uniform terms. Coordinates are not bound.
 """
