@@ -13,7 +13,6 @@ function (==ₛ)(a::DTerm, b::DTerm)
             an == bn &&
             ak == bk &&
             au == bu
-        (Index(i), Index(j)) => i == j
         (Coordinate(i), Coordinate(j)) => i == j
         (DExpr(ah, ac), DExpr(bh, bc)) => ah == bh && isequal_args(ac, bc)
         (AddMul(af, ac, ad), AddMul(bf, bc, bd)) =>
@@ -60,7 +59,6 @@ function (<ₛ)(x::DTerm, y::DTerm)
     rx == ry || return rx < ry
 
     return @match (x, y) begin
-        (Index(i), Index(j)) => i < j
         (Coordinate(i), Coordinate(j)) => i < j
         (Literal(a), Literal(b)) => isless(a, b)::Bool
         (Tensor(_, nx, _, _), Tensor(_, ny, _, _)) => begin
@@ -122,13 +120,6 @@ Returns `true` if `term` is a Literal.
 isliteral(term::DTerm) = isa_variant(term, Literal)
 
 """
-    isindex(term)
-
-Return `true` if `term` is a symbolic grid index.
-"""
-isindex(term::DTerm) = isa_variant(term, Index)
-
-"""
     iscoordinate(term)
 
 Return `true` if `term` is a symbolic coordinate.
@@ -166,7 +157,7 @@ iscomp(term::DTerm) = isa_variant(term, DExpr) && isa_variant(term.head, Comp)
 """
     isinds(term)
 
-Return `true` if `term` is a grid indexing expression.
+Return `true` if `term` is a sample, see [`getindex`](@ref).
 """
 isinds(term::DTerm) = isa_variant(term, DExpr) && isa_variant(term.head, Inds)
 
@@ -236,8 +227,7 @@ end
 """
     isuniform(term)
 
-Return `true` for literals, grid indices, uniform named tensors, zero tensors, and
-identity tensors. An expression is uniform if all its children are uniform.
+Return `true` for literals, uniform tensors, and expressions with uniform children.
 """
 function isuniform(term::DTerm)
     return @match term begin
@@ -266,12 +256,12 @@ end
 """
     value(term)
 
-Return the value of a literal or the dimension of a symbolic grid index.
+Return the value of a literal or the axis of a coordinate.
 """
 function value(term::DTerm)
     return @match term begin
-        Literal(val) || Index(val) || Coordinate(val) => val
-        _ => throw(ArgumentError("only literals and grid indices can have a value"))
+        Literal(val) || Coordinate(val) => val
+        _ => throw(ArgumentError("only literals and coordinates can have a value"))
     end
 end
 
@@ -357,7 +347,7 @@ isbinary(term::DTerm) = iscall(term) && arity(term) == 2
 """
     argument(term)
 
-Return the term being indexed by a component, location, or grid indexing expression.
+Return the term of a component or a sample.
 """
 function argument(term::DTerm)
     return @match term begin
@@ -453,25 +443,21 @@ end
 """
     getindex(term::DTerm)
     getindex(term::DTerm, I::Integer...)
-    getindex(term::DTerm, positions::Union{Integer, Rational, Lower, Upper, Colon}...)
+    getindex(term::DTerm, positions::Union{Coord, Trace, Tuple, Lower, Upper, Colon}...)
 
 Without indices, return the scalar `term` itself. Otherwise, construct a symbolic tensor component if `term` is not a scalar, respecting symmetric, alternating,
 and diagonal tensor structure. Zero and identity tensors return literal component values, and packed
 tensors return the stored entry.
-If `term` is a scalar, construct a sample of `term` at `positions` relative to the evaluation point: offsets, which
-must be multiples of `1//2`, or the global positions `↓`, `↑` and `:`. The global positions `↓` and `↑` sample the
-traces of `term` on the lower and upper walls, and `:` its value independent of the axis, e.g. `g[↓, 1//2]`. Samples
-of samples with as many positions compose, e.g. `g[1//2][1//2]` is `g[1]`, and literals and uniform tensors are not
-sampled.
+If `term` is a scalar, construct a sample of `term` at the absolute `positions`, one per axis: coordinates
+`(frame, offset)`, see [`Coord`](@ref), or the traces `↓`, `↑` and `:`, see [`Trace`](@ref), e.g. `g[↓, (:, 1//2)]`.
+Samples are lowered with [`lower`](@ref). Samples cannot be sampled again, and literals and uniform tensors are not
+sampled. Traces along some axes only, read at the evaluation point along the others, are taken with [`Project`](@ref).
 """
 function Base.getindex(term::DTerm)
     tensorrank(term) == 0 || throw(ArgumentError("number of subscripts not matching tensor rank"))
     return term
 end
-function Base.getindex(term::DTerm, I::Vararg{Integer, N}) where {N}
-    tensorrank(term) == 0 && return makeinds(term, I)
-    return component(term, map(Int, I))
-end
+Base.getindex(term::DTerm, I::Vararg{Integer, N}) where {N} = component(term, map(Int, I))
 
 # the component `I` of `term`, respecting the structure of named and packed tensors
 function component(term::DTerm, I::NTuple{N, Int}) where {N}
@@ -510,7 +496,7 @@ function component(term::DTerm, I::NTuple{N, Int}) where {N}
     end
 end
 Base.getindex(term::DTerm, positions::Vararg{PositionLike, N}) where {N} = makeinds(term, positions)
-# samples at global positions only, which are their own binding keys
+# samples at traces only, which would otherwise be ambiguous with the binding keys `term[locations...]`
 Base.getindex(term::DTerm, p::Global, ps::Vararg{Global, N}) where {N} = makeinds(term, (p, ps...))
 
 # hashing DTerms
@@ -530,7 +516,6 @@ function Base.hash(term::DTerm, h::UInt)::UInt
             end
             return hash(x, h)::UInt
         end
-        Index(i) => hash(i, hash(:Index, h))
         Coordinate(i) => hash(i, hash(:Coordinate, h))
         Tensor(rank, name, kind, uniform) => hash(uniform, hash(kind, hash(name, hash(rank, hash(:Tensor, h)))))
         DExpr(_, _, _, cached) => iszero(h) ? cached : hash(cached, h)
@@ -543,12 +528,11 @@ end
 # Ranks preserve the ordering of the static symbolic core.
 function termrank(term)
     return @match term begin
-        Index(_) => 0
-        Coordinate(_) => 1
-        Tensor(_, _, _, _) => 2
-        Literal(_) => 3
-        DExpr(_, _) => 4
-        AddMul(_, _, _) => 5
+        Coordinate(_) => 0
+        Tensor(_, _, _, _) => 1
+        Literal(_) => 2
+        DExpr(_, _) => 3
+        AddMul(_, _, _) => 4
     end
 end
 
@@ -605,12 +589,15 @@ function isless_args(xs, ys, lt = <ₛ)
     return length(xs) < length(ys)
 end
 
-# samples of a field are ordered by descending offsets, so that stencils read `f[1//2] - f[-1//2]`, followed by the
-# global positions
-isless_position(x::Rational{Int}, y::Rational{Int}) = x > y
-isless_position(::Rational{Int}, ::Global) = true
-isless_position(::Global, ::Rational{Int}) = false
-isless_position(x::Global, y::Global) = globalrank(x) < globalrank(y)
+# samples of a field are ordered by the frames of their coordinates, then by descending offsets, so that stencils read
+# `f[(:, 1//2)] - f[(:, -1//2)]`, followed by the traces
+function isless_position(x::Coord, y::Coord)
+    x.frame === y.frame || return globalrank(x.frame) < globalrank(y.frame)
+    return x.offset > y.offset
+end
+isless_position(::Coord, ::Trace) = true
+isless_position(::Trace, ::Coord) = false
+isless_position(x::Trace, y::Trace) = globalrank(x.element) < globalrank(y.element)
 
 globalrank(::Lower) = 0
 globalrank(::Upper) = 1

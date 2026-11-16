@@ -9,12 +9,11 @@ end
 function Base.show(io::IO, v::DTerm)
     return @match v begin
         Literal(val) => print(io, val)
-        Index(i) => print_index(io, i)
         Coordinate(i) => print_coordinate(io, i)
         Tensor(rank, name, _, _) => print_tensor(io, rank, name)
         DExpr(Call(op), args) => printop(io, op, args)
         DExpr(Comp(comp), (arg,)) => print_indexed(io, arg, comp)
-        DExpr(Inds(positions), (arg,)) => print_indexed(io, arg, map(position_name, positions))
+        DExpr(Inds(positions), (arg,)) => print_indexed(io, arg, positions)
         DExpr(Pack(_, dims, _), _) => print_pack(io, v, dims, ())
         AddMul(_, _, _) => print(io, callform(v))
     end
@@ -73,18 +72,6 @@ function print_superscript(io, i::Integer)
     return
 end
 
-function print_index(io, i)
-    return if i == 1
-        print(io, '𝑖')
-    elseif i == 2
-        print(io, '𝑗')
-    elseif i == 3
-        print(io, '𝑘')
-    else
-        print(io, "Index(", i, ')')
-    end
-end
-
 function print_coordinate(io, i)
     printstyled(io, 'ξ'; italic = true)
     return print_superscript(io, i)
@@ -111,12 +98,10 @@ print_opname(io, ::Divergence) = print(io, "divg")
 print_opname(io, ::Curl) = print(io, "curl")
 function print_opname(io, op::Lifted)
     print_opname(io, op.op)
-    foreach(op.axes) do a
-        a < 0 && print(io, '₋')
-        print_subscript(io, abs(a))
-    end
+    foreach(a -> print_subscript(io, a), op.axes)
     return
 end
+print_opname(io, p::Project) = print(io, "Project(", LocationName(p.element), ", ", p.axis, ')')
 
 """
     printop(io, op, args)
@@ -227,8 +212,9 @@ Base.show(io::IO, ::LocationName{Colon}) = print(io, ':')
 
 Base.show(io::IO, l::Located) = print_indexed(io, l.term, map(LocationName, l.locations))
 
-position_name(p::Rational) = stencil_constant(p)
-position_name(p::Global) = LocationName(p)
+# positions print as they are written in samples, `(:, 1//2)` and `↓`
+Base.show(io::IO, c::Coord) = print(io, '(', LocationName(c.frame), ", ", stencil_constant(c.offset), ')')
+Base.show(io::IO, t::Trace) = show(io, LocationName(t.element))
 
 function print_pack_table(io, t, rank, dims, kind)
     print(io, dims, "-D ")

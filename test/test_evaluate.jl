@@ -191,8 +191,8 @@ Chmy.evaluate(::typeof(sq), (x,)::Tuple{DTerm}) = Chmy.argof(sqrt, x)
         # integer powers of sums are powers of the sum with a positive leading coefficient
         @test isequal(arguments((b - a)^3), (Literal(-1), (a - b)^3))
         # samples are ordered by descending offsets
-        @test isequal(arguments(f[1 // 2] - f[-1 // 2]), (f[1 // 2], -f[-1 // 2]))
-        @test isequal(arguments(f[-1] - 2f[0] + f[1]), (f[1], -2f[0], f[-1]))
+        @test isequal(arguments(f[(:, 1 // 2)] - f[(:, -1 // 2)]), (f[(:, 1 // 2)], -f[(:, -1 // 2)]))
+        @test isequal(arguments(f[(:, -1)] - 2f[(:, 0)] + f[(:, 1)]), (f[(:, 1)], -2f[(:, 0)], f[(:, -1)]))
         # sums and products of tensors in component form are in component form
         @test ispack(components(A, 2) + 2 * components(A, 2))
         @test ispack(a * components(A, 2))
@@ -220,8 +220,8 @@ Chmy.evaluate(::typeof(sq), (x,)::Tuple{DTerm}) = Chmy.argof(sqrt, x)
             (a + b)^2 * (a + b)^-3, -(a - b) * -(b - a), 2.5a + 0.5a, A ⋅ adj(A), det(A) * ℐ(2) - A ⋅ adj(A),
             2 * (a + b) + c, 2 * (a + b) - (a + b), (2a)^b, (-2a)^(1 // 2), a^b * 2^b, -(2 * (A + 3 * ℐ(2))),
             sym(asym(A)) + asym(A)', cof(components(A, 3))[1, 2], inv(components(S, 2))[1, 2],
-            lower(Δ, (↓, :), (1 // 2, 1 // 2)), lower(Δ, (↓, ↓), (1 // 2, 1 // 2)),
-            lower(CentralDifference{5}()[1](sin(f) * f), (:,), (0,)),
+            lower(Δ[(↓, 1 // 2), (:, 1 // 2)]), lower(Δ[(↓, 1 // 2), (↓, 1 // 2)]),
+            lower(CentralDifference{5}()[1](sin(f) * f)[(:, 0)]),
         ]
         for t in corpus, s in subterms(t)
             @test (@inferred evaluate(s)) ==ₛ s

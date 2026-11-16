@@ -25,18 +25,14 @@ makecomp_unchecked(arg::DTerm, comp::NTuple{N, Int}) where {N} = DExpr(Comp(comp
 function makeinds(arg::DTerm, positions::NTuple{N, PositionLike}) where {N}
     tensorrank(arg) == 0 || throw(ArgumentError("only scalars can be arguments to indexing expression"))
     p = map(asposition, positions)
-    # samples of samples with as many positions compose like positions in lowering, and constants are not sampled
-    return @match arg begin
-        DExpr(Inds(inner), (base,)) && if length(inner) == N end => makeinds_unchecked(base, map(shift, p, inner))
-        _ => isconstant(arg) ? arg : makeinds_unchecked(arg, p)
-    end
+    isinds(arg) && throw(ArgumentError("samples cannot be sampled again"))
+    # constants are the same at every position
+    return isconstant(arg) ? arg : makeinds_unchecked(arg, p)
 end
 
-asposition(p::Global) = p
-function asposition(p::Union{Integer, Rational})
-    denominator(p) <= 2 || throw(ArgumentError("offsets must be multiples of 1//2"))
-    return Rational{Int}(p)
-end
+asposition(p::Position) = p
+asposition(p::Global) = Trace(p)
+asposition((frame, offset)::Tuple{Global, Union{Integer, Rational}}) = Coord(frame, offset)
 
 makeinds_unchecked(arg::DTerm, positions::NTuple{N, Position}) where {N} = DExpr(Inds(positions), (arg,))
 

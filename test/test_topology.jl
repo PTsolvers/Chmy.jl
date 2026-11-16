@@ -1,6 +1,6 @@
 using Test
 using Chmy
-using Chmy: matches, dim, codim, distance, shift, mirror
+using Chmy: matches, dim, codim, distance, frame, wall, mirror
 
 @testset "faces" begin
     @test dim((↓, :)) == 1
@@ -13,21 +13,23 @@ using Chmy: matches, dim, codim, distance, shift, mirror
 end
 
 @testset "positions" begin
-    # the outward distance from the wall, positive in the ghost region, positions point along the axis
-    @test distance(↓, 1 // 2) == -1 // 2
-    @test distance(↓, -1 // 2) == 1 // 2
-    @test distance(↑, 1 // 2) == 1 // 2
-    @test isnothing(distance(:, 1 // 2))
-    @test isnothing(distance(↓, ↓))
-    # offsets add up, a global position absorbs offsets, and the innermost global position wins
-    @test shift(1 // 2, 1 // 1) == 3 // 2
-    @test shift(1 // 2, ↓) == ↓
-    @test shift(↑, 1 // 2) == ↑
-    @test shift(↑, ↓) == ↓
-    @test shift(↓, (:)) == (:)
-    @test mirror(1 // 2) == -1 // 2
-    @test mirror(↓) == ↑
-    @test mirror(:) == (:)
+    # the outward distance from the wall of the frame, positive in the ghost region, offsets point along the axis
+    @test distance(Coord(↓, 1 // 2)) == -1 // 2
+    @test distance(Coord(↓, -1 // 2)) == 1 // 2
+    @test distance(Coord(↑, 1 // 2)) == 1 // 2
+    @test isnothing(distance(Coord(:, 1 // 2)))
+    @test isnothing(distance(Trace(↓)))
+    # the sides of the face next to the positions, traces are never next to a wall
+    @test map(frame, (Coord(↓, 1), Coord(:, 0), Trace(↑))) == (↓, :, :)
+    # coordinates move along the axis, and traces are constant along it
+    @test Coord(↑, -1 // 2) + 1 == Coord(↑, 1 // 2)
+    @test Coord(:, 0) - 1 // 2 == Coord(:, -1 // 2)
+    @test Trace(↓) + 1 // 2 == Trace(↓)
+    # the point on the wall, and the mirror image through it
+    @test wall(Coord(↑, -3 // 2)) == Coord(↑, 0)
+    @test mirror(Coord(↓, -1 // 2)) == Coord(↓, 1 // 2)
+    # offsets are multiples of 1//2
+    @test_throws ArgumentError Coord(:, 1 // 3)
 end
 
 @testset "wall patterns" begin

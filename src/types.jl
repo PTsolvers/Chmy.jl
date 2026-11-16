@@ -43,14 +43,42 @@ Location on a staggered grid.
 """
 const Location = Union{Point, Segment, Lower, Upper, Colon}
 
-# global positions along an axis: the traces on the lower and upper walls, and values independent of the axis
+# the elements of an axis: the lower wall, the upper wall, and the whole axis
 const Global = Union{Lower, Upper, Colon}
 
-# a position along an axis: a lattice coordinate, or a global position
-const Position = Union{Rational{Int}, Global}
+"""
+    Coord(frame, offset)
 
-# a position as given by users, offsets are converted to `Rational{Int}`
-const PositionLike = Union{Integer, Rational, Global}
+The position at `offset` along an axis from the origin of the `frame`: the grid point of the kernel for `:`, the lower
+wall for `↓`, and the upper wall for `↑`. Integer offsets are points and half-integer offsets are segments, e.g.
+`Coord(↑, -1//2)` is the last segment. Written `(frame, offset)` in samples.
+"""
+struct Coord
+    frame::Global
+    offset::Rational{Int}
+    function Coord(frame::Global, offset::Union{Integer, Rational})
+        denominator(offset) <= 2 || throw(ArgumentError("offsets must be multiples of 1//2"))
+        return new(frame, offset)
+    end
+end
+
+"""
+    Trace(element)
+
+The position without a coordinate along an axis: the trace on the lower wall `↓` or the upper wall `↑`, or the value
+independent of the axis `:`. Written `↓`, `↑` and `:` in samples.
+"""
+struct Trace
+    element::Global
+end
+
+"""
+The absolute position along an axis, a [`Coord`](@ref) or a [`Trace`](@ref).
+"""
+const Position = Union{Coord, Trace}
+
+# a position as given by users: tuples `(frame, offset)` are coordinates, and the elements of the axis are traces
+const PositionLike = Union{Global, Position, Tuple{Global, Union{Integer, Rational}}}
 
 # head of a Chmy expression
 @data HeadImpl begin
@@ -71,10 +99,9 @@ const Head = HeadImpl.Type
 
 # DTerm definition
 @data DTermImpl begin
-    export Literal, Index, Coordinate, Tensor, DExpr, AddMul
+    export Literal, Coordinate, Tensor, DExpr, AddMul
 
     Literal(Number)
-    Index(Int)
     Coordinate(Int)
     struct Tensor
         rank::Int

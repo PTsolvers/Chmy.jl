@@ -1,7 +1,5 @@
 const Side = Union{Lower, Upper}
-const AxisKind = Union{Colon, Side}
-
-const Face{N} = NTuple{N, AxisKind}
+const Face{N} = NTuple{N, Global}
 
 dim(f::Face) = count(==(:), f)
 codim(f::Face) = count(!=(:), f)
@@ -14,24 +12,22 @@ isinterior(face::Face) = codim(face) == 0
 outward(::Lower) = -1
 outward(::Upper) = 1
 
-flip(::Colon) = (:)
-flip(::Lower) = Upper()
-flip(::Upper) = Lower()
+# the side of the face next to a position: the frame of a coordinate, and `:` for traces, which are never next to a wall
+frame(c::Coord) = c.frame
+frame(::Trace) = (:)
 
-# the outward distance of the position `p` from the wall on the side of a face, positive in the ghost region, and
-# `nothing` along the spanning axes of the face and at global positions, which have no distance from the wall
+# the outward distance of a position from the wall of its frame, positive in the ghost region, and `nothing` for the
+# coordinates relative to the grid point and for traces, which have no distance from a wall
+distance(c::Coord) = distance(c.frame, c.offset)
+distance(::Trace) = nothing
 distance(::Colon, p) = nothing
 distance(side::Side, p::Rational{Int}) = outward(side) * p
-distance(::Side, ::Global) = nothing
 
-# the position `p` sampled at `s`: offsets add up, a global position absorbs offsets, and the innermost global
-# position wins
-shift(p::Rational{Int}, s::Rational{Int}) = p + s
-shift(p::Position, s::Global) = s
-shift(p::Global, s::Rational{Int}) = p
+# positions shifted along the axis: coordinates move, and traces are constant along the axis
+Base.:+(c::Coord, s::Union{Integer, Rational}) = Coord(c.frame, c.offset + s)
+Base.:+(t::Trace, ::Union{Integer, Rational}) = t
+Base.:-(p::Position, s::Union{Integer, Rational}) = p + (-s)
 
-# the position in the frame of the reflected axis, and the position, or the side of a face, along the signed axis `a`,
-# reflected if `a` is negative
-mirror(p::Rational{Int}) = -p
-mirror(p::Global) = flip(p)
-mirror(p, a::Int) = a > 0 ? p : mirror(p)
+# the point on the wall of the frame of a coordinate, and the mirror image of the coordinate through it
+wall(c::Coord) = Coord(c.frame, 0)
+mirror(c::Coord) = Coord(c.frame, -c.offset)

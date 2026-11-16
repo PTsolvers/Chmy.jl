@@ -44,30 +44,36 @@ using Chmy
         @test (@inferred stencil_weights(Difference{4, 1 // 2}())) === (-1 // 3, -1 // 2, 1, -1 // 6)
     end
 
+    # stencils at the grid point of the kernel
+    i = Coord(:, 0)
+
     @testset "standard stencils" begin
-        @test (@inferred lower_rule(CentralDifference(), (f,))) ==ₛ (1 // 2) * (f[1] - f[-1])
-        @test (@inferred lower_rule(CentralDifference{5}(), (f,))) ==ₛ (2 // 3) * (f[1] - f[-1]) - (1 // 12) * (f[2] - f[-2])
-        @test (@inferred lower_rule(CentralDifference{7}(), (f,))) ==ₛ (3 // 4) * (f[1] - f[-1]) - (3 // 20) * (f[2] - f[-2]) + (1 // 60) * (f[3] - f[-3])
-        @test (@inferred lower_rule(ForwardDifference(), (f,))) ==ₛ f[1] - f[0]
-        @test (@inferred lower_rule(BackwardDifference(), (f,))) ==ₛ f[0] - f[-1]
-        forward = @inferred lower_rule(ForwardDifference{3}(), (f,))
-        @test forward ==ₛ 2 * f[1] - (3 // 2) * f[0] - (1 // 2) * f[2]
+        @test (@inferred lower_rule(CentralDifference(), f, i)) ==ₛ (1 // 2) * (f[(:, 1)] - f[(:, -1)])
+        @test (@inferred lower_rule(CentralDifference{5}(), f, i)) ==ₛ (2 // 3) * (f[(:, 1)] - f[(:, -1)]) - (1 // 12) * (f[(:, 2)] - f[(:, -2)])
+        @test (@inferred lower_rule(CentralDifference{7}(), f, i)) ==ₛ (3 // 4) * (f[(:, 1)] - f[(:, -1)]) - (3 // 20) * (f[(:, 2)] - f[(:, -2)]) + (1 // 60) * (f[(:, 3)] - f[(:, -3)])
+        @test (@inferred lower_rule(ForwardDifference(), f, i)) ==ₛ f[(:, 1)] - f[(:, 0)]
+        @test (@inferred lower_rule(BackwardDifference(), f, i)) ==ₛ f[(:, 0)] - f[(:, -1)]
+        forward = @inferred lower_rule(ForwardDifference{3}(), f, i)
+        @test forward ==ₛ 2 * f[(:, 1)] - (3 // 2) * f[(:, 0)] - (1 // 2) * f[(:, 2)]
         # integer weights are stored as `Int`
         @test map(t -> value(first(arguments(t))), arguments(forward)) === (-1 // 2, 2, -3 // 2)
-        @test (@inferred lower_rule(BackwardDifference{3}(), (f,))) ==ₛ (1 // 2) * f[-2] + (3 // 2) * f[0] - 2 * f[-1]
-        @test (@inferred lower_rule(Difference{3, 2}(), (f,))) ==ₛ 4 * f[2] - (5 // 2) * f[1] - (3 // 2) * f[3]
-        @test (@inferred lower_rule(Difference{4, 1 // 2}(), (f,))) ==ₛ f[1] - (1 // 3) * f[-1] - (1 // 2) * f[0] - (1 // 6) * f[2]
+        @test (@inferred lower_rule(BackwardDifference{3}(), f, i)) ==ₛ (1 // 2) * f[(:, -2)] + (3 // 2) * f[(:, 0)] - 2 * f[(:, -1)]
+        @test (@inferred lower_rule(Difference{3, 2}(), f, i)) ==ₛ 4 * f[(:, 2)] - (5 // 2) * f[(:, 1)] - (3 // 2) * f[(:, 3)]
+        @test (@inferred lower_rule(Difference{4, 1 // 2}(), f, i)) ==ₛ f[(:, 1)] - (1 // 3) * f[(:, -1)] - (1 // 2) * f[(:, 0)] - (1 // 6) * f[(:, 2)]
     end
 
     @testset "staggered stencils" begin
-        @test (@inferred lower_rule(StaggeredCentralDifference(), (f,))) ==ₛ f[1 // 2] - f[-1 // 2]
-        @test (@inferred lower_rule(StaggeredCentralDifference{4}(), (f,))) ==ₛ (9 // 8) * (f[1 // 2] - f[-1 // 2]) - (1 // 24) * (f[3 // 2] - f[-3 // 2])
-        @test (@inferred lower_rule(StaggeredForwardDifference(), (f,))) ==ₛ f[3 // 2] - f[1 // 2]
-        @test (@inferred lower_rule(StaggeredBackwardDifference(), (f,))) ==ₛ f[-1 // 2] - f[-3 // 2]
-        @test (@inferred lower_rule(StaggeredForwardDifference{3}(), (f,))) ==ₛ 3 * f[3 // 2] - 2 * f[1 // 2] - f[5 // 2]
-        @test (@inferred lower_rule(StaggeredBackwardDifference{3}(), (f,))) ==ₛ f[-5 // 2] + 2 * f[-1 // 2] - 3 * f[-3 // 2]
-        @test (@inferred lower_rule(StaggeredDifference{3, 1 // 2}(), (f,))) ==ₛ f[1 // 2] - f[-1 // 2]
-        @test (@inferred lower_rule(StaggeredDifference{3, -1 // 2}(), (f,))) ==ₛ f[1 // 2] - f[-1 // 2]
+        @test (@inferred lower_rule(StaggeredCentralDifference(), f, i)) ==ₛ f[(:, 1 // 2)] - f[(:, -1 // 2)]
+        @test (@inferred lower_rule(StaggeredCentralDifference{4}(), f, i)) ==ₛ (9 // 8) * (f[(:, 1 // 2)] - f[(:, -1 // 2)]) - (1 // 24) * (f[(:, 3 // 2)] - f[(:, -3 // 2)])
+        @test (@inferred lower_rule(StaggeredForwardDifference(), f, i)) ==ₛ f[(:, 3 // 2)] - f[(:, 1 // 2)]
+        @test (@inferred lower_rule(StaggeredBackwardDifference(), f, i)) ==ₛ f[(:, -1 // 2)] - f[(:, -3 // 2)]
+        @test (@inferred lower_rule(StaggeredForwardDifference{3}(), f, i)) ==ₛ 3 * f[(:, 3 // 2)] - 2 * f[(:, 1 // 2)] - f[(:, 5 // 2)]
+        @test (@inferred lower_rule(StaggeredBackwardDifference{3}(), f, i)) ==ₛ f[(:, -5 // 2)] + 2 * f[(:, -1 // 2)] - 3 * f[(:, -3 // 2)]
+        @test (@inferred lower_rule(StaggeredDifference{3, 1 // 2}(), f, i)) ==ₛ f[(:, 1 // 2)] - f[(:, -1 // 2)]
+        @test (@inferred lower_rule(StaggeredDifference{3, -1 // 2}(), f, i)) ==ₛ f[(:, 1 // 2)] - f[(:, -1 // 2)]
+        # in the frame of the wall, and at traces, which are constant along the axis
+        @test (@inferred lower_rule(StaggeredCentralDifference(), f, Coord(↓, 1 // 2))) ==ₛ f[(↓, 1)] - f[(↓, 0)]
+        @test (@inferred lower_rule(StaggeredCentralDifference(), f, Trace(↑))) ==ₛ Literal(0)
     end
 
     @testset "invalid parameters" begin

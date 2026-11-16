@@ -11,18 +11,17 @@ function diffusion(dims)
     grad = Gradient(StaggeredCentralDifference())
     # equation
     r_u = divg(grad(u))
-    # lower in the bulk at cell centres, and simplify
+    # lower in the bulk at cell centres
     locs = ntuple(_ -> 𝓈, length(dims))
-    face = ntuple(_ -> (:), length(dims))
-    pos = ntuple(_ -> 1 // 2, length(dims))
-    r_l = lower(r_u, face, pos) |> simplify
+    pos = ntuple(_ -> (:, 1 // 2), length(dims))
+    r_l = lower(r_u[pos...])
     # arrays
     u1 = rand(dims...)
     u2 = copy(u1)
     # bind data
     bnd = Binding(u[locs...] => u1)
     # compile
-    r_c = compile(r_l, face, bnd; inbounds = true)
+    r_c = compile(r_l, bnd; inbounds = true)
     return run(r_c, u1, u2, nt)
 end
 
@@ -31,7 +30,7 @@ function run(r_c, u1, u2, nt)
     f, l = extrema(CartesianIndices(u2))
     for it in 1:nt
         for I in (f + oneunit(f)):(l - oneunit(l))
-            u2[I] = u1[I] + (0.4 / N) * r_c((u1,), Tuple(I), size(u1))
+            u2[I] = u1[I] + (0.4 / N) * r_c((u1,), Tuple(I), size(u1) .+ 1)
         end
         bc!(u2)
         u1, u2 = u2, u1

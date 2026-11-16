@@ -18,7 +18,6 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred isliteral(lit)) == true
         @test (@inferred isuniform(lit)) == true
 
-        @test (@inferred isindex(lit)) == false
         @test (@inferred istensor(lit)) == false
         @test (@inferred iscomp(lit)) == false
         @test (@inferred isinds(lit)) == false
@@ -49,52 +48,17 @@ Random.seed!(1234) # deterministic tests
         @test value(Literal(v)) == v
     end
 
-    @testset "Index" begin
-        ind = @inferred Index(1)
-
-        @test value(ind) == 1
-        @test ind === (@inferred Index(1.0))
-
-        @test ind isa DTerm
-        @test (@inferred isa_variant(ind, Index))
-
-        @test (@inferred tensorrank(ind)) == 0
-
-        @test (@inferred isindex(ind)) == true
-        @test (@inferred isuniform(ind)) == false
-
-        @test (@inferred isliteral(ind)) == false
-        @test (@inferred istensor(ind)) == false
-        @test (@inferred iscomp(ind)) == false
-        @test (@inferred isinds(ind)) == false
-        @test (@inferred isexpr(ind)) == false
-        @test (@inferred iscall(ind)) == false
-
-        @test_throws ArgumentError head(ind)
-        @test_throws ArgumentError children(ind)
-        @test_throws ArgumentError operation(ind)
-        @test_throws ArgumentError arguments(ind)
-        @test_throws ArgumentError argument(ind)
-        @test_throws ArgumentError components(ind)
-        @test_throws ArgumentError indices(ind)
-        @test_throws ArgumentError tensorkind(ind)
-        @test_throws ArgumentError tensorname(ind)
-
-        @test_throws InexactError Index(1.1)
-    end
-
     @testset "Coordinate" begin
         ξ = @inferred Coordinate(1)
 
         @test value(ξ) == 1
         @test ξ === ξ¹
         @test ξ ==ₛ Coordinate(1)
-        @test ξ !=ₛ Index(1)
+        @test ξ !=ₛ Coordinate(2)
 
         @test (@inferred tensorrank(ξ)) == 0
 
         @test (@inferred iscoordinate(ξ)) == true
-        @test (@inferred isindex(ξ)) == false
         @test (@inferred isuniform(ξ)) == false
         @test (@inferred isexpr(ξ)) == false
     end
@@ -107,7 +71,6 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred istensor(t)) == true
 
         @test (@inferred isliteral(t)) == false
-        @test (@inferred isindex(t)) == false
         @test (@inferred iscomp(t)) == false
         @test (@inferred isinds(t)) == false
         @test (@inferred isexpr(t)) == false
@@ -215,7 +178,6 @@ Random.seed!(1234) # deterministic tests
             @test components(expr) == (1, 2)
 
             @test (@inferred isliteral(expr)) == false
-            @test (@inferred isindex(expr)) == false
             @test (@inferred istensor(expr)) == false
             @test (@inferred iscall(expr)) == false
             @test (@inferred isinds(expr)) == false
@@ -234,7 +196,7 @@ Random.seed!(1234) # deterministic tests
         @testset "Inds" begin
             @scalars a @uniform(b)
             @vectors v
-            expr = @inferred DExpr(Inds((0 // 1, 1 // 1)), (a,))
+            expr = @inferred DExpr(Inds((Coord(:, 0), Coord(↓, 1))), (a,))
 
             @test expr isa DTerm
             @test (@inferred isa_variant(expr, DExpr))
@@ -242,46 +204,46 @@ Random.seed!(1234) # deterministic tests
             @test (@inferred isexpr(expr)) == true
             @test (@inferred isinds(expr)) == true
 
-            @test (@inferred head(expr)) == Inds((0 // 1, 1 // 1))
+            @test (@inferred head(expr)) == Inds((Coord(:, 0), Coord(↓, 1)))
             @test isequal(children(expr), (a,))
             @test (@inferred argument(expr)) ==ₛ a
-            @test indices(expr) === (0 // 1, 1 // 1)
+            @test indices(expr) === (Coord(:, 0), Coord(↓, 1))
 
             @test (@inferred isliteral(expr)) == false
-            @test (@inferred isindex(expr)) == false
             @test (@inferred istensor(expr)) == false
             @test (@inferred iscall(expr)) == false
             @test (@inferred iscomp(expr)) == false
 
             @test (@inferred tensorrank(expr)) == 0
             @test (@inferred isuniform(expr)) == false
-            @test (@inferred isuniform(DExpr(Inds((1 // 2,)), (b,)))) == true
+            @test (@inferred isuniform(DExpr(Inds((Coord(:, 1 // 2),)), (b,)))) == true
 
-            @test (@inferred a[0, 1]) ==ₛ expr
-            @test indices(@inferred a[1 // 2, -1]) === (1 // 2, -1 // 1)
+            # coordinates are written as `(frame, offset)`, and traces as the elements of the axis
+            @test (@inferred a[(:, 0), (↓, 1)]) ==ₛ expr
+            @test indices(@inferred a[(↑, -1 // 2), Coord(:, 1)]) === (Coord(↑, -1 // 2), Coord(:, 1))
+            @test indices(@inferred a[↓, (:, 1 // 2)]) === (Trace(↓), Coord(:, 1 // 2))
+            @test indices(@inferred a[↓, :]) === (Trace(↓), Trace(:))
             @test (@inferred iscomp(v[1])) == true
-            @test (@inferred isinds(v[1][1, 2])) == true
-            @test indices(v[1][1, 2]) === (1 // 1, 2 // 1)
-            @test_throws ArgumentError a[1 // 3]
-            @test_throws ArgumentError v[1 // 2]
-            # global positions: traces on the walls, and values independent of the axis
-            @test indices(@inferred a[↓, 1 // 2]) === (↓, 1 // 2)
-            @test indices(@inferred a[↓, :]) === (↓, :)
-            @test a[↓, 0] !=ₛ a[0, 0]
-            @test a[↓, 0] !=ₛ a[↑, 0]
-            @test sprint(show, a[↓, -1 // 2]) == "a[↓, -1//2]"
-            @test sprint(show, a[:, 1]) == "a[:, 1]"
-            # samples of samples compose like positions in lowering, unless they have different lengths
-            @test a[1 // 2][1 // 2] ==ₛ a[1]
-            @test a[1 // 2, 0][↓, 0] ==ₛ a[↓, 0]
-            @test a[↓, 0][1 // 2, 1] ==ₛ a[↓, 1]
-            @test isinds(argument(a[1 // 2][1, 0]))
+            @test (@inferred isinds(v[1][(:, 1), (:, 2)])) == true
+            @test a[↓, (:, 0)] !=ₛ a[(↓, 0), (:, 0)]
+            @test a[↓, (:, 0)] !=ₛ a[↑, (:, 0)]
+            @test sprint(show, a[↓, (:, -1 // 2)]) == "a[↓, (:, -1//2)]"
+            @test sprint(show, a[:, (↑, 1)]) == "a[:, (↑, 1)]"
+            @test_throws ArgumentError a[(:, 1 // 3)]
+            @test_throws ArgumentError v[(:, 1 // 2)]
+            # offsets are not positions
+            @test_throws MethodError a[1 // 2]
+            @test_throws ArgumentError a[0, 1]
+            @test_throws MethodError a[↓, 0]
+            # samples cannot be sampled again
+            @test_throws ArgumentError a[(:, 1 // 2)][(:, 1)]
+            @test_throws ArgumentError a[(:, 1 // 2)][(:, 1), (:, 1)]
             # constants are not sampled, uniform calls are
-            @test b[1 // 2] ==ₛ b
-            @test Literal(2)[1 // 2] ==ₛ Literal(2)
+            @test b[(:, 1 // 2)] ==ₛ b
+            @test Literal(2)[(:, 1 // 2)] ==ₛ Literal(2)
             @tensors 1 @uniform(w)
-            @test w[1][0, 1] ==ₛ w[1]
-            @test isinds(sin(b)[1 // 2])
+            @test w[1][(:, 0), (:, 1)] ==ₛ w[1]
+            @test isinds(sin(b)[(:, 1 // 2)])
 
             @test_throws ArgumentError operation(expr)
             @test_throws ArgumentError arguments(expr)
@@ -407,8 +369,8 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred ℐ(2) ==ₛ ℐ(2))
         @test (@inferred ℐ(2) !=ₛ ℐ(3))
         @test (@inferred 𝒪(2) !=ₛ ℐ(2))
-        @test (@inferred Index(2) ==ₛ Index(2))
-        @test (@inferred Index(1) !=ₛ Index(2))
+        @test (@inferred ξ² ==ₛ ξ²)
+        @test (@inferred ξ¹ !=ₛ ξ²)
         @test (@inferred Literal(1) ==ₛ Literal(1))
         @test (@inferred Literal(1) ==ₛ Literal(1.0))
         @test (@inferred Literal(1) !=ₛ Literal(1.1))
@@ -420,8 +382,8 @@ Random.seed!(1234) # deterministic tests
 
         @test (@inferred 1 <ₛ 2)
         @test (@inferred Literal(1) <ₛ Literal(2))
-        @test (@inferred 𝑖 <ₛ 𝑗)
-        @test (@inferred 𝑖 <ₛ a)
+        @test (@inferred ξ¹ <ₛ ξ²)
+        @test (@inferred ξ¹ <ₛ a)
         @test (@inferred a <ₛ b)
         @test (@inferred 𝒪(0) <ₛ ℐ(0))
         @test (@inferred a <ₛ u)
@@ -432,10 +394,11 @@ Random.seed!(1234) # deterministic tests
         @test (@inferred a + b <ₛ a + b + b)
         @test (@inferred v[1] <ₛ v[2])
         @test (@inferred u[2] <ₛ v[1])
-        @test (@inferred a[1] <ₛ a[↓])
+        @test (@inferred a[(:, 1)] <ₛ a[↓])
         @test (@inferred a[↓] <ₛ a[↑])
-        # samples are ordered by descending offsets
-        @test (@inferred a[1] <ₛ a[0])
+        # samples are ordered by the frames, then by descending offsets
+        @test (@inferred a[(:, 1)] <ₛ a[(:, 0)])
+        @test (@inferred a[(↓, 0)] <ₛ a[(:, 1)])
 
         terms = DTerm[sin(b), sin(a), cos(a), Literal(2), a]
         expected = DTerm[a, Literal(2), cos(a), sin(a), sin(b)]

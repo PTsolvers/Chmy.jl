@@ -21,8 +21,8 @@ struct NoopRule <: AbstractRule end
         isinds(t) && argument(t) ==ₛ b && return c
         return nothing
     end
-    @test (@inferred Prewalk(rule)(a[1])) ==ₛ b[1]
-    @test (@inferred Postwalk(rule)(a[1])) ==ₛ c
+    @test (@inferred Prewalk(rule)(a[(:, 1)])) ==ₛ b[(:, 1)]
+    @test (@inferred Postwalk(rule)(a[(:, 1)])) ==ₛ c
 
     # expressions with rewritten children are rebuilt in canonical form
     expr = sin(a + b)

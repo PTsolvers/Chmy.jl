@@ -174,17 +174,16 @@ Return the full tuple of exact first-derivative coefficients aligned with
     return QuoteNode(map(stencil_constant, difference_weights(difference_nodes(N, O))))
 end
 
-# build the expression that reads the field `f` at the stencil node `x` relative to the evaluation point
+# build the expression that reads the field `f` at the stencil node `x` from the position `i`
 #
-# for collocated differences `x` is an integer offset, and for staggered differences `x` is
-# a half-integer offset; the grid locations and indices of the samples are inferred by `lower`
-field_sample(x) = :(f[$x])
+# for collocated differences `x` is an integer offset, and for staggered differences `x` is a half-integer offset
+field_sample(x) = :(f[i + $x])
 
 # build the weighted sum of field samples for the stencil with nodes `x` and `weights`
 #
 # if the stencil is antisymmetric, i.e. every nonzero weight at `x[k]` has an opposite weight at `-x[k]`, the terms
 # are grouped in pairs `c * (f[x] - f[-x])` for positive `x`, which halves the number of multiplications, e.g.
-# `f[1] - f[-1]` for the central difference; the order and the signs of the terms are canonicalised on construction,
+# `f[i + 1] - f[i - 1]` for the central difference; the order and the signs of the terms are canonicalised on construction,
 # and an all-zero stencil yields `ZERO`
 function difference_expr(x, weights)
     nonzero = findall(!iszero, weights)
@@ -200,9 +199,6 @@ function difference_expr(x, weights)
     return isempty(terms) ? :ZERO : :(+($(terms...)))
 end
 
-@generated function lower_rule(d::Union{Difference, StaggeredDifference}, args::Tuple{DTerm})
-    return quote
-        f = only(args)
-        $(difference_expr(stencil_nodes(d()), stencil_weights(d())))
-    end
+@generated function lower_rule(d::Union{Difference, StaggeredDifference}, f::DTerm, i::Position)
+    return difference_expr(stencil_nodes(d()), stencil_weights(d()))
 end

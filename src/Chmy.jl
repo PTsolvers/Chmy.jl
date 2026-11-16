@@ -17,13 +17,13 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 # re-export from LinearAlgebra
 export ⋅, ×, tr, det, diag, transpose
 
-export DTerm, Literal, Index, Coordinate, Operator, Fun
-export 𝓅, 𝓈, ↓, ↑
+export DTerm, Literal, Coordinate, Operator, Fun
+export 𝓅, 𝓈, ↓, ↑, Coord, Trace, Position
 export AnyNormal, AnyTangent, 𝐧, 𝐭
 include("types.jl")
 
 export isexpr, iscall
-export isliteral, isindex, iscoordinate, istensor, iscomp, isinds, ispack, isuniform
+export isliteral, iscoordinate, istensor, iscomp, isinds, ispack, isuniform
 export head, children, operation, arguments
 export value, argument, arity, isunary, isbinary
 export components, entries, indices
@@ -34,11 +34,6 @@ include("dterm.jl")
 
 const ZERO = Literal(0)
 const ONE = Literal(1)
-
-export 𝑖, 𝑗, 𝑘
-const 𝑖 = Index(1)
-const 𝑗 = Index(2)
-const 𝑘 = Index(3)
 
 export ξ¹, ξ², ξ³
 const ξ¹ = Coordinate(1)
@@ -74,7 +69,7 @@ include("calculus.jl")
 
 include("topology.jl")
 
-export lower_rule, lower, At
+export lower_rule, lower, Project
 include("lowering.jl")
 
 export Lifted
@@ -85,7 +80,7 @@ export Wall, AlongAxis, AnyWall, AnyCorner, LeftWall, RightWall, BottomWall, Top
 export Ghost, Boundary, Interior, Within
 export OverridePredicate, OverrideMatch, FaceMatch, FacePredicate, WallPredicate, signed_axes, signed_distances
 export Override, override, 𝒷
-export BoundaryRule, WallRule, Add, Scale, WallValue, WallDerivative, boundary_rule, wall_rule
+export BoundaryRule, WallRule, Add, Scale, WallValue, WallDerivative, boundary_rule
 include("override.jl")
 
 export subs

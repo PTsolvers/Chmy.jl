@@ -3,7 +3,11 @@ using Chmy
 
 # a pointwise operator defined only by its rule, which keeps the call and samples the argument here
 struct Pointwise <: Operator end
-Chmy.lower_rule(op::Pointwise, args::Tuple{DTerm}, face, x) = op(args[1])
+Chmy.lower_rule(op::Pointwise, f::DTerm, inds::Tuple) = op(f)
+
+# an operator of one argument in one dimension
+struct Shifted <: Operator end
+Chmy.lower_rule(::Shifted, f::DTerm, i::Position) = f[i + 1]
 
 # a scalar operator depending only on the number of dimensions
 struct Scaled <: Operator end
@@ -11,11 +15,11 @@ Chmy.evaluate(::Scaled, args::Tuple{DTerm}, dims) = args[1] / dims
 
 # an operator whose rule returns a tensor in component form instead of a scalar
 struct Unindexed <: Operator end
-Chmy.lower_rule(::Unindexed, args::Tuple{DTerm}, face, x) = pack([args[1], args[1]])
+Chmy.lower_rule(::Unindexed, f::DTerm, inds::Tuple) = pack([f, f])
 
 # an operator whose rule reads its argument at the evaluation point without sampling it
 struct Unsampled <: Operator end
-Chmy.lower_rule(::Unsampled, args::Tuple{DTerm}, face, x) = 2 * args[1]
+Chmy.lower_rule(::Unsampled, f::DTerm, inds::Tuple) = 2 * f
 
 # a tensor-valued operator without a component form
 struct Unexpanded <: Operator end
@@ -29,134 +33,143 @@ Chmy.checkranks(::Unexpanded, ::Tuple{Vararg{DTerm}}) = nothing
     @tensors 2 A B
     d, s = CentralDifference(), StaggeredCentralDifference()
     divg, grad = Divergence(s), Gradient(s)
+    # the grid point of the kernel in 2D
+    o = ((:, 0), (:, 0))
 
     @testset "samples" begin
-        # fields are sampled at the position, uniform terms are kept
-        @test (@inferred lower(sin(f) + a * v[1], (:, :), (0, 0))) ==ₛ sin(f[0, 0]) + a * v[1][0, 0]
-        @test (@inferred lower(a, (:,), (0,))) ==ₛ a
-        # nested samples shift the position
-        @test (@inferred lower(sin(f[1 // 2, 0]), (:, :), (0, 0))) ==ₛ sin(f[1 // 2, 0])
-        @test (@inferred lower(sin(f)[-1 // 2], (:,), (0,))) ==ₛ sin(f[-1 // 2])
-        @test (@inferred lower(f[1 // 2][1], (:,), (1 // 2,))) ==ₛ f[2]
+        # fields are sampled at the positions, uniform terms are kept
+        @test (@inferred lower((sin(f) + a * v[1])[o...])) ==ₛ sin(f[o...]) + a * v[1][o...]
+        @test (@inferred lower(a[(:, 0)])) ==ₛ a
+        # samples inside are read at their own positions
+        @test (@inferred lower(sin(f[(:, 1 // 2), (↓, 0)])[o...])) ==ₛ sin(f[(:, 1 // 2), (↓, 0)])
         # uniform calls are expanded as well
-        @test (@inferred lower(d[1](a), (:,), (0,))) ==ₛ Literal(0)
+        @test (@inferred lower(d[1](a)[(:, 0)])) ==ₛ Literal(0)
+        # every sample is lowered, and terms outside samples are kept
+        @test (@inferred lower(f)) ==ₛ f
+        @test (@inferred lower(f[(:, 0)] + d[1](g)[(:, 0)])) ==ₛ f[(:, 0)] + (1 // 2) * (g[(:, 1)] - g[(:, -1)])
     end
 
     @testset "laws" begin
-        e = divg(grad(f)) * f[1 // 2, 0]
-        x = (1 // 2, -1 // 2)
-        # the position is an outer sample
-        @test lower(e, (↓, :), x) ==ₛ lower(e[x...], (↓, :), (0, 0))
-        # samples compose with the position
-        @test lower(e[1, ↓], (↓, :), x) ==ₛ lower(e, (↓, :), (3 // 2, ↓))
+        e = divg(grad(f)) * Project(↓, 2)(f)
+        x = ((↓, 1 // 2), (:, -1 // 2))
+        # a projection replaces the position along its axis
+        @test lower(Project(↑, 1)(e)[x...]) ==ₛ lower(e[↑, (:, -1 // 2)])
         # lowered expressions are valid input
-        @test lower(lower(e, (↓, :), x), (↓, :), (0, 0)) ==ₛ lower(e, (↓, :), x)
+        @test lower(lower(e[x...])) ==ₛ lower(e[x...])
     end
 
-    @testset "global positions" begin
-        # a global position absorbs offsets, and the innermost one wins
-        @test (@inferred lower(f[1 // 2, 0][↓, 0], (:, :), (0, 0))) ==ₛ f[↓, 0]
-        @test (@inferred lower(f[↓, 0][1 // 2, 0], (:, :), (0, 0))) ==ₛ f[↓, 0]
-        @test (@inferred lower(f[↓, 0][↑, 0], (:, :), (0, 0))) ==ₛ f[↓, 0]
-        @test (@inferred lower(f[:, 0][↓, 1], (:, :), (0, 1 // 2))) ==ₛ f[:, 3 // 2]
-        # traces are constant along their axis, so their normal derivative vanishes
-        @test lower(s[1](f[↓, 0]), (:, :), (0, 1 // 2)) ==ₛ Literal(0)
-        @test lower(s[2](f[↓, 0]), (:, :), (0, 1 // 2)) ==ₛ f[↓, 1] - f[↓, 0]
-        # lowering at a global position evaluates the expression on the traces
-        @test lower(sin(f) * g[1 // 2, 0], (:, :), (0, :)) ==ₛ sin(f[0, :]) * g[1 // 2, :]
+    @testset "traces" begin
+        # projections replace the position along their axis, and the innermost one wins
+        @test (@inferred lower(Project(↓, 1)(f)[(:, 1 // 2), (:, 0)])) ==ₛ f[↓, (:, 0)]
+        @test (@inferred lower(Project(↑, 1)(Project(↓, 1)(f))[o...])) ==ₛ f[↓, (:, 0)]
+        @test (@inferred lower(Project(↓, 2)(Project(:, 1)(f))[(:, 0), (:, 1 // 2)])) ==ₛ f[:, ↓]
+        # traces are constant along their axis, so their normal derivative vanishes, and not along the other axes
+        @test lower(s[1](Project(↓, 1)(f))[(:, 0), (:, 1 // 2)]) ==ₛ Literal(0)
+        @test lower(s[2](Project(↓, 1)(f))[(:, 0), (:, 1 // 2)]) ==ₛ f[↓, (:, 1)] - f[↓, (:, 0)]
+        @test lower(s[1](f)[↓, (:, 1 // 2)]) ==ₛ Literal(0)
+        @test lower(s[2](f)[↓, (:, 1 // 2)]) ==ₛ f[↓, (:, 1)] - f[↓, (:, 0)]
+        # lowering at a trace evaluates the expression on the traces
+        @test lower((sin(f) * s[1](g))[(:, 0), :]) ==ₛ sin(f[(:, 0), :]) * (g[(:, 1 // 2), :] - g[(:, -1 // 2), :])
     end
 
     @testset "laplacian" begin
         Δ = divg(grad(f))
-        interior = f[-1 // 2] - 2 * f[1 // 2] + f[3 // 2]
-        @test lower(Δ, (:,), (1 // 2,)) ==ₛ interior
-        # the same stencil next to the wall, relative to the wall point
-        @test lower(Δ, (↓,), (1 // 2,)) ==ₛ interior
-        @test lower(Δ, (↓,), (3 // 2,)) ==ₛ f[1 // 2] - 2 * f[3 // 2] + f[5 // 2]
-        @test lower(divg(grad(f)), (:, :), (0, 0)) ==ₛ
-            f[-1, 0] + f[0, -1] - 4 * f[0, 0] + f[1, 0] + f[0, 1]
+        @test lower(Δ[(:, 1 // 2)]) ==ₛ f[(:, -1 // 2)] - 2 * f[(:, 1 // 2)] + f[(:, 3 // 2)]
+        # the same stencil next to the walls, in the frame of the wall
+        @test lower(Δ[(↓, 1 // 2)]) ==ₛ f[(↓, -1 // 2)] - 2 * f[(↓, 1 // 2)] + f[(↓, 3 // 2)]
+        @test lower(Δ[(↑, -1 // 2)]) ==ₛ f[(↑, -3 // 2)] - 2 * f[(↑, -1 // 2)] + f[(↑, 1 // 2)]
+        @test lower(Δ[o...]) ==ₛ f[(:, -1), (:, 0)] + f[(:, 0), (:, -1)] - 4 * f[o...] + f[(:, 1), (:, 0)] + f[(:, 0), (:, 1)]
     end
 
     @testset "rules" begin
-        @test (@inferred lower(d[1](d[2](f)), (:, :), (0, 0))) ==ₛ
-            (1 // 2) * ((1 // 2) * (f[1, 1] - f[1, -1]) - (1 // 2) * (f[-1, 1] - f[-1, -1]))
-        @test (@inferred lower(s[1](s[2](f)), (:, :), (0, 1 // 2))) ==ₛ
-            (f[1 // 2, 1] - f[1 // 2, 0]) - (f[-1 // 2, 1] - f[-1 // 2, 0])
+        @test (@inferred lower(d[1](d[2](f))[o...])) ==ₛ
+            (1 // 2) * ((1 // 2) * (f[(:, 1), (:, 1)] - f[(:, 1), (:, -1)]) - (1 // 2) * (f[(:, -1), (:, 1)] - f[(:, -1), (:, -1)]))
+        @test (@inferred lower(s[1](s[2](f))[(:, 0), (:, 1 // 2)])) ==ₛ
+            (f[(:, 1 // 2), (:, 1)] - f[(:, 1 // 2), (:, 0)]) - (f[(:, -1 // 2), (:, 1)] - f[(:, -1 // 2), (:, 0)])
+        # rules of one argument at one position
+        @test (@inferred lower(Shifted()(f)[(↓, 0)])) ==ₛ f[(↓, 1)]
         # calls returned by rules are kept, and the operators inside their arguments are expanded
-        @test lower(Pointwise()(s[1](f)), (:, :), (0, 0)) ==ₛ Pointwise()(f[1 // 2, 0] - f[-1 // 2, 0])
-        @test lower(Pointwise()(Pointwise()(f)), (:,), (0,)) ==ₛ Pointwise()(Pointwise()(f[0]))
+        @test lower(Pointwise()(s[1](f))[o...]) ==ₛ Pointwise()(f[(:, 1 // 2), (:, 0)] - f[(:, -1 // 2), (:, 0)])
+        @test lower(Pointwise()(Pointwise()(f))[(:, 0)]) ==ₛ Pointwise()(Pointwise()(f[(:, 0)]))
         # rules can depend on the number of dimensions
-        @test (@inferred lower(Scaled()(f), (:, :), (0, 0))) ==ₛ f[0, 0] / 2
+        @test (@inferred lower(Scaled()(f)[o...])) ==ₛ f[o...] / 2
         # unsampled terms in the result of a rule are read at the evaluation point
-        @test (@inferred lower(Unsampled()(s[1](f)), (:, :), (0, 0))) ==ₛ 2 * (f[1 // 2, 0] - f[-1 // 2, 0])
-        @test (@inferred lower(Unsampled()(f), (:, :), (↓, 1 // 2))) ==ₛ 2 * f[↓, 1 // 2]
+        @test (@inferred lower(Unsampled()(s[1](f))[o...])) ==ₛ 2 * (f[(:, 1 // 2), (:, 0)] - f[(:, -1 // 2), (:, 0)])
+        @test (@inferred lower(Unsampled()(f)[↓, (:, 1 // 2)])) ==ₛ 2 * f[↓, (:, 1 // 2)]
     end
 
     @testset "tensor expressions" begin
-        @test (@inferred lower(divg(u), (:, :), (1 // 2, 1 // 2))) ==ₛ
-            (u[1][1, 1 // 2] - u[1][0, 1 // 2]) + (u[2][1 // 2, 1] - u[2][1 // 2, 0])
-        @test (@inferred lower((A ⋅ B)[1, 2], (:, :), (0, 0))) ==ₛ
-            A[1, 1][0, 0] * B[1, 2][0, 0] + A[1, 2][0, 0] * B[2, 2][0, 0]
-        @test (@inferred lower(f .+ g, (:, :), (0, 0))) ==ₛ f[0, 0] + g[0, 0]
+        @test (@inferred lower(divg(u)[(:, 1 // 2), (:, 1 // 2)])) ==ₛ
+            (u[1][(:, 1), (:, 1 // 2)] - u[1][(:, 0), (:, 1 // 2)]) + (u[2][(:, 1 // 2), (:, 1)] - u[2][(:, 1 // 2), (:, 0)])
+        @test (@inferred lower((A ⋅ B)[1, 2][o...])) ==ₛ A[1, 1][o...] * B[1, 2][o...] + A[1, 2][o...] * B[2, 2][o...]
+        @test (@inferred lower((f .+ g)[o...])) ==ₛ f[o...] + g[o...]
         # components exceeding the number of dimensions
-        @test_throws BoundsError lower(u[3], (:, :), (0, 0))
-        @test_throws BoundsError lower(divg(A)[3], (:, :), (0, 0))
+        @test_throws BoundsError lower(u[3][o...])
+        @test_throws BoundsError lower(divg(A)[3][o...])
     end
 
     @testset "tensors in component form" begin
         gravity = pack([0, -1])
         # a call with all tensor arguments in component form is evaluated right away
         @test ispack(f * gravity)
-        @test lower((f * gravity)[2], (:, :), (0, 0)) ==ₛ -f[0, 0]
+        @test lower((f * gravity)[2][o...]) ==ₛ -f[o...]
         # mixed with coordinate-free tensors, the call is evaluated component by component
         @test (u + gravity)[2] ==ₛ u[2] - 1
-        @test lower((u + gravity) ⋅ u, (:, :), (0, 0)) ==ₛ u[1][0, 0]^2 + u[2][0, 0] * (u[2][0, 0] - 1)
-        @test_throws DimensionMismatch lower((u + gravity) ⋅ u, (:, :, :), (0, 0, 0))
+        @test lower(((u + gravity) ⋅ u)[o...]) ==ₛ u[1][o...]^2 + u[2][o...] * (u[2][o...] - 1)
+        @test_throws DimensionMismatch lower(((u + gravity) ⋅ u)[(:, 0), (:, 0), (:, 0)])
     end
 
-    @testset "sampling with At" begin
+    @testset "projection" begin
         @vectors W
-        # tensors are sampled through `At`, component by component
-        @test (@inferred lower(At(↓, 0)(W)[2], (:, :), (0, 1 // 2))) ==ₛ W[2][↓, 1 // 2]
-        @test (@inferred lower(At(1 // 2, 0)(W)[1], (:, :), (0, 0))) ==ₛ W[1][1 // 2, 0]
-        # expressions are sampled as a whole, uniform terms are kept
-        @test lower(At(↓, 0)(sin(f) + a), (:, :), (1, 1)) ==ₛ sin(f[↓, 1]) + a
-        @test_throws ArgumentError lower(At(↓)(f), (:, :), (0, 0))
+        # tensors are projected component by component
+        @test (@inferred lower(Project(↓, 1)(W)[2][(:, 0), (:, 1 // 2)])) ==ₛ W[2][↓, (:, 1 // 2)]
+        # expressions are projected as a whole, uniform terms are kept
+        @test lower(Project(↓, 1)(sin(f) + a)[(:, 1), (:, 1)]) ==ₛ sin(f[↓, (:, 1)]) + a
+        # constants are not projected, and samples cannot be
+        @test Project(↓, 1)(a) ==ₛ a
+        @test_throws ArgumentError lower(Project(↓, 1)(f[(:, 0), (:, 0)])[o...])
+        # rules never sample sampled arguments
+        @test_throws ArgumentError lower(s[1](f[(:, 0)])[(:, 0)])
+        @test sprint(show, Project(↑, 2)(f)) == "Project(↑, 2)(f)"
+        # the axis must exist
+        @test_throws ArgumentError Project(↓, 0)
+        @test_throws ArgumentError lower(Project(↓, 3)(f)[o...])
     end
 
     @testset "extrusion" begin
         # surfaces at the bottom and the top, interpolated with a normalised vertical coordinate
         @scalars B S c
-        Z = c[:, 0] * S[0, ↑] + (1 - c[:, 0]) * B[0, ↓]
-        @test (@inferred lower(Z, (:, :), (0, 0))) ==ₛ Z
-        @test lower(Z, (:, :), (1 // 2, 1)) ==ₛ c[:, 1] * S[1 // 2, ↑] + (1 - c[:, 1]) * B[1 // 2, ↓]
+        Z = Project(:, 1)(c) * Project(↑, 2)(S) + (1 - Project(:, 1)(c)) * Project(↓, 2)(B)
+        @test (@inferred lower(Z[o...])) ==ₛ c[:, (:, 0)] * S[(:, 0), ↑] + (1 - c[:, (:, 0)]) * B[(:, 0), ↓]
+        @test lower(Z[(:, 1 // 2), (:, 1)]) ==ₛ c[:, (:, 1)] * S[(:, 1 // 2), ↑] + (1 - c[:, (:, 1)]) * B[(:, 1 // 2), ↓]
     end
 
     @testset "coordinates" begin
-        # point `1` lies on the lower wall, at the coordinate 0
-        @test (@inferred lower(ξ¹ * f, (:,), (1 // 2,))) ==ₛ (𝑖 - 1 // 2) * f[1 // 2]
-        @test (@inferred lower(ξ² * f, (:, :), (1 // 2, 0))) ==ₛ (𝑗 - 1) * f[1 // 2, 0]
-        @test (@inferred lower(s[1](ξ¹ * f), (:,), (0,))) ==ₛ (𝑖 - 1 // 2) * f[1 // 2] - (𝑖 - 3 // 2) * f[-1 // 2]
-        # the trace on the lower wall is at the coordinate 0
-        @test (@inferred lower(ξ¹ * f, (:, :), (↓, 0))) ==ₛ Literal(0)
-        @test_throws ArgumentError lower(ξ¹ * f, (:, :), (↑, 0))
-        @test_throws ArgumentError lower(ξ¹ * f, (:, :), (:, 0))
+        # the coordinate of the origin of the frame, constant along the other axes, plus the offset
+        @test (@inferred lower((ξ¹ * f)[(:, 1 // 2)])) ==ₛ (ξ¹[(:, 0)] + 1 // 2) * f[(:, 1 // 2)]
+        @test (@inferred lower((ξ² * f)[(:, 1 // 2), (:, 0)])) ==ₛ ξ²[:, (:, 0)] * f[(:, 1 // 2), (:, 0)]
+        # so differences of coordinates are exact
+        @test (@inferred lower(s[1](ξ¹)[(:, 0)])) ==ₛ Literal(1)
+        @test (@inferred lower(s[2](ξ¹)[(:, 0), (:, 1 // 2)])) ==ₛ Literal(0)
+        # the lower wall is at the coordinate 0, and the upper wall at the sampled coordinate of its origin
+        @test (@inferred lower((ξ¹ * f)[(↓, 1 // 2)])) ==ₛ (1 // 2) * f[(↓, 1 // 2)]
+        @test (@inferred lower((ξ¹ * f)[↓, (:, 0)])) ==ₛ Literal(0)
+        @test (@inferred lower(ξ¹[(↑, -1 // 2)])) ==ₛ ξ¹[(↑, 0)] - 1 // 2
+        @test (@inferred lower(ξ¹[↑, (:, 0)])) ==ₛ ξ¹[(↑, 0), :]
+        # coordinates vary along their axis
+        @test_throws ArgumentError lower(ξ¹[:, (:, 0)])
     end
 
     @testset "errors" begin
-        @test_throws ArgumentError lower(f, (), ())
-        @test_throws ArgumentError lower(f, (:, :), (0,))
-        @test_throws ArgumentError lower(f, (:,), (1 // 3,))
-        @test_throws ArgumentError lower(v, (:, :), (0, 0))
-        @test_throws ArgumentError lower(𝑖 * f, (:,), (0,))
-        @test_throws ArgumentError lower(f[0], (:, :), (0, 0))
-        @test_throws ArgumentError lower(d[3](f), (:, :), (0, 0))
+        @test_throws ArgumentError lower(f[(:, 1 // 3)])
+        @test_throws ArgumentError lower(v[o...])
+        @test_throws ArgumentError lower(d[3](f)[o...])
         # 1D operators must be lifted to more dimensions
-        @test_throws ArgumentError lower(d(f), (:, :), (0, 0))
+        @test_throws ArgumentError lower(d(f)[o...])
         # a rule must return a scalar of samples
-        @test_throws ArgumentError lower(Unindexed()(f), (:, :), (0, 0))
+        @test_throws ArgumentError lower(Unindexed()(f)[o...])
         # tensor-valued calls must have a component form
-        @test_throws ArgumentError lower(Unexpanded()(f)[1], (:, :), (0, 0))
-        @test_throws ArgumentError lower(ξ³ * f, (:,), (0,))
+        @test_throws ArgumentError lower(Unexpanded()(f)[1][o...])
+        @test_throws ArgumentError lower((ξ³ * f)[(:, 0)])
     end
 end

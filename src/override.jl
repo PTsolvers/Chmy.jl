@@ -189,7 +189,7 @@ matches(e::EitherRegion, ξ::Rational) = matches(e.p, ξ) || matches(e.q, ξ)
 matches(b::BothRegions, ξ::Rational) = matches(b.p, ξ) && matches(b.q, ξ)
 matches(neg::NotRegion, ξ::Rational) = !matches(neg.p, ξ)
 
-# samples at global positions have no distance from the wall, and match no region
+# positions without a distance from the wall, e.g. traces, match no region
 matches(::RegionPattern, ::Nothing) = false
 
 const DefaultRegion = Ghost | Boundary
@@ -227,9 +227,9 @@ end
 
 """
 Abstract supertype for the predicates of overrides. A predicate implements `Chmy.match(predicate, face, comps, x)`,
-which returns `nothing`, or an [`OverrideMatch`](@ref) if the component `comps` of the sample at the position `x` is
-overridden at the `face`, a face adjacent to the face of the kernel. The outward distance of the sample from the wall
-on the side `face[a]` is `Chmy.distance(face[a], x[a])`, which is `nothing` at global positions. A predicate selecting
+which returns `nothing`, or an [`OverrideMatch`](@ref) if the component `comps` of the sample at the positions `x` is
+overridden at the `face`, a face next to the sample, whose sides are frames of the positions. The outward distance of
+the sample from the wall on the side `face[a]` is `Chmy.distance(x[a])`. A predicate selecting
 tensor components also implements `Chmy.freecomps(predicate, comps)`, the components indexing the tensor data of the
 rule, and `Chmy.tangentcomps(predicate, comps)`, the components resolving `𝐭`.
 """
@@ -293,7 +293,7 @@ end
 function match(p::WallPredicate, face, comps, x)
     matches(p.wall, face) || return nothing
     axis = findfirst(!=(:), face)::Int
-    ξ = distance(face[axis], x[axis])
+    ξ = distance(x[axis])
     (matches(p.region, ξ) && matches(p.comps, comps, axis)) || return nothing
     return FaceMatch((signed_axis(axis, face[axis]),), (ξ,))
 end
@@ -321,7 +321,7 @@ end
 function match(p::FacePredicate, face, comps, x)
     matches(p.face, face) || return nothing
     axes = Tuple(a for a in eachindex(face) if face[a] != (:))
-    ξs = map(a -> distance(face[a], x[a]), axes)
+    ξs = map(a -> distance(x[a]), axes)
     all(ξ -> matches(p.region, ξ), ξs) || return nothing
     return FaceMatch(map(a -> signed_axis(a, face[a]), axes), ξs)
 end
@@ -332,8 +332,9 @@ end
     Override(predicates)
 
 Overrides a term next to the boundary, called as `Override(predicates)(u, rules...)` with one rule call per predicate.
-At every face adjacent to the face of the lowering context, the first matching predicate selects its rule, and the
-rules of the matched faces are applied in the order of the predicates. See [`override`](@ref).
+At every face next to the sample, i.e. whose sides are the frames of the positions of the sample, the first matching
+predicate selects its rule, and the rules of the matched faces are applied in the order of the predicates. See
+[`override`](@ref).
 """
 struct Override <: Operator
     predicates::Tuple{Vararg{OverridePredicate}}
@@ -345,7 +346,7 @@ struct OverrideComponent <: Operator
     comps::Tuple{Vararg{Int}}
 end
 
-# an override of a component sampled at the position `x`, with the matches of the faces that are still to be applied
+# an override of a component sampled at the positions `x`, with the matches of the faces that are still to be applied
 struct OverrideSample <: Operator
     component::OverrideComponent
     x::Tuple{Vararg{Position}}
@@ -379,9 +380,10 @@ const AnyOverride = Union{Override, OverrideComponent, OverrideSample}
 printop(io, o::AnyOverride, args) = printstyled(io, overridden(o, args); color = :red)
 printprec(o::AnyOverride, args) = printprec(overridden(o, args))
 
-# the first matching predicate of every face adjacent to the face of the kernel, faces of lower codimension and lower
-# axes first, ordered by the predicate
-function candidates(predicates, comps, face::Face{N}, x) where {N}
+# the first matching predicate of every face next to the sample, faces of lower codimension and lower axes first,
+# ordered by the predicate
+function candidates(predicates, comps, x::NTuple{N, Position}) where {N}
+    face = map(frame, x)
     sides = Tuple(a for a in 1:N if face[a] != (:))
     result = Pair{Int, OverrideMatch}[]
     # bit k of the mask selects the k-th side
@@ -404,16 +406,16 @@ end
 component(o::Override, args, I) = OverrideComponent(o, I)(args...)
 
 # a scalar override is the override of its only component
-lower_rule(o::Override, args, face, x) = lower_rule(OverrideComponent(o, ()), args, face, x)
+lower_rule(o::Override, args::Tuple, x::Tuple) = lower_rule(OverrideComponent(o, ()), args, x)
 
-function lower_rule(c::OverrideComponent, args, face, x)
-    sample = OverrideSample(c, x, candidates(c.override.predicates, c.comps, face, x))
-    return lower_rule(sample, args, face, x)
+function lower_rule(c::OverrideComponent, args::Tuple, x::Tuple)
+    sample = OverrideSample(c, x, candidates(c.override.predicates, c.comps, x))
+    return lower_rule(sample, args, x)
 end
 
-function lower_rule(s::OverrideSample, args, face, x)
+function lower_rule(s::OverrideSample, args::Tuple, x::Tuple)
     # a sample read elsewhere, e.g. by a mirror rule, is matched again
-    x == s.x || return lower_rule(s.component, args, face, x)
+    x == s.x || return lower_rule(s.component, args, x)
     comps = s.component.comps
     isempty(s.candidates) && return first(args)[comps...]
     i, m = first(s.candidates)
@@ -472,7 +474,7 @@ end
     𝒷(g; span = false)
 
 The boundary data `g` at the face matched by an override: `g` is sampled at the traces of the walls of the face, e.g.
-`g[↓, 1//2]` by the left wall, at the position of the overridden sample along the other axes, or independently of
+`g[↓, (:, 1//2)]` by the left wall, at the position of the overridden sample along the other axes, or independently of
 them with `span = true`, e.g. `g[↓, :]`, a single value for the left wall. Can only appear in the data of override
 rules.
 """
@@ -485,20 +487,23 @@ print_opname(io, ::OnFace) = print(io, '𝒷')
 # the boundary data of a tensor are the boundary data of its components
 component(b::OnFace, args, I) = componentwise(b, args, I)
 
-function lower_rule(::OnFace, args, face, x)
+function lower_rule(::OnFace, args::Tuple, x::Tuple)
     throw(ArgumentError("boundary data `𝒷` can only appear in the data of override rules"))
 end
 
-# the data sampled at the walls of the matched face, and along the other axes at the sample, or at `:` with `span`
+# the data projected on the walls of the matched face, and read along the other axes at the sample, or projected on
+# `:` with `span`
 function resolve_face(b::OnFace, term, face)
-    positions = ntuple(a -> face_position(b, a, face.axes), face.dims)
-    return At(positions)(resolve_face(only(arguments(term)), face))
-end
-
-function face_position(b::OnFace, a, signed_axes)
-    k = findfirst(s -> abs(s) == a, signed_axes)
-    isnothing(k) || return signed_axes[k] > 0 ? Upper() : Lower()
-    return b.span ? (:) : 0 // 1
+    data = resolve_face(only(arguments(term)), face)
+    for a in 1:face.dims
+        k = findfirst(s -> abs(s) == a, face.axes)
+        if !isnothing(k)
+            data = Project(face.axes[k] > 0 ? Upper() : Lower(), a)(data)
+        elseif b.span
+            data = Project(:, a)(data)
+        end
+    end
+    return data
 end
 
 # rules
@@ -545,17 +550,13 @@ boundary_rule(::Scale, u, (w,), match) = w * u
 boundary_rule(::Replace, u, (v,), match) = v
 
 """
-Abstract supertype for the rules applied along the normal of a wall, which implement [`wall_rule`](@ref).
+Abstract supertype for the rules applied along the normal of a wall, which are lifted along the normal of the matched
+wall. A rule implements the 1D [`lower_rule`](@ref) `lower_rule(rule, (u, data...), i::Coord)` of the overridden
+component `u` at the position `i` along the normal, e.g. `2g[wall(i)] - u[mirror(i)]`, where `Chmy.distance(i)` is
+the outward distance from the wall, `Chmy.wall(i)` the point on the wall, and `Chmy.mirror(i)` the mirror image of `i`
+through the wall.
 """
 abstract type WallRule <: BoundaryRule end
-
-"""
-    wall_rule(rule, u, data, ξ)
-
-The 1D expression of the `rule` of an upper wall, sampled relative to the sample at the outward distance `ξ` from the
-wall, e.g. `2g[-ξ] - u[-2ξ]`. The rule is lifted along the normal of the matched wall, mirrored at lower walls.
-"""
-function wall_rule end
 
 """
     WallValue(g)
@@ -579,22 +580,20 @@ function boundary_rule(op::WallRule, u, data, match)
     axes = signed_axes(match)
     length(axes) == 1 ||
         throw(ArgumentError(lazy"wall rules are only defined on walls, got a face of codimension $(length(axes))"))
-    return Lifted(op, axes)(u, data...)
+    return Lifted(op, map(abs, axes))(u, data...)
 end
 
-function lower_rule(op::WallRule, (u, data...)::Tuple{DTerm, Vararg{DTerm}}, face::Face{1}, x::NTuple{1, Position})
-    return wall_rule(op, u, data, distance(face[1], x[1]))
-end
-
-function wall_rule(::WallValue, u, (g,), ξ)
+function lower_rule(::WallValue, (u, g)::Tuple{DTerm, DTerm}, i::Coord)
+    ξ = distance(i)
     iszero(ξ) && return g
-    ξ > 0 && return 2g[-ξ] - u[-2ξ]
+    ξ > 0 && return 2g[wall(i)] - u[mirror(i)]
     throw(ArgumentError(lazy"WallValue can only be applied on the wall or in the ghost region, got ξ = $ξ"))
 end
 
-function wall_rule(::WallDerivative, u, (g,), ξ)
+function lower_rule(::WallDerivative, (u, g)::Tuple{DTerm, DTerm}, i::Coord)
+    ξ = distance(i)
     iszero(ξ) && return u
-    ξ > 0 && return u[-2ξ] + 2ξ * g[-ξ]
+    ξ > 0 && return u[mirror(i)] + 2ξ * g[wall(i)]
     throw(ArgumentError(lazy"WallDerivative can only be applied on the wall or in the ghost region, got ξ = $ξ"))
 end
 
