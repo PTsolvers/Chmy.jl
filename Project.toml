@@ -14,6 +14,7 @@ Moshi = "2e0e35c7-a2e4-4343-998d-7ef72827ed2d"
 OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
 RuntimeGeneratedFunctions = "7e49a35a-f44a-4d26-94aa-eba1b4ca6b47"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
 Adapt = "4"
@@ -22,4 +23,5 @@ Moshi = "0.3.12"
 OrderedCollections = "2.0.1"
 PrettyTables = "3.3.2"
 RuntimeGeneratedFunctions = "0.5.26"
+StaticArrays = "1.9.25"
 julia = "1.12"

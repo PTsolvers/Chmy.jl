@@ -11,6 +11,8 @@ import Adapt
 import LinearAlgebra: ⋅, ×, tr, det, diag, transpose
 import Base: broadcasted
 
+using StaticArrays: SVector, SMatrix
+
 using RuntimeGeneratedFunctions
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
@@ -57,10 +59,12 @@ include("tensors.jl")
 export @scalars, @vectors, @tensors, @uniform, @sym, @diag, @alt
 include("macros.jl")
 
-export FiniteDifference, Interpolate, Extrapolate
+export Interpolate, Extrapolate
+include("interpolate.jl")
+
 export CentralDifference, ForwardDifference, BackwardDifference
 export StaggeredCentralDifference, StaggeredForwardDifference, StaggeredBackwardDifference
-include("reconstruction.jl")
+include("finite_difference.jl")
 
 export DifferentialOperator
 export Gradient, Divergence, Curl

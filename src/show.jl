@@ -92,7 +92,7 @@ function print_opname(io, op::BroadcastedFun)
     name = nameof(op.f)
     return Base.isoperator(name) ? print(io, '.', name) : print(io, name, '.')
 end
-function print_opname(io, d::FiniteDifference)
+function print_opname(io, d::Interpolate)
     print(io, '∂')
     d.order == 1 || print_superscript(io, d.order)
     return
