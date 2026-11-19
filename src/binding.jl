@@ -29,19 +29,20 @@ locations of the sampled fields, e.g. `u[𝓈, 𝓈]` for `u[(:, 1//2), (↓, 3/
 """
 function bindings(term::DTerm)
     keys = Union{DTerm, Located}[]
-    collect_bindings!(keys, term)
+    foreach_read(t -> push!(keys, isinds(t) ? bindkey(argument(t), indices(t)) : t), term)
     return Tuple(unique(keys))
 end
 
-function collect_bindings!(keys, term::DTerm)
+# calls `f` on every term that `term` reads: the samples, except samples of coordinates, and the unsampled tensors
+function foreach_read(f, term::DTerm)
     @match term begin
-        DExpr(Inds(positions), (arg,)) => iscoordinate(arg) || push!(keys, bindkey(arg, positions))
-        Tensor(_, _, _, _) || DExpr(Comp(_), _) => push!(keys, term)
-        DExpr(_, args) => foreach(t -> collect_bindings!(keys, t), args)
-        AddMul(_, _, dict) => foreach(t -> collect_bindings!(keys, t), Iterators.flatten((dict.keys, dict.vals)))
+        DExpr(Inds(_), (arg,)) => iscoordinate(arg) || f(term)
+        Tensor(_, _, _, _) || DExpr(Comp(_), _) => f(term)
+        DExpr(_, args) => foreach(t -> foreach_read(f, t), args)
+        AddMul(_, _, dict) => foreach(t -> foreach_read(f, t), Iterators.flatten((dict.keys, dict.vals)))
         _ => nothing
     end
-    return keys
+    return
 end
 
 struct Binding{K, D}

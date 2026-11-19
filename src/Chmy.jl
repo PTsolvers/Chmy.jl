@@ -98,6 +98,9 @@ export Binding
 export findkey, push, pairstuple, bindings
 include("binding.jl")
 
+export nonuniforms
+include("nonuniforms.jl")
+
 export compile
 include("compile.jl")
 

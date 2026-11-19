@@ -11,6 +11,8 @@ isinterior(face::Face) = codim(face) == 0
 # the direction of the outward normal along the axis
 outward(::Lower) = -1
 outward(::Upper) = 1
+# no wall in the frame of the grid point
+outward(::Colon) = 0
 
 # the side of the face next to a position: the frame of a coordinate, and `:` for traces, which are never next to a wall
 frame(c::Coord) = c.frame
