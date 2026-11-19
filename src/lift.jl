@@ -19,6 +19,8 @@ struct Lifted{O <: Operator, K} <: Operator
 end
 Lifted(op::Operator, axes::Vararg{Integer, N}) where {N} = Lifted(op, axes)
 
+Base.getindex(op::Operator, axes::Vararg{Integer, N}) where {N} = Lifted(op, axes)
+
 tensorrank(lf::Lifted, args) = tensorrank(lf.op, args)
 checkranks(lf::Lifted, args::NTuple{N, DTerm}) where {N} = checkranks(lf.op, args)
 

@@ -56,10 +56,14 @@ wall for `↓`, and the upper wall for `↑`. Integer offsets are points and hal
 struct Coord
     frame::Global
     offset::Rational{Int}
-    function Coord(frame::Global, offset::Union{Integer, Rational})
-        denominator(offset) <= 2 || throw(ArgumentError("offsets must be multiples of 1//2"))
-        return new(frame, offset)
-    end
+    Coord(frame::Global, offset::Union{Integer, Rational}) = new(frame, checkoffset(offset))
+end
+
+# offsets along an axis are multiples of 1//2, as the positions on a staggered grid
+function checkoffset(x)
+    y = Rational{Int}(x)
+    denominator(y) <= 2 || throw(ArgumentError(LazyString("offsets must be multiples of 1//2, got ", y)))
+    return y
 end
 
 """

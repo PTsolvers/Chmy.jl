@@ -57,11 +57,10 @@ include("tensors.jl")
 export @scalars, @vectors, @tensors, @uniform, @sym, @diag, @alt
 include("macros.jl")
 
-export AbstractDifference, Difference, StaggeredDifference
+export FiniteDifference, Interpolate, Extrapolate
 export CentralDifference, ForwardDifference, BackwardDifference
 export StaggeredCentralDifference, StaggeredForwardDifference, StaggeredBackwardDifference
-export stencil_nodes, stencil_weights
-include("differences.jl")
+include("reconstruction.jl")
 
 export DifferentialOperator
 export Gradient, Divergence, Curl

@@ -221,7 +221,7 @@ Chmy.evaluate(::typeof(sq), (x,)::Tuple{DTerm}) = Chmy.argof(sqrt, x)
             2 * (a + b) + c, 2 * (a + b) - (a + b), (2a)^b, (-2a)^(1 // 2), a^b * 2^b, -(2 * (A + 3 * ℐ(2))),
             sym(asym(A)) + asym(A)', cof(components(A, 3))[1, 2], inv(components(S, 2))[1, 2],
             Δ[(↓, 1 // 2), (:, 1 // 2)], Δ[(↓, 1 // 2), (↓, 1 // 2)],
-            CentralDifference{5}()[1](sin(f) * f)[(:, 0)],
+            CentralDifference(5)[1](sin(f) * f)[(:, 0)],
         ]
         for t in corpus, s in subterms(t)
             @test (@inferred evaluate(s)) ==ₛ s

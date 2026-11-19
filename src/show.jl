@@ -92,7 +92,11 @@ function print_opname(io, op::BroadcastedFun)
     name = nameof(op.f)
     return Base.isoperator(name) ? print(io, '.', name) : print(io, name, '.')
 end
-print_opname(io, ::AbstractDifference) = print(io, '∂')
+function print_opname(io, d::FiniteDifference)
+    print(io, '∂')
+    d.order == 1 || print_superscript(io, d.order)
+    return
+end
 print_opname(io, ::Gradient) = print(io, "grad")
 print_opname(io, ::Divergence) = print(io, "divg")
 print_opname(io, ::Curl) = print(io, "curl")

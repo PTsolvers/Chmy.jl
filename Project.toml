@@ -17,7 +17,7 @@ RuntimeGeneratedFunctions = "7e49a35a-f44a-4d26-94aa-eba1b4ca6b47"
 
 [compat]
 Adapt = "4"
-KernelAbstractions = "0.9"
+KernelAbstractions = "0.10"
 Moshi = "0.3.12"
 OrderedCollections = "2.0.1"
 PrettyTables = "3.3.2"

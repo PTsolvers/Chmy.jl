@@ -70,9 +70,6 @@ function packed_dims(args)
     return dims
 end
 
-# make operators callable
-(op::Operator)(args::DTerm...) = makecall(op, args)
-
 BroadcastedFun(op::Fun) = BroadcastedFun(op.f)
 Fun(op::BroadcastedFun) = Fun(op.f)
 
@@ -216,6 +213,9 @@ end
 
 # values that are converted to terms in mixed binary operations: numbers, and the wall vectors
 const TermLike = Union{Number, AnyNormal, AnyTangent}
+
+# make operators callable, with numbers and wall vectors as arguments
+(op::Operator)(args::Union{DTerm, TermLike}...) = makecall(op, map(asterm, args))
 
 # mixed binary operations of terms and term-like values
 for op in (:+, :-, :*, :max, :min, :/, ://, :÷, :^, :<, :<=, :>, :>=, :(==), :!=, :&, :|, :xor)
