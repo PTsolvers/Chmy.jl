@@ -16,11 +16,6 @@ Base.hash(l::Located, h::UInt) = hash(l.locations, hash(l.term, hash(:Located, h
 # a binding key, at least one location is a point or a segment, otherwise the sample is the key itself
 Base.getindex(term::DTerm, locs::Vararg{Location, N}) where {N} = Located(term, locs)
 
-# the location of a position: coordinates at integer offsets are points and at half-integer ones segments, and traces
-# are located at their element
-location(c::Coord) = isinteger(c.offset) ? Point() : Segment()
-location(t::Trace) = t.element
-
 # the key of the sample of `term` at `positions`: samples at traces only are their own keys
 bindkey(term::DTerm, positions) = Located(term, map(location, positions))
 bindkey(term::DTerm, positions::Tuple{Vararg{Trace}}) = makeinds_unchecked(term, positions)

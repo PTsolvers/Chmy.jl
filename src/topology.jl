@@ -23,6 +23,15 @@ distance(::Trace) = nothing
 distance(::Colon, p) = nothing
 distance(side::Side, p::Rational{Int}) = outward(side) * p
 
+# whether a position lies outside the domain, beyond the wall of its frame; positions on the wall are inside, and
+# coordinates relative to the grid point and traces never lie outside
+isghost(p::Position) = something(distance(p), 0 // 1) > 0
+
+# the location of a position: coordinates at integer offsets are points and at half-integer ones segments, and traces
+# are located at their element
+location(c::Coord) = isinteger(c.offset) ? Point() : Segment()
+location(t::Trace) = t.element
+
 # positions shifted along the axis: coordinates move, and traces are constant along the axis
 Base.:+(c::Coord, s::Union{Integer, Rational}) = Coord(c.frame, c.offset + s)
 Base.:+(t::Trace, ::Union{Integer, Rational}) = t

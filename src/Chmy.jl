@@ -59,8 +59,13 @@ include("tensors.jl")
 export @scalars, @vectors, @tensors, @uniform, @sym, @diag, @alt
 include("macros.jl")
 
-export Interpolate, Extrapolate
+export Interpolate, Extrapolate, InterpolateFrom
+export WallPolicy, ReduceOrder, KeepOrder, ReadGhosts
+export locations, interpolate
 include("interpolate.jl")
+
+export Grids
+include("grids.jl")
 
 export CentralDifference, ForwardDifference, BackwardDifference
 export StaggeredCentralDifference, StaggeredForwardDifference, StaggeredBackwardDifference

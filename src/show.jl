@@ -97,6 +97,7 @@ function print_opname(io, d::Interpolate)
     d.order == 1 || print_superscript(io, d.order)
     return
 end
+print_opname(io, ::GridInterpolate) = print(io, "interpolate")
 print_opname(io, ::Gradient) = print(io, "grad")
 print_opname(io, ::Divergence) = print(io, "divg")
 print_opname(io, ::Curl) = print(io, "curl")

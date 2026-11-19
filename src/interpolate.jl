@@ -34,6 +34,9 @@ function fornberg(x, m)
     return c
 end
 
+# `n` nodes with unit spacing centred on the evaluation point, on half-integer offsets for even `n`
+centred(n) = ((1 - n) // 2):((n - 1) // 2)
+
 # the nodes as offsets from the evaluation point
 function offsets(nodes)
     x = SVector(Tuple(checkoffset(n) for n in nodes))
@@ -69,11 +72,6 @@ The value at the evaluation point of the polynomial interpolating the argument a
 [`Interpolate(order, nodes)`](@ref Interpolate).
 """
 Interpolate(nodes) = Interpolate(0, nodes)
-
-function checkranks(d::Interpolate, args::Tuple{Vararg{DTerm}})
-    length(args) == 1 || throw(ArgumentError(LazyString("'", d, "' requires one argument")))
-    return checkscalar(d, args)
-end
 
 # whether every node `x` has the node `-x`; the interpolation then commutes with the reflection, so the weights satisfy
 # `w(-x) = (-1)ᵏ w(x)` for the `k`-th derivative
@@ -133,4 +131,155 @@ function lower_rule(e::Extrapolate, (u, g, a...)::Tuple{DTerm, DTerm, Vararg{DTe
     rows = map(j -> row(j + 1), eachindex(e.nodes))
     known = sum((r / r0 * u[i + x] for (r, x) in zip(rows, e.nodes) if !isstaticzero(r)); init = ZERO)
     return g[y] / r0 - known
+end
+
+# the number of nodes of interpolations on the staggered grid, even so that they are centred on the evaluation point
+function checkorder(order::Integer)
+    if order < 2 || isodd(order)
+        throw(ArgumentError(LazyString("the order of interpolation must be even and at least 2, got ", order)))
+    end
+    return Int(order)
+end
+
+"""
+Abstract supertype of the policies choosing the nodes of [`InterpolateFrom`](@ref) next to the walls. A policy
+implements `Chmy.wallnodes(policy, nodes, c)`, which returns the nodes used at the coordinate `c`, given the vector of
+the `nodes` centred on `c`, as offsets from `c` to the positions of the argument.
+"""
+abstract type WallPolicy end
+
+struct ReduceOrderPolicy <: WallPolicy end
+struct KeepOrderPolicy <: WallPolicy end
+struct ReadGhostsPolicy <: WallPolicy end
+
+"Drops the nodes outside the domain, down to the nearest node inside, which lowers the order next to the walls."
+const ReduceOrder = ReduceOrderPolicy()
+"Shifts the nodes inside the domain, which keeps the order next to the walls."
+const KeepOrder = KeepOrderPolicy()
+"Keeps the nodes outside the domain, whose samples are read from the argument, e.g. from halos or an override."
+const ReadGhosts = ReadGhostsPolicy()
+
+wallnodes(::ReadGhostsPolicy, nodes, c) = nodes
+
+# the nodes move inward until the outermost one is the outermost position of the argument inside the domain, as the
+# nodes are on the lattice of these positions
+function wallnodes(::KeepOrderPolicy, nodes, c)
+    any(x -> isghost(c + x), nodes) || return nodes
+    shift = ceil(Int, maximum(x -> distance(c + x), nodes))
+    return map(x -> x - outward(c.frame) * shift, nodes)
+end
+
+# the nodes inside the domain, or the outermost position of the argument inside the domain if no node is inside
+function wallnodes(::ReduceOrderPolicy, nodes, c)
+    inside = filter(x -> !isghost(c + x), nodes)
+    isempty(inside) || return inside
+    return [argmax(x -> distance(c + x), wallnodes(KeepOrder, nodes, c))]
+end
+
+"""
+    InterpolateFrom(location; order = 2, wall = ReduceOrder)
+
+The value at the evaluation point of the polynomial interpolating the argument at the `order` positions nearest to
+it at the `location`, `𝓅` or `𝓈`, and the argument itself at the `location`, e.g. `InterpolateFrom(𝓈)` interpolates
+linearly from the segments. Next to the walls, the nodes are chosen by the [`WallPolicy`](@ref) `wall`. Traces are
+read as they are, since they are constant along the axis.
+"""
+struct InterpolateFrom <: Operator
+    location::Union{Point, Segment}
+    order::Int
+    wall::WallPolicy
+    function InterpolateFrom(location::Union{Point, Segment}, order::Integer, wall::WallPolicy)
+        return new(location, checkorder(order), wall)
+    end
+end
+InterpolateFrom(location; order = 2, wall = ReduceOrder) = InterpolateFrom(location, order, wall)
+
+# the interpolations take one scalar argument
+function checkranks(d::Union{Interpolate, InterpolateFrom}, args::Tuple{Vararg{DTerm}})
+    length(args) == 1 || throw(ArgumentError(LazyString("'", d, "' requires one argument")))
+    return checkscalar(d, args)
+end
+
+# traces are at every location, since they are constant along the axis
+athome(l, c::Coord) = location(c) == l
+athome(l, ::Trace) = true
+
+# away from the location, the nodes are the positions at the location centred on the coordinate, as chosen by the wall
+# policy
+function lower_rule(r::InterpolateFrom, f::DTerm, i::Position)
+    athome(r.location, i) && return f[i]
+    return lower_rule(Interpolate(wallnodes(r.wall, centred(r.order), i)), f, i)
+end
+
+# interpolation on grids
+
+"""
+    locations(grid, comps, dims)
+
+The locations where the component `comps` of tensors is stored on the `grid` in `dims` dimensions, a tuple of
+locations with one `𝓅` or `𝓈` per axis, e.g. `((𝓅, 𝓈),)` for the first component of vectors on [`Grids.MAC`](@ref)
+in 2D. A grid is any object implementing this method: `𝓅` and `𝓈` store every component at this location along every
+axis, and a tuple of them every component at these locations, in as many dimensions as there are locations.
+"""
+function locations end
+
+locations(l::Union{Point, Segment}, comps, dims) = (ntuple(_ -> l, dims),)
+
+function locations(l::Tuple{Vararg{Union{Point, Segment}}}, comps, dims)
+    length(l) == dims || throw(DimensionMismatch(LazyString("the grid ", l, " has ", length(l), " dimensions, got ", dims)))
+    return (l,)
+end
+
+# the interpolation of the component `comps` of the argument from its locations on the grid, see `interpolate`; the
+# calls on tensors have no components, and their components interpolate the components of the argument
+struct GridInterpolate <: Operator
+    grid::Any
+    comps::Tuple{Vararg{Int}}
+    order::Int
+    wall::WallPolicy
+end
+
+tensorrank(::GridInterpolate, args) = tensorrank(only(args))
+
+checkranks(::GridInterpolate, args::Tuple{Vararg{DTerm}}) = length(args) == 1 || throw(ArgumentError("an interpolation requires one argument"))
+
+# constants are not interpolated
+evaluate(::GridInterpolate, (t,)::Tuple{DTerm}) = isconstant(t) ? t : nothing
+component(op::GridInterpolate, (t,)::Tuple{DTerm}, I) = GridInterpolate(op.grid, I, op.order, op.wall)(t[I...])
+
+function lower_rule(op::GridInterpolate, f::DTerm, x::NTuple{N, Position}) where {N}
+    return reconstruct(locations(op.grid, op.comps, N), op, f, x)::DTerm
+end
+
+# a single location: the tensor product of the interpolations from the location along every axis
+function reconstruct((home,)::Tuple{Any}, op, f, x)
+    g = foldl((g, a) -> Lifted(InterpolateFrom(home[a], op.order, op.wall), a)(g), eachindex(x); init = f)
+    return g[x...]
+end
+
+# several locations: the argument is read at one of them, and cannot be interpolated between them yet
+function reconstruct(homes::Tuple, op, f, x)
+    if !any(home -> all(map(athome, home, x)), homes)
+        throw(ArgumentError(LazyString("cannot interpolate `", f, "` between the locations ", homes)))
+    end
+    return f[x...]
+end
+
+"""
+    interpolate(u, grid; order = 2, wall = ReduceOrder)
+
+The term `u` read only at the locations where it is stored on the `grid`, see [`locations`](@ref), and interpolated
+elsewhere, every component of a tensor from its own locations. A component stored at one location is interpolated
+along every axis with [`InterpolateFrom`](@ref) on `order` positions, 2 for linear and 4 for cubic interpolation, with
+the nodes next to the walls chosen by the [`WallPolicy`](@ref) `wall`. A component stored at several locations is
+only read at them. At its locations, `u` is read as it is.
+
+```julia
+interpolate(η, 𝓈)                        # a scalar at the cell centres
+interpolate(v, Grids.MAC; order = 4)     # every component from its faces, cubic
+interpolate(k, (𝓅, 𝓈); wall = ReadGhosts)
+```
+"""
+function interpolate(u, grid; order = 2, wall = ReduceOrder)
+    return GridInterpolate(grid, (), checkorder(order), wall)(asterm(u))
 end

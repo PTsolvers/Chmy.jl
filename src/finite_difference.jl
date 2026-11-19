@@ -5,7 +5,7 @@ The first derivative on `n` points centred on the evaluation point, `n` odd, see
 """
 function CentralDifference(n::Integer = 3)
     isodd(n) || throw(ArgumentError("a central difference requires an odd number of points"))
-    return Interpolate(1, ((1 - n) // 2):((n - 1) // 2))
+    return Interpolate(1, centred(n))
 end
 
 """
@@ -29,7 +29,7 @@ The first derivative on `n` half-integer offsets centred on the evaluation point
 """
 function StaggeredCentralDifference(n::Integer = 2)
     iseven(n) || throw(ArgumentError("a staggered central difference requires an even number of points"))
-    return Interpolate(1, ((1 - n) // 2):((n - 1) // 2))
+    return Interpolate(1, centred(n))
 end
 
 """

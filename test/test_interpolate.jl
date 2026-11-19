@@ -60,6 +60,37 @@ using Chmy
         @test Extrapolate(1 // 2, (1,))[2](u, g, 1)[x...] ==ₛ 2 * g[(:, 0), (↓, 0)] - u[(:, 0), (↓, 1 // 2)]
     end
 
+    @testset "interpolation from a location" begin
+        avg(a, b) = (1 // 2) * (a + b)
+        # the argument itself at the location, and at traces, which are constant along the axis
+        @test (@inferred lower_rule(InterpolateFrom(𝓅), f, Coord(↓, 1))) ==ₛ f[(↓, 1)]
+        @test (@inferred lower_rule(InterpolateFrom(𝓈), f, Trace(↓))) ==ₛ f[↓]
+        # elsewhere, the polynomial on the nearest positions at the location
+        @test (@inferred lower_rule(InterpolateFrom(𝓅), f, Coord(:, 1 // 2))) ==ₛ avg(f[(:, 1)], f[(:, 0)])
+        @test lower_rule(InterpolateFrom(𝓈; order = 4), f, Coord(:, 0)) ==ₛ
+            (9 // 16) * (f[(:, 1 // 2)] + f[(:, -1 // 2)]) - (1 // 16) * (f[(:, 3 // 2)] + f[(:, -3 // 2)])
+        # by default, nodes outside the domain are dropped, down to the nearest node inside at both walls
+        @test lower_rule(InterpolateFrom(𝓈), f, Coord(↓, 0)) ==ₛ f[(↓, 1 // 2)]
+        @test lower_rule(InterpolateFrom(𝓈), f, Coord(↑, 0)) ==ₛ f[(↑, -1 // 2)]
+        @test lower_rule(InterpolateFrom(𝓈; order = 4), f, Coord(↓, 1)) ==ₛ
+            (3 // 8) * f[(↓, 1 // 2)] + (3 // 4) * f[(↓, 3 // 2)] - (1 // 8) * f[(↓, 5 // 2)]
+        @test lower_rule(InterpolateFrom(𝓅; order = 4), f, Coord(↓, -1 // 2)) ==ₛ (3 // 2) * f[(↓, 0)] - (1 // 2) * f[(↓, 1)]
+        @test lower_rule(InterpolateFrom(𝓅), f, Coord(↓, -5 // 2)) ==ₛ f[(↓, 0)]
+        @test lower_rule(InterpolateFrom(𝓅), f, Coord(↑, 5 // 2)) ==ₛ f[(↑, 0)]
+        # or shifted inside the domain, keeping their number
+        @test lower_rule(InterpolateFrom(𝓈; wall = KeepOrder), f, Coord(↓, 0)) ==ₛ (3 // 2) * f[(↓, 1 // 2)] - (1 // 2) * f[(↓, 3 // 2)]
+        @test lower_rule(InterpolateFrom(𝓈; wall = KeepOrder), f, Coord(↑, 0)) ==ₛ (3 // 2) * f[(↑, -1 // 2)] - (1 // 2) * f[(↑, -3 // 2)]
+        @test lower_rule(InterpolateFrom(𝓈; order = 4, wall = KeepOrder), f, Coord(↓, 1)) ==ₛ
+            (5 // 16) * f[(↓, 1 // 2)] + (15 // 16) * f[(↓, 3 // 2)] - (5 // 16) * f[(↓, 5 // 2)] + (1 // 16) * f[(↓, 7 // 2)]
+        @test lower_rule(InterpolateFrom(𝓅; wall = KeepOrder), f, Coord(↓, -5 // 2)) ==ₛ (7 // 2) * f[(↓, 0)] - (5 // 2) * f[(↓, 1)]
+        # or kept, reading the ghosts of the argument
+        @test lower_rule(InterpolateFrom(𝓈; wall = ReadGhosts), f, Coord(↓, 0)) ==ₛ avg(f[(↓, 1 // 2)], f[(↓, -1 // 2)])
+        # the order is the number of nodes, even
+        @test_throws ArgumentError InterpolateFrom(𝓅; order = 3)
+        @test_throws ArgumentError InterpolateFrom(𝓅; order = 0)
+        @test_throws ArgumentError InterpolateFrom(𝓅)(u, g)
+    end
+
     @testset "invalid parameters" begin
         @test_throws ArgumentError Interpolate((0, 0))
         @test_throws ArgumentError Interpolate((0, 1 // 3))
