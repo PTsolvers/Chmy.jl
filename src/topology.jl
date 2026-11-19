@@ -27,7 +27,3 @@ distance(side::Side, p::Rational{Int}) = outward(side) * p
 Base.:+(c::Coord, s::Union{Integer, Rational}) = Coord(c.frame, c.offset + s)
 Base.:+(t::Trace, ::Union{Integer, Rational}) = t
 Base.:-(p::Position, s::Union{Integer, Rational}) = p + (-s)
-
-# the point on the wall of the frame of a coordinate, and the mirror image of the coordinate through it
-wall(c::Coord) = Coord(c.frame, 0)
-mirror(c::Coord) = Coord(c.frame, -c.offset)

@@ -129,6 +129,8 @@ function lower_rule(e::Extrapolate, (u, g, a...)::Tuple{DTerm, DTerm, Vararg{DTe
     row(j) = sum((coeffs[k] * e.weights[j, k] for k in eachindex(coeffs)); init = ZERO)
     r0 = row(1)
     isstaticzero(r0) && throw(ArgumentError(LazyString("the constraint of '", e, "' does not depend on the extrapolated value")))
-    known = sum((row(j + 1) / r0 * u[i + x] for (j, x) in enumerate(e.nodes)); init = ZERO)
+    # nodes with zero weights in the constraint are not sampled
+    rows = map(j -> row(j + 1), eachindex(e.nodes))
+    known = sum((r / r0 * u[i + x] for (r, x) in zip(rows, e.nodes) if !isstaticzero(r)); init = ZERO)
     return g[y] / r0 - known
 end

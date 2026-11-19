@@ -414,7 +414,7 @@ function lower_rule(c::OverrideComponent, args::Tuple, x::Tuple)
 end
 
 function lower_rule(s::OverrideSample, args::Tuple, x::Tuple)
-    # a sample read elsewhere, e.g. by a mirror rule, is matched again
+    # a sample read elsewhere, e.g. by the extrapolation of a wall rule, is matched again
     x == s.x || return lower_rule(s.component, args, x)
     comps = s.component.comps
     isempty(s.candidates) && return first(args)[comps...][x...]
@@ -450,10 +450,15 @@ resolve_face(::Operator, term, face) = walkargs(x -> resolve_face(x, face), term
 # nested overrides resolve the data at their own faces
 resolve_face(::AnyOverride, term, face) = term
 
+# the signed axis of a wall
+function wallaxis(signed_axes)
+    length(signed_axes) == 1 ||
+        throw(ArgumentError(lazy"only defined on walls, got a face of codimension $(length(signed_axes))"))
+    return only(signed_axes)
+end
+
 function resolve_face(::AnyNormal, term, face)
-    length(face.axes) == 1 ||
-        throw(ArgumentError(lazy"the normal is only defined on walls, got a face of codimension $(length(face.axes))"))
-    a = only(face.axes)
+    a = wallaxis(face.axes)
     return unitvector(abs(a), sign(a), face.dims)
 end
 
@@ -550,51 +555,54 @@ boundary_rule(::Scale, u, (w,), match) = w * u
 boundary_rule(::Replace, u, (v,), match) = v
 
 """
-Abstract supertype for the rules applied along the normal of a wall, which are lifted along the normal of the matched
-wall. A rule implements the 1D [`lower_rule`](@ref) `lower_rule(rule, (u, data...), i::Coord)` of the overridden
-component `u` at the position `i` along the normal, e.g. `2g[wall(i)] - u[mirror(i)]`, where `Chmy.distance(i)` is
-the outward distance from the wall, `Chmy.wall(i)` the point on the wall, and `Chmy.mirror(i)` the mirror image of `i`
-through the wall.
-"""
-abstract type WallRule <: BoundaryRule end
+    WallData(g, a₀, coeffs...; npoints = 1)
+    WallData(npoints)(g, a₀, coeffs...)
 
+Imposes the constraint `Σₖ aₖ ∂ₙᵏ u = g` on the wall, with the outward normal derivatives `∂ₙ` and the coefficients
+`(a₀, coeffs...)`, at most `npoints + 1` of them. The sample is extrapolated with [`Extrapolate`](@ref) from `npoints`
+samples inside the domain, starting at the mirror image of the sample through the wall, or at the next sample for a
+sample on the wall.
 """
-    WallValue(g)
-
-Imposes the value `g` on the wall: on the wall the term is `g`, and in the ghost region the mirror image through the
-wall makes the linear interpolation equal to `g`.
-"""
-struct WallValue <: WallRule end
-WallValue(g) = WallValue()(asterm(g))
-
-"""
-    WallDerivative(g)
-
-Imposes the outward normal derivative `g` on the wall, through the mirror image of the ghost samples. The values on
-the wall are not changed.
-"""
-struct WallDerivative <: WallRule end
-WallDerivative(g) = WallDerivative()(asterm(g))
-
-function boundary_rule(op::WallRule, u, data, match)
-    axes = signed_axes(match)
-    length(axes) == 1 ||
-        throw(ArgumentError(lazy"wall rules are only defined on walls, got a face of codimension $(length(axes))"))
-    return Lifted(op, map(abs, axes))(u, data...)
+struct WallData <: BoundaryRule
+    npoints::Int
+    function WallData(npoints::Integer)
+        npoints >= 1 || throw(ArgumentError("wall data require at least one extrapolation point"))
+        return new(npoints)
+    end
 end
 
-function lower_rule(::WallValue, (u, g)::Tuple{DTerm, DTerm}, i::Coord)
-    ξ = distance(i)
-    iszero(ξ) && return g[i]
-    ξ > 0 && return 2g[wall(i)] - u[mirror(i)]
-    throw(ArgumentError(lazy"WallValue can only be applied on the wall or in the ghost region, got ξ = $ξ"))
+WallData(g, a₀, coeffs...; npoints = 1) = WallData(npoints)(asterm(g), asterm(a₀), map(asterm, coeffs)...)
+
+"""
+    WallValue(g; npoints = 1)
+
+Imposes the value `g` on the wall, see [`WallData`](@ref).
+"""
+WallValue(g; npoints = 1) = WallData(g, 1; npoints)
+
+"""
+    WallDerivative(g; npoints = 1)
+
+Imposes the outward normal derivative `g` on the wall, see [`WallData`](@ref).
+"""
+WallDerivative(g; npoints = 1) = WallData(g, 0, 1; npoints)
+
+function checkranks(w::WallData, args::Tuple{Vararg{DTerm}})
+    2 <= length(args) <= w.npoints + 2 ||
+        throw(ArgumentError(lazy"'$w' requires the data and 1 to $(w.npoints + 1) coefficients"))
+    return
 end
 
-function lower_rule(::WallDerivative, (u, g)::Tuple{DTerm, DTerm}, i::Coord)
-    ξ = distance(i)
-    iszero(ξ) && return u[i]
-    ξ > 0 && return u[mirror(i)] + 2ξ * g[wall(i)]
-    throw(ArgumentError(lazy"WallDerivative can only be applied on the wall or in the ghost region, got ξ = $ξ"))
+function boundary_rule(w::WallData, u, (g, coeffs...), match)
+    a, ξ = wallaxis(signed_axes(match)), only(signed_distances(match))
+    ξ >= 0 || throw(ArgumentError(lazy"wall data can only be imposed on the wall or in the ghost region, got ξ = $ξ"))
+    # the nodes start at the mirror image of the sample, or at the next sample on the wall, against the outward normal
+    s = sign(a)
+    start = iszero(ξ) ? 1 : 2ξ
+    nodes = (-s * (start + k) for k in 0:(w.npoints - 1))
+    # the derivatives along the outward normal are the derivatives along the axis times `sᵏ`
+    along = ntuple(k -> s^(k - 1) * coeffs[k], length(coeffs))
+    return Lifted(Extrapolate(-s * ξ, nodes), abs(a))(u, g, along...)
 end
 
 # the user interface

@@ -1,6 +1,6 @@
 using Test
 using Chmy
-using Chmy: matches, dim, codim, distance, frame, wall, mirror
+using Chmy: matches, dim, codim, distance, frame
 
 @testset "faces" begin
     @test dim((↓, :)) == 1
@@ -25,9 +25,6 @@ end
     @test Coord(↑, -1 // 2) + 1 == Coord(↑, 1 // 2)
     @test Coord(:, 0) - 1 // 2 == Coord(:, -1 // 2)
     @test Trace(↓) + 1 // 2 == Trace(↓)
-    # the point on the wall, and the mirror image through it
-    @test wall(Coord(↑, -3 // 2)) == Coord(↑, 0)
-    @test mirror(Coord(↓, -1 // 2)) == Coord(↓, 1 // 2)
     # offsets are multiples of 1//2
     @test_throws ArgumentError Coord(:, 1 // 3)
 end

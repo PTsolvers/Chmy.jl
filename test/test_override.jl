@@ -112,7 +112,7 @@ end
 
 @testset "wall rules" begin
     @scalars u
-    @uniform @scalars g gL gB uL ĝ
+    @uniform @scalars g gL gB uL ĝ α β
 
     # a ghost segment: the wall is half a cell away, the mirror sample half a cell inside
     @test override(u, LeftWall => WallValue(g))[(↓, -1 // 2)] ==ₛ 2g - u[(↓, 1 // 2)]
@@ -120,14 +120,26 @@ end
     # a ghost point, and the wall point
     @test override(u, LeftWall => WallValue(g))[(↓, -1)] ==ₛ 2g - u[(↓, 1)]
     @test override(u, LeftWall => WallValue(g))[(↓, 0)] ==ₛ g
+    # deeper ghosts extrapolate from their mirror image
+    @test override(u, LeftWall => WallValue(g))[(↓, -3 // 2)] ==ₛ 2g - u[(↓, 3 // 2)]
+    # and from more points inside the domain
+    @test override(u, LeftWall => WallValue(g; npoints = 2))[(↓, -1 // 2)] ==ₛ
+        (8 // 3) * g - 2u[(↓, 1 // 2)] + (1 // 3) * u[(↓, 3 // 2)]
     # the boundary value is read at the wall, at both walls
     @test override(u, LeftWall => WallValue(cos(ξ¹)))[(↓, -1 // 2)] ==ₛ 2 - u[(↓, 1 // 2)]
     @test override(u, RightWall => WallValue(cos(ξ¹)))[(↑, 1 // 2)] ==ₛ 2cos(ξ¹[(↑, 0)]) - u[(↑, -1 // 2)]
-    # an outward derivative gives the same expression at both walls, and keeps the wall value
+    # an outward derivative gives the same expression at both walls, and is one-sided on the wall
     @test override(u, WallDerivative(g))[(↓, -1 // 2)] ==ₛ u[(↓, 1 // 2)] + g
     @test override(u, WallDerivative(g))[(↑, 1 // 2)] ==ₛ u[(↑, -1 // 2)] + g
     @test override(u, WallDerivative(g))[(↓, -1)] ==ₛ u[(↓, 1)] + 2g
-    @test override(u, WallDerivative(g))[(↓, 0)] ==ₛ u[(↓, 0)]
+    @test override(u, WallDerivative(g))[(↓, 0)] ==ₛ u[(↓, 1)] + g
+    # a Robin condition `αu + β∂ₙu = g`, the same at both walls
+    robin(v) = g / (α / 2 + β) - (α / 2 - β) / (α / 2 + β) * v
+    @test override(u, WallData(g, α, β))[(↓, -1 // 2)] ==ₛ robin(u[(↓, 1 // 2)])
+    @test override(u, WallData(g, α, β))[(↑, 1 // 2)] ==ₛ robin(u[(↑, -1 // 2)])
+    # one point determines a constraint up to the first derivative
+    @test_throws ArgumentError override(u, WallData(g, 0, 0, 1))
+    @test_throws ArgumentError WallData(g, 1; npoints = 0)
     # inside the domain the rules throw
     @test_throws ArgumentError override(u, (LeftWall, Interior) => WallValue(g))[(↓, 1 // 2)]
     @test_throws ArgumentError override(u, (LeftWall, Interior) => WallDerivative(g))[(↓, 1 // 2)]

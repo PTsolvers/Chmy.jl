@@ -83,7 +83,7 @@ export Wall, AlongAxis, AnyWall, AnyCorner, LeftWall, RightWall, BottomWall, Top
 export Ghost, Boundary, Interior, Within
 export OverridePredicate, OverrideMatch, FaceMatch, FacePredicate, WallPredicate, signed_axes, signed_distances
 export Override, override, 𝒷
-export BoundaryRule, WallRule, Add, Scale, WallValue, WallDerivative, boundary_rule
+export BoundaryRule, Add, Scale, WallData, WallValue, WallDerivative, boundary_rule
 include("override.jl")
 
 export subs
