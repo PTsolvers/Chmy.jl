@@ -25,6 +25,6 @@ using Chmy
         @test isequal(collect(keys(nonuniforms(a * ξ¹ * f, (:, 0)).samples)), [f])
         # samples next to a wall are in the frame of the wall
         @test issetequal(nonuniforms(divg(grad(f)), (↓, 1 // 2)).samples[f], [(Coord(↓, x),) for x in (-1 // 2, 1 // 2, 3 // 2)])
-        @test sprint(show, nonuniforms(f + g, o...)) == "Nonuniforms(f, g) at [(:, 0), (:, 0)]"
+        @test sprint(show, nonuniforms(f + g, o...)) == "Nonuniforms(f, g) at [0, 0]"
     end
 end

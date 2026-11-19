@@ -479,7 +479,7 @@ end
     𝒷(g; span = false)
 
 The boundary data `g` at the face matched by an override: `g` is sampled at the traces of the walls of the face, e.g.
-`g[↓, (:, 1//2)]` by the left wall, at the position of the overridden sample along the other axes, or independently of
+`g[↓, 1//2]` by the left wall, at the position of the overridden sample along the other axes, or independently of
 them with `span = true`, e.g. `g[↓, :]`, a single value for the left wall. Can only appear in the data of override
 rules.
 """

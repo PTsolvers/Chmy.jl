@@ -35,6 +35,6 @@ location(c::Coord) = isinteger(c.offset) ? Point() : Segment()
 location(t::Trace) = t.element
 
 # positions shifted along the axis: coordinates move, and traces are constant along the axis
-Base.:+(c::Coord, s::Union{Integer, Rational}) = Coord(c.frame, c.offset + s)
-Base.:+(t::Trace, ::Union{Integer, Rational}) = t
-Base.:-(p::Position, s::Union{Integer, Rational}) = p + (-s)
+Base.:+(c::Coord, s::Offset) = Coord(c.frame, c.offset + s)
+Base.:+(t::Trace, ::Offset) = t
+Base.:-(p::Position, s::Offset) = p + (-s)

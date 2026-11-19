@@ -227,14 +227,16 @@ Random.seed!(1234) # deterministic tests
             @test (@inferred isinds(v[1][(:, 1), (:, 2)])) == true
             @test a[↓, (:, 0)] !=ₛ a[(↓, 0), (:, 0)]
             @test a[↓, (:, 0)] !=ₛ a[↑, (:, 0)]
-            @test sprint(show, a[↓, (:, -1 // 2)]) == "a[↓, (:, -1//2)]"
+            @test sprint(show, a[↓, (:, -1 // 2)]) == "a[↓, -1//2]"
+            @test sprint(show, a[(:, 0), (↓, 1 // 2)]) == "a[0, (↓, 1//2)]"
             @test sprint(show, a[:, (↑, 1)]) == "a[:, (↑, 1)]"
             @test_throws ArgumentError a[(:, 1 // 3)]
             @test_throws ArgumentError v[(:, 1 // 2)]
-            # offsets are not positions
-            @test_throws MethodError a[1 // 2]
-            @test_throws ArgumentError a[0, 1]
-            @test_throws MethodError a[↓, 0]
+            # offsets are coordinates from the origin
+            @test (@inferred a[1 // 2, ↓]) ==ₛ a[(:, 1 // 2), ↓]
+            @test indices(@inferred a[-1 // 2]) === (Coord(:, -1 // 2),)
+            @test indices(@inferred a[0, 1]) === (Coord(:, 0), Coord(:, 1))
+            @test (@inferred a[↓, 0]) ==ₛ a[↓, (:, 0)]
             # samples cannot be sampled again
             @test_throws ArgumentError a[(:, 1 // 2)][(:, 1)]
             @test_throws ArgumentError a[(:, 1 // 2)][(:, 1), (:, 1)]

@@ -217,8 +217,10 @@ Base.show(io::IO, ::LocationName{Colon}) = print(io, ':')
 
 Base.show(io::IO, l::Located) = print_indexed(io, l.term, map(LocationName, l.locations))
 
-# positions print as they are written in samples, `(:, 1//2)` and `↓`
-Base.show(io::IO, c::Coord) = print(io, '(', LocationName(c.frame), ", ", stencil_constant(c.offset), ')')
+# positions print as they are written in samples, `(↓, 1//2)` and `↓`, and coordinates from the origin as offsets, `1//2`
+Base.show(io::IO, c::Coord) = print_coord(io, c.frame, c.offset)
+print_coord(io, frame, offset) = print(io, '(', LocationName(frame), ", ", stencil_constant(offset), ')')
+print_coord(io, ::Colon, offset) = print(io, stencil_constant(offset))
 Base.show(io::IO, t::Trace) = show(io, LocationName(t.element))
 
 function print_pack_table(io, t, rank, dims, kind)

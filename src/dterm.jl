@@ -443,17 +443,18 @@ end
 """
     getindex(term::DTerm)
     getindex(term::DTerm, I::Integer...)
-    getindex(term::DTerm, positions::Union{Coord, Trace, Tuple, Lower, Upper, Colon}...)
+    getindex(term::DTerm, positions...)
 
 Without indices, return the scalar `term` itself. Otherwise, construct a symbolic tensor component if `term` is not a scalar, respecting symmetric, alternating,
 and diagonal tensor structure. Zero and identity tensors return literal component values, and packed
 tensors return the stored entry.
 If `term` is a scalar, sample `term` at the absolute `positions`, one per axis: coordinates `(frame, offset)`, see
-[`Coord`](@ref), or the traces `↓`, `↑` and `:`, see [`Trace`](@ref), e.g. `g[↓, (:, 1//2)]`. The sample is lowered at
+[`Coord`](@ref), offsets from the origin, `u[1//2]` being `u[(:, 1//2)]`, or the traces `↓`, `↑` and `:`, see
+[`Trace`](@ref), e.g. `g[↓, 1//2]`. The sample is lowered at
 once: `term` is expanded in component form in as many dimensions as there are positions, see [`components`](@ref), and
-its calls with their [`lower_rule`](@ref), into samples of fields, e.g. `divg(grad(u))[(:, 1//2), (:, 1//2)]` is a
-stencil of samples `u[(:, -1//2), (:, 1//2)]`. Literals and uniform tensors are not sampled, and a coordinate is the
-coordinate of the origin of the frame plus the offset, e.g. `ξ¹[(:, 0), :] + 1//2`, or the offset itself in the frame
+its calls with their [`lower_rule`](@ref), into samples of fields, e.g. `divg(grad(u))[1//2, 1//2]` is a stencil of
+samples `u[-1//2, 1//2]`. Literals and uniform tensors are not sampled, and a coordinate is the
+coordinate of the origin of the frame plus the offset, e.g. `ξ¹[0, :] + 1//2`, or the offset itself in the frame
 of the lower wall. Samples cannot be sampled again, also inside expressions. Traces along some axes only, read at the
 evaluation point along the others, are taken with [`Project`](@ref).
 """
@@ -461,7 +462,10 @@ function Base.getindex(term::DTerm)
     tensorrank(term) == 0 || throw(ArgumentError("number of subscripts not matching tensor rank"))
     return term
 end
-Base.getindex(term::DTerm, I::Vararg{Integer, N}) where {N} = component(term, map(Int, I))
+# integers are the indices of a component of a tensor, and the offsets of a sample of a scalar
+function Base.getindex(term::DTerm, I::Vararg{Integer, N}) where {N}
+    return tensorrank(term) == 0 ? makeinds(term, I) : component(term, map(Int, I))
+end
 
 # the component `I` of `term`, respecting the structure of named and packed tensors
 function component(term::DTerm, I::NTuple{N, Int}) where {N}
@@ -594,7 +598,7 @@ function isless_args(xs, ys, lt = <ₛ)
 end
 
 # samples of a field are ordered by the frames of their coordinates, then by descending offsets, so that stencils read
-# `f[(:, 1//2)] - f[(:, -1//2)]`, followed by the traces
+# `f[1//2] - f[-1//2]`, followed by the traces
 function isless_position(x::Coord, y::Coord)
     x.frame === y.frame || return globalrank(x.frame) < globalrank(y.frame)
     return x.offset > y.offset

@@ -30,7 +30,9 @@ end
 
 asposition(p::Position) = p
 asposition(p::Global) = Trace(p)
-asposition((frame, offset)::Tuple{Global, Union{Integer, Rational}}) = Coord(frame, offset)
+asposition((frame, offset)::Tuple{Global, Offset}) = Coord(frame, offset)
+# an offset is a coordinate from the origin, `u[1//2]` is `u[(:, 1//2)]`
+asposition(offset::Offset) = Coord(:, offset)
 
 makeinds_unchecked(arg::DTerm, positions::NTuple{N, Position}) where {N} = DExpr(Inds(positions), (arg,))
 

@@ -46,17 +46,20 @@ const Location = Union{Point, Segment, Lower, Upper, Colon}
 # the elements of an axis: the lower wall, the upper wall, and the whole axis
 const Global = Union{Lower, Upper, Colon}
 
+# the offset of a position from the origin of a frame, in grid steps
+const Offset = Union{Integer, Rational}
+
 """
     Coord(frame, offset)
 
 The position at `offset` along an axis from the origin of the `frame`: the grid point of the kernel for `:`, the lower
 wall for `↓`, and the upper wall for `↑`. Integer offsets are points and half-integer offsets are segments, e.g.
-`Coord(↑, -1//2)` is the last segment. Written `(frame, offset)` in samples.
+`Coord(↑, -1//2)` is the last segment. Written `(frame, offset)` in samples, or just `offset` for the frame `:`.
 """
 struct Coord
     frame::Global
     offset::Rational{Int}
-    Coord(frame::Global, offset::Union{Integer, Rational}) = new(frame, checkoffset(offset))
+    Coord(frame::Global, offset::Offset) = new(frame, checkoffset(offset))
 end
 
 # offsets along an axis are multiples of 1//2, as the positions on a staggered grid
@@ -81,8 +84,9 @@ The absolute position along an axis, a [`Coord`](@ref) or a [`Trace`](@ref).
 """
 const Position = Union{Coord, Trace}
 
-# a position as given by users: tuples `(frame, offset)` are coordinates, and the elements of the axis are traces
-const PositionLike = Union{Global, Position, Tuple{Global, Union{Integer, Rational}}}
+# a position as given by users: tuples `(frame, offset)` are coordinates, numbers are offsets from the origin, and the
+# elements of the axis are traces
+const PositionLike = Union{Global, Position, Offset, Tuple{Global, Offset}}
 
 # head of a Chmy expression
 @data HeadImpl begin
